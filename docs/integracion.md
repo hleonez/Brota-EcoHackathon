@@ -1,7 +1,7 @@
 # Integrar API y paneles
 
 Para rutas, entradas y respuestas del primer recorrido propuesto, consulta el
-[contrato inicial de API](contrato-api.md). Esta guía cubre su integración técnica.
+[contrato modular de API](contrato-api.md). Esta guía cubre su integración técnica.
 
 Si se elige Neon como PostgreSQL gestionado, sigue el
 [tutorial de Neon para Brota](tutorial-neon.md), con pasos para PowerShell,

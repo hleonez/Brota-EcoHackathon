@@ -6,7 +6,7 @@
 
 **Fuente principal:** [Plan Maestro · Brota](../Brota_Plan_Maestro_NeuralSprint.md), especialmente secciones 4, 5, 8, 9, 11, 12 y 13.
 
-**Referencias del repositorio:** [decisiones de infraestructura](decisiones.md) y [contrato inicial de API](contrato-api.md).
+**Referencias del repositorio:** [decisiones de infraestructura](decisiones.md) y [contrato modular de API](contrato-api.md).
 
 ## 1. Propósito y alcance
 
@@ -125,7 +125,7 @@ En una solicitud mixta, los vínculos de servicio deben apuntar a órdenes de es
 
 El estado general de la solicitud se calcula a partir de sus órdenes. Si se almacena para acelerar consultas, será una proyección reconstruible. «Una orden recogida y otra pendiente» debe seguir visible como atención parcial.
 
-El contrato inicial permite reemplazar la asignación vigente. Este diseño conserva también las anteriores para explicar reasignaciones. El recolector asignado debe estar activo y pertenecer al gremio de la orden en ese momento; una reorganización futura no debe alterar esa evidencia.
+El contrato modular permite reemplazar la asignación vigente y conserva las anteriores para explicar reasignaciones. El recolector asignado debe estar activo y pertenecer al gremio de la orden en ese momento; una reorganización futura no debe alterar esa evidencia.
 
 ### 5.3. Recepción y medición del material
 
@@ -216,7 +216,7 @@ La hoja de ruta se genera a partir de asignaciones. El Sello Negocio Verde, repo
 
 ### 7.1. Estados propuestos
 
-El recorrido mínimo conserva los estados del contrato inicial:
+El recorrido mínimo comparte estos estados con el contrato modular:
 
 ```text
 orden: nueva → asignada → recogida
@@ -258,7 +258,7 @@ La tablet conserva operaciones pendientes en su almacenamiento local. Un registr
 
 La escritura y su registro de idempotencia se confirman juntas. Dos peticiones simultáneas con la misma clave se serializan mediante unicidad y coordinación transaccional; no basta con consultar primero si existe. Envíos externos se procesan después del commit mediante `evento_salida`; un fallo de mensajería no revierte una recolección ya registrada.
 
-El contrato inicial conserva claves al menos 24 horas. Eso cubre reintentos HTTP, pero no garantiza deduplicación offline prolongada. Antes de habilitar offline se acordará cuánto tiempo puede pasar una tablet desconectada y se retendrán identificadores de operación durante esa ventana, o se rechazará una sincronización demasiado antigua para revisión. No se promete deduplicación indefinida con claves ya eliminadas.
+El contrato modular conserva claves HTTP al menos 24 horas y exige que la retención offline cubra la ventana anunciada por el servidor. Antes de habilitar offline se acordará cuánto tiempo puede pasar una tablet desconectada y se retendrán identificadores de operación durante esa ventana, o se rechazará una sincronización demasiado antigua para revisión. No se promete deduplicación indefinida con claves ya eliminadas.
 
 La versión esperada evita que una tablet sobrescriba una reasignación más reciente. Ante conflicto se conserva el trabajo pendiente y se solicita revisión; no se aplica «último en escribir gana» a resultados o pesajes. Los lotes de sincronización tendrán dependencias y confirmación por operación para poder reintentar solo lo pendiente.
 
@@ -323,11 +323,11 @@ Se validarán cantidades, ventanas horarias y coherencia de FK al escribir. Las 
 | QR | Aparece en una línea del ciclo, aunque el plan rechaza QR e imanes reiteradamente | No se requiere QR; Pasaporte legible y canales existentes |
 | Usuario y recolector | Tabla resumida incluye rol recolector; otros apartados dicen que no tiene cuenta | Entidad de recolector separada de identidad y cuenta de acceso |
 | Racha | La transcripción muestra «-1,5 durante la semana 5» junto al principio de no penalización | No fijar multiplicador o descuento: confirmar el original antes de configurar |
-| Rechazo parcial | Se menciona como ajuste del plan, mientras el contrato inicial solo recoge rechazo total | Admitir kg aceptados/rechazados en pesaje; resultado parcial por orden pendiente de contrato |
+| Rechazo parcial | Se menciona como ajuste del plan, mientras el resultado inicial de orden distingue recogida y rechazo total | Admitir kg aceptados/rechazados en pesaje; resultado parcial por orden pendiente de contrato |
 | Atribución de kilos | Se piden kilos por torre, aunque hay lotes de múltiples hogares | Solo atribuir torre u hogar cuando exista evidencia de procedencia medible |
 | Tecnologías | El plan sugiere PostgreSQL 16 y frameworks; el repositorio ya documenta PostgreSQL 18 | Usar la infraestructura acordada; no fijar ORM ni framework por este diseño |
 
-El contrato inicial cubre un subconjunto manual de este documento. No se amplían sus endpoints de manera implícita: identidad, entregas directas, borradores, incentivos y offline necesitarán contratos propios. El núcleo puede implementarse antes de esas extensiones.
+El contrato modular 0.2 desarrolla las interfaces de identidad, entregas directas, borradores, incentivos y offline, además del recorrido manual. Sus rutas son propuestas, no funcionalidades implementadas. El núcleo puede construirse antes de habilitar las extensiones, manteniendo explícitas las reglas pendientes de validar con el reto.
 
 ## 13. Decisiones para cerrar con el contexto de la hackathon
 

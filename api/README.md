@@ -1,6 +1,6 @@
 # Incorporar la API
 
-Propuesta funcional editable: [contrato inicial de API](../docs/contrato-api.md).
+Propuesta funcional editable: [contrato modular de API](../docs/contrato-api.md).
 Es un borrador para acordar con el equipo antes de implementar el dominio.
 
 El framework se elegirá con las reglas del reto. Aquí se añadirá su proyecto y
