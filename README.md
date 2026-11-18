@@ -61,7 +61,9 @@ contraseña tampoco modifica una base ya inicializada.
 
 ## Guías y estructura
 
-- `api/` y `web/`: puntos de incorporación de las aplicaciones futuras.
+- [Backend](api/README.md): instrucciones de incorporación y `.env.example` local.
+- [Paneles](web/README.md): espacios provisionales de coordinación y Fundación,
+  con puertos de desarrollo 3000 y 3001; API compartida en el puerto 8000.
 - `infra/`: Compose, ejemplos de entorno y validaciones.
 - [Integración de aplicaciones y despliegue separado](docs/integracion.md).
 - [Servidor, respaldos, traslado y recuperación](docs/operacion.md).
