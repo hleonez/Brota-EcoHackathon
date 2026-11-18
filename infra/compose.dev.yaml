@@ -1,0 +1,7 @@
+services:
+  db:
+    ports:
+      - target: 5432
+        published: "${DB_LOCAL_PORT:-5432}"
+        host_ip: 127.0.0.1
+        protocol: tcp

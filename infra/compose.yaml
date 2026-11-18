@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:18.7-bookworm
+    environment:
+      POSTGRES_DB: ${DB_NAME:?Set DB_NAME in the environment file}
+      POSTGRES_USER: ${DB_USER:?Set DB_USER in the environment file}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets:
+      - db_password
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+
+secrets:
+  db_password:
+    file: ${DB_PASSWORD_FILE:?Set DB_PASSWORD_FILE to a local secret file}
