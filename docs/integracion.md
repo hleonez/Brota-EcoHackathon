@@ -1,5 +1,8 @@
 # Integrar API y paneles
 
+Para rutas, entradas y respuestas del primer recorrido propuesto, consulta el
+[contrato inicial de API](contrato-api.md). Esta guía cubre su integración técnica.
+
 ## Contrato mínimo
 
 Cada aplicación tendrá una imagen con comando de inicio propio, puerto configurable,
