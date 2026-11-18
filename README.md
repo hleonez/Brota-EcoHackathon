@@ -104,6 +104,8 @@ el comando del paso 4. No vuelvas a crear la configuración ni la contraseña.
 
 ### Para detenerlo
 
+Ejecuta este comando cuando termines de trabajar y quieras apagar la base:
+
 ```powershell
 docker compose --env-file infra/env/dev.env -f infra/compose.yaml -f infra/compose.dev.yaml down
 ```
@@ -127,21 +129,50 @@ El secreto no se regenera en arranques posteriores. Para reiniciar basta el coma
 Si el puerto 5432 está ocupado, cambia `DB_LOCAL_PORT` en `dev.env`.
 La base queda accesible en `127.0.0.1:5432` (o el puerto configurado).
 
-## Operación local
+## Comandos opcionales de consulta
 
-Los siguientes comandos funcionan en PowerShell y Bash:
+Usa solo el comando que necesites. **Son consultas independientes**, no pasos que
+debas ejecutar todos seguidos después de iniciar la base. Funcionan en PowerShell
+y Bash desde la raíz del proyecto. Copia cada comando en una sola línea, sin
+añadir una barra `\` al final.
+
+### Ver si la base está funcionando
+
+Muestra el estado del contenedor. Busca el servicio `db` con estado `healthy`:
 
 ```text
 docker compose --env-file infra/env/dev.env -f infra/compose.yaml -f infra/compose.dev.yaml ps
-docker compose --env-file infra/env/dev.env -f infra/compose.yaml -f infra/compose.dev.yaml logs --tail 100 db
-docker compose --env-file infra/env/dev.env -f infra/compose.yaml -f infra/compose.dev.yaml exec db psql -U brota_admin -d brota -c "SELECT current_database(), version();"
-docker compose --env-file infra/env/dev.env -f infra/compose.yaml -f infra/compose.dev.yaml down
 ```
 
-Si cambiaste `DB_USER` o `DB_NAME`, ajusta también el comando SQL. `down` conserva
-el volumen; `down -v` lo elimina. Cambiar el nombre del proyecto selecciona otro
-volumen, no mueve los datos. Cambiar variables de inicialización o el archivo de
-contraseña tampoco modifica una base ya inicializada.
+### Consultar mensajes si ocurre un error
+
+Muestra los últimos 100 mensajes de PostgreSQL. Úsalo si la base no arranca o
+necesitas investigar un problema:
+
+```text
+docker compose --env-file infra/env/dev.env -f infra/compose.yaml -f infra/compose.dev.yaml logs --tail 100 db
+```
+
+### Comprobar que PostgreSQL responde a una consulta
+
+Con la base encendida, ejecuta esta consulta de lectura. Muestra el nombre de la
+base y la versión de PostgreSQL; no modifica los datos:
+
+```text
+docker compose --env-file infra/env/dev.env -f infra/compose.yaml -f infra/compose.dev.yaml exec db psql -U brota_admin -d brota -c "SELECT current_database(), version();"
+```
+
+Si cambiaste `DB_USER` o `DB_NAME` en `infra/env/dev.env`, reemplaza `brota_admin`
+o `brota` en este comando por los valores que elegiste.
+
+Para apagar la base al terminar, usa el apartado **Para detenerlo** del tutorial.
+
+### Sobre la configuración de una base existente
+
+Cambiar el nombre del proyecto selecciona otro volumen, no mueve los datos.
+Cambiar variables de inicialización o el archivo de contraseña tampoco modifica
+una base ya inicializada. Consulta la [guía de operación](docs/operacion.md) antes
+de cambiar una instalación con datos.
 
 ## Guías y estructura
 
