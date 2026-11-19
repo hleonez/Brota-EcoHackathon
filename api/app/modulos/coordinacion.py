@@ -148,7 +148,8 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
     )
     gremio = db.get(Gremio, o.gremio_id)
     franja = franja_texto(datos.inicio, datos.fin)
-    texto = f"🚲 {r.nombre} pasa {franja}. Ten la bolsa lista en la puerta." if franja else (
+    # franja termina en "p. m." / "a. m.": no repetir el punto.
+    texto = f"🚲 {r.nombre} pasa {franja} Ten la bolsa lista en la puerta." if franja else (
         f"🚲 {r.nombre} va a pasar por tu recolección. Te avisamos cualquier novedad."
     )
     encolar_aviso(

@@ -10,13 +10,15 @@ Se actualiza en cada paso de trabajo.
 | --- | --- | --- |
 | PostgreSQL 18 (Docker) | Funcionando | `infra/` |
 | API central (FastAPI) | Núcleo funcionando, 20 pruebas en verde | `api/`, rama `feat/api-nucleo` |
-| Integración con el bot | Lista del lado de la API | [integracion-bot.md](integracion-bot.md) |
-| Bot de WhatsApp (Meta) | Por construir (lo hace el equipo) | — |
+| Integración con el bot | Probada de punta a punta (dry-run contra la API real) | [integracion-bot.md](integracion-bot.md) |
+| Bot de WhatsApp (Meta) | Esqueleto funcionando, 14 pruebas; falta conectarlo al webhook de Meta | `bot/`, rama `feat/bot-whatsapp` |
+| App de Meta | Creada (BrotaBrisa), número de prueba enviando | [guia-bot-meta.md](guia-bot-meta.md) |
 | Paneles / tablet | Pospuesto | `web/` |
-| IA (tiquete, audios), canjes, certificado | Pendiente | — |
+| IA con Gemini (tiquete, audios) | Decidido, por construir en la API | — |
+| Canjes, certificado, exportaciones | Pendiente | — |
 
-Rama de trabajo: `feat/api-nucleo` (subida a GitHub). **`main` no se ha modificado**; se fusiona
-después de verificar.
+Ramas: `feat/api-nucleo` (subida a GitHub) y `feat/bot-whatsapp` (sale de la anterior; aún
+local). **`main` no se ha modificado**; se fusiona después de verificar.
 
 ---
 
@@ -124,15 +126,88 @@ El equipo construye el bot con la WhatsApp Cloud API de Meta y un número propio
 
 ---
 
+## 5 · 18-nov-2026 · Revisión de estructura, guía del bot y elección de Gemini
+
+**Revisión de la estructura (¿es escalable y profesional?):** sí para el piloto y para seguir
+creciendo. Es un monolito modular (lo que pide el plan), con migraciones versionadas, contrato
+documentado, pruebas contra PostgreSQL real, idempotencia y permisos por gremio. Mejoras
+identificadas, por prioridad:
+
+| Prioridad | Mejora | Por qué |
+| --- | --- | --- |
+| Alta | CI de la API en GitHub Actions (ruff + pytest con PostgreSQL) | Hoy las pruebas solo corren en local |
+| Alta | El bot en `bot/` dentro del mismo repositorio, con su Dockerfile y servicio Compose | Un solo contrato y un solo despliegue |
+| Media | Rol de PostgreSQL restringido para la API | Hoy usa el administrador en desarrollo |
+| Media | Configuración de ruff en `pyproject.toml` | Estilo uniforme en el equipo |
+| Media | Dividir `pesajes.py` (800 líneas) en esquemas/servicio/rutas al volver a tocarlo | Legibilidad |
+| Baja | Despachador de avisos como proceso aparte si hay varias réplicas | Hoy es un hilo dentro de la API |
+| Baja | Carga anticipada en listados (consultas N+1) | Solo importa con miles de registros |
+
+**Guía del bot:** nueva [guia-bot-meta.md](guia-bot-meta.md), con 6 fases: crear la app de Meta,
+webhook, conexión con la API, avisos, token permanente y número propio, y publicación.
+
+**IA con Gemini (Google AI Studio):** se adopta Gemini como proveedor. Encaja con el plan:
+entiende audio e imágenes directamente (no hace falta un servicio de transcripción aparte) y
+devuelve JSON con esquema. Decisiones:
+- La llave de Gemini vive **solo en la API** (módulo M06), no en el bot ni en la tablet. El bot y
+  la tablet llaman a la API; la IA propone y una persona confirma.
+- Nivel gratuito solo con datos ficticios: según los términos de Google, lo enviado en el nivel
+  gratuito puede usarse para mejorar sus productos. Con vecinos reales, nivel de pago.
+- Si Gemini falla, el flujo manual sigue funcionando.
+
+---
+
+## 6 · 18-nov-2026 · App de Meta y esqueleto del bot (rama `feat/bot-whatsapp`)
+
+**Meta (Fase 1 de la guía, hecha por el equipo):**
+- App **BrotaBrisa** creada con el caso de uso de WhatsApp, en el portafolio existente «Fymbot»:
+  el límite de portafolios de la cuenta impidió crear uno nuevo. Sirve para desarrollo. Antes de
+  registrar el número real conviene un portafolio «Brota» (creado por otro integrante).
+- Número de prueba +1 555 656-3261; el `hello_world` llegó al celular autorizado.
+- Un token temporal quedó visible en una captura: se recomendó regenerarlo y tapar los secretos.
+
+**Decisión:** bot en **Python + FastAPI** (mismo stack que la API), dentro del repo en `bot/`.
+
+**Qué se construyó (`bot/`):**
+- Webhook de Meta: verificación (`GET /webhook`), recepción con validación de la firma
+  `X-Hub-Signature-256`, respuesta inmediata y procesamiento en segundo plano, en orden por vecino,
+  e ignorando reenvíos de Meta por `wamid`.
+- Conversación de Brisa: registro (nombre → torre en lista → apartamento → consentimiento con
+  «Ver más»), menú de 3 botones, PUNTOS, ESTADO, LIGA y BORRAR MIS DATOS.
+- Cliente de la API con `X-Canal-Celular` y `Idempotency-Key` = `wamid`.
+- Bucle de avisos: reserva → envío → confirmación; si pasaron 24 h, plantilla aprobada
+  (`brota_asignacion`, `brota_recoleccion`, `brota_rechazo`) cuando se active.
+- Modo **dry-run** (no llama a Meta) y **simulador** de mensajes firmados para probar sin celular.
+- `bot/Dockerfile` e `infra/compose.bot.yaml` (el bot llama a la API por la red interna).
+
+**Ajustes en la API:** se quitó el doble punto en el aviso de asignación («p. m.. Ten…»).
+
+**Verificación:**
+- 14 pruebas del bot con Meta y la API simuladas; 20 de la API siguen en verde.
+- Prueba real, dry-run contra la API en Docker: registro de un vecino, «Los dos» → BR-00001,
+  segunda solicitud bloqueada por la regla de solicitud abierta, asignación y recogida hechas por
+  la coordinación → el bot entregó solos los dos avisos («Jairo pasa mañana…», «+10 puntos») y la
+  API los marcó como enviados.
+- Encontrado y corregido en las pruebas: «Apto 402» no se reconocía; «hola» se tomaba como nombre.
+- Contenedores de API y bot construidos y sanos; la validación de infraestructura sigue pasando.
+
+**Pendiente:** conectar el webhook real de Meta (README del bot, sección 2), plantillas,
+token permanente y número propio.
+
+---
+
 ## Próximos pasos
 
-- [ ] Revisar la rama `feat/api-nucleo` y fusionarla a `main`.
-- [ ] Bot: cuenta de Meta for Developers, número de prueba, webhook y primer «hola» → `GET /v1/me`.
-- [ ] Bot: registro, menú de 3 botones y bucle de avisos contra la API.
+- [ ] Revisar las ramas `feat/api-nucleo` y `feat/bot-whatsapp` y fusionarlas a `main`.
+- [x] Bot: Fase 1 de la guía (app de Meta y número de prueba).
+- [x] Bot: esqueleto con registro, menú, solicitudes y avisos contra la API.
+- [ ] Bot: Fase 2 (webhook real con `cloudflared`) y prueba desde el celular.
 - [ ] Plantillas de WhatsApp enviadas a aprobación.
+- [ ] API: CI en GitHub Actions y configuración de ruff.
+- [ ] API: módulo M06 con Gemini (interpretar audio/texto y leer el tiquete de pesaje).
 - [ ] Datos reales: viviendas por torre, lista de precios de Asorescatar, peso del balde.
 - [ ] 20-nov: ajustar al stack y criterios oficiales del reto.
-- [ ] Después: IA (tiquete y audios), Certificado Verde, exportación Excel, canjes, paneles.
+- [ ] Después: Certificado Verde, exportación Excel, canjes, paneles.
 
 ## Decisiones abiertas para el equipo
 

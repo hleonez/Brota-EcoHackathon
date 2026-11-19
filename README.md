@@ -178,7 +178,9 @@ de cambiar una instalación con datos.
 
 - [Bitácora de cambios](docs/bitacora.md): qué se ha hecho paso a paso, estado y próximos pasos.
 - [Backend](api/README.md): ejecución, pruebas, migraciones y Docker de la API.
-- [Contrato de API](docs/contrato-api.md) e [integración del bot de WhatsApp](docs/integracion-bot.md).
+- [Bot de WhatsApp](bot/README.md): Brisa, probar sin Meta, conectar el webhook y Docker.
+- [Contrato de API](docs/contrato-api.md), [integración del bot](docs/integracion-bot.md) y
+  [guía paso a paso del bot con Meta](docs/guia-bot-meta.md).
 - [Paneles](web/README.md): espacios provisionales de coordinación y Fundación,
   con puertos de desarrollo 3000 y 3001; API compartida en el puerto 8000.
 - `infra/`: Compose, ejemplos de entorno y validaciones.
