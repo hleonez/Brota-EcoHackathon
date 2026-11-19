@@ -52,6 +52,8 @@ def _parametros(datos: dict[str, Any], campos: list[str]) -> list[str]:
             v = ", ".join(str(x) for x in v)
         if isinstance(v, str) and c in ("puntos_otorgados", "saldo") and "." in v:
             v = v.rstrip("0").rstrip(".")
+        if v in (None, "") and c == "franja_texto":
+            v = "pronto"  # «Rosa pasará por tu recolección pronto»
         valores.append(str(v) if v not in (None, "") else "-")  # Meta rechaza parámetros vacíos
     return valores
 

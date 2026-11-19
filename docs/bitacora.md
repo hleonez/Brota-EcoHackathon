@@ -485,6 +485,23 @@ un VPS, y más adelante un dominio con túnel con nombre.
 
 ---
 
+## 14 · 19-nov-2026 · Plantillas de WhatsApp enviadas a Meta desde el código
+
+- Commit `a0cb2ba` (IA y autoconexión) y rama subida a GitHub.
+- **`python -m app.meta crear-plantillas`:** crea en la cuenta de WhatsApp las plantillas de los
+  avisos que pueden salir fuera de la ventana de 24 h. Usa la API de WhatsApp Business con el token
+  permanente (permiso `whatsapp_business_management`); es lo mismo que el formulario de WhatsApp
+  Manager. `python -m app.meta plantillas` muestra su estado.
+  - Las cuatro: `brota_asignacion`, `brota_recoleccion`, `brota_rechazo` y `brota_nueva_orden`.
+  - Español, categoría UTILITY.
+  - El orden de las variables coincide con `app/avisos.py`.
+- `WHATSAPP_WABA_ID` en `bot/.env`: la cuenta de WhatsApp de Brisa.
+- Si una asignación no tiene hora, la plantilla dice «pasará por tu recolección pronto».
+- **Estado:** las 4 enviadas el 19-nov y **en revisión (PENDING)**. Cuando estén aprobadas, se activa
+  `WHATSAPP_USAR_PLANTILLAS=true`.
+
+---
+
 ## Próximos pasos
 
 - [ ] Revisar las ramas y fusionar `feat/coordinacion-whatsapp` a `main`.

@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     # Si está definida, el bot registra solo su webhook en Meta con la URL pública del túnel.
     tunel_metricas_url: str = ""
     whatsapp_app_id: str = ""  # opcional: si falta, se obtiene del token
+    whatsapp_waba_id: str = ""  # cuenta de WhatsApp Business (plantillas: python -m app.meta)
 
     # Laboratorio (solo desarrollo): http://localhost:8090/lab con celulares simulados.
     # Lo que Brisa envíe a un celular simulado se queda en el laboratorio; nunca sale a Meta.
