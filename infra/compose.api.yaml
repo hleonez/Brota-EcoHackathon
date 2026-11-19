@@ -1,0 +1,40 @@
+# API de Brota como servicio de Compose (capa opcional sobre compose.yaml).
+#
+# Desarrollo (PostgreSQL + API en Docker):
+#   docker compose --env-file infra/env/dev.env -f infra/compose.yaml -f infra/compose.dev.yaml -f infra/compose.api.yaml up -d --build --wait
+#
+# Lee secretos de api/.env (JWT_SECRET, BOT_SERVICE_TOKEN, ...). La conexión a la base se
+# fuerza a la red interna (db:5432) y usa el mismo secreto montado del contenedor de PostgreSQL.
+services:
+  api:
+    build:
+      context: ../api
+    env_file:
+      - path: ../api/.env
+        required: false
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:?Set DB_NAME in the environment file}
+      DB_USER: ${API_DB_USER:-${DB_USER}}
+      DB_PASSWORD: ""
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      DB_SSLMODE: disable
+      MIGRAR_AL_INICIAR: ${API_MIGRAR_AL_INICIAR:-true}
+      SEMBRAR_AL_INICIAR: ${API_SEMBRAR_AL_INICIAR:-false}
+    secrets:
+      - db_password
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - target: 8000
+        published: "${API_LOCAL_PORT:-8000}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,9 +1,9 @@
 # Brota · Base de infraestructura
 
-Infraestructura PostgreSQL desplegable y guía para incorporar la API y los paneles
-cuando se conozcan los frameworks del reto. La base se inicia vacía: todavía no
-hay aplicaciones, tablas de negocio ni migraciones. El plan maestro es una
-referencia de producto, no una selección definitiva de tecnologías.
+Infraestructura PostgreSQL desplegable y la API central de Brota (`api/`, FastAPI
+con migraciones Alembic). La API atiende al bot de WhatsApp y a los futuros paneles.
+El plan maestro es una referencia de producto; el stack puede ajustarse si el reto
+impone otro.
 
 ## Requisitos
 
@@ -17,8 +17,8 @@ la raíz de este repositorio, después de clonarlo y entrar en su carpeta.
 
 ## Cómo levantar el proyecto en Windows
 
-**Por ahora solo puedes levantar la base de datos.** El backend y los paneles
-todavía son carpetas preparadas para crear las aplicaciones durante la hackathon.
+Estos pasos levantan PostgreSQL. La API (FastAPI) ya existe en `api/`: después del
+paso 4 sigue [api/README.md](api/README.md). Los paneles todavía son carpetas preparadas.
 
 ### 1. Abre Docker Desktop
 
@@ -176,7 +176,8 @@ de cambiar una instalación con datos.
 
 ## Guías y estructura
 
-- [Backend](api/README.md): instrucciones de incorporación y `.env.example` local.
+- [Backend](api/README.md): ejecución, pruebas, migraciones y Docker de la API.
+- [Contrato de API](docs/contrato-api.md) e [integración del bot de WhatsApp](docs/integracion-bot.md).
 - [Paneles](web/README.md): espacios provisionales de coordinación y Fundación,
   con puertos de desarrollo 3000 y 3001; API compartida en el puerto 8000.
 - `infra/`: Compose, ejemplos de entorno y validaciones.

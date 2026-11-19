@@ -26,3 +26,5 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+.pytest_cache/
+.ruff_cache/

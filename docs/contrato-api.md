@@ -1,240 +1,155 @@
-# Contrato inicial de API · Brota
+# Contrato de API · Brota
 
-Estado: **borrador 0.1 para acordar con el equipo**. Describe una primera versión
-funcional del servicio; no implementa endpoints ni define tablas o un framework.
-Las decisiones de negocio que siguen son propuestas revisables con el reto.
+Estado: **0.2-brota.1, implementado** en `api/` (FastAPI). Parte del contrato modular 0.2
+(18-nov-2026) y del diseño de base de datos; reemplaza el borrador 0.1. Los esquemas exactos
+de entrada y salida se publican en OpenAPI: `GET /docs` y `GET /openapi.json` en la API.
+Si este documento y OpenAPI discrepan, manda OpenAPI y se corrige este archivo.
 
-## 1. Objetivo y recorrido inicial
+Integración del bot de WhatsApp: [integracion-bot.md](integracion-bot.md).
 
-Una API compartida para registrar una solicitud, mostrarla a coordinación,
-asignar su atención, confirmar el resultado y registrar el material recibido.
-El panel de la Fundación consulta información del mismo servicio.
+## 1. Convenciones
 
-Recorrido propuesto:
+- Base local `http://localhost:8000/v1`; detrás del proxy `/api/v1` (`ROOT_PATH=/api`). Salud fuera de `/v1`.
+- JSON UTF-8, campos `snake_case`, IDs UUID como string generados por el servidor.
+- Escritura: se rechazan campos desconocidos (`422`). Lectura: los clientes ignoran campos nuevos.
+- Instantes ISO 8601 con zona; respuestas en UTC con `Z`. Periodos `[desde, hasta)`. Meses y
+  semanas locales en `America/Bogota`.
+- **Decimales como strings con punto**: kg con 3 decimales (`"9.000"`), puntos con 2, precios con 4.
+  Un número JSON (`9.0`) se rechaza.
+- Respuesta individual `{"data": {...}}`; listas `{"data": [...], "pagination": {"limit", "offset", "has_more"}}`
+  (`limit` 20 por defecto, máximo 100; orden `created_at` desc, `id` desc).
+- Error: `{"error": {"code", "message", "fields?", "request_id", ...}}`. `code` es estable.
+- Recursos editables traen `version`; las acciones exigen `version_esperada` (`409 VERSION_CONFLICT`).
+- `POST`/`PATCH` de dominio exigen `Idempotency-Key` (1–128). Misma clave y cuerpo → misma
+  respuesta (cabecera `Idempotent-Replayed: true`); otro cuerpo → `409 IDEMPOTENCY_CONFLICT`;
+  sin clave → `400 IDEMPOTENCY_KEY_REQUIRED`. Retención: 72 h. Excepciones: `/auth/sesiones`,
+  `/sync` (usa `operacion_id` por operación) y `/canal/avisos/*`.
 
-```text
-Solicitud → orden por equipo → asignación → resultado de recogida
-                                               ↓
-                                   pesaje del material recibido
-                                               ↓
-                                      resumen para paneles
-```
+Códigos: `200`, `201`, `202`, `400`, `401`, `403`, `404` (inexistente o fuera de ámbito), `409`,
+`422`, `503`. Códigos de error de dominio: `VALIDATION_ERROR`, `VERSION_CONFLICT`,
+`INVALID_TRANSITION`, `OPEN_REQUEST_EXISTS`, `IDEMPOTENCY_CONFLICT`, `CONSENT_REQUIRED`,
+`NOT_REGISTERED`, `CONTACT_ALREADY_REGISTERED`, `LIGA_NOT_CONFIGURED`, `VIGENCIA_SOLAPADA`,
+`DEPENDENCY_PENDING`, `OPERATION_TOO_OLD`, `DUPLICATE`, `INVALID_CREDENTIALS`.
 
-Separar los conceptos permite cambiar canales y pantallas sin rehacer la API:
+## 2. Actores y autenticación
 
-| Concepto | Significado propuesto |
-| --- | --- |
-| Ubicación | Referencia conocida de hogar, negocio o punto; su estructura se definirá con el reto |
-| Solicitud | Una petición de atención asociada a una ubicación |
-| Orden | Trabajo para un equipo dentro de una solicitud |
-| Recolector | Persona que atiende la orden; no implica una cuenta de usuario |
-| Pesaje | Registro confirmado de kilos recibidos, por material |
-| Catálogo | Equipos, tipos de servicio, materiales y motivos disponibles |
+`Authorization: Bearer <token>`:
 
-No se fija un recurso genérico de «usuarios» que mezcle residentes, recolectores
-y operadores. Identidad, registro, consentimiento y permisos necesitan validación
-antes de definir sus operaciones.
-
-## 2. Convenciones técnicas
-
-- HTTP y JSON UTF-8; cuerpos con `Content-Type: application/json`.
-- Desarrollo: `http://localhost:8000/v1`. Servidor con proxy: `/api/v1`.
-  `/api` es el prefijo de despliegue; `/v1` es la versión del contrato.
-- Salud fuera de la versión: `/health/live` y `/health/ready` en desarrollo;
-  `/api/health/live` y `/api/health/ready` detrás del proxy.
-- IDs opacos de tipo string: el cliente no interpreta su formato ni genera IDs
-  de entidades del servidor. Los ejemplos usan identificadores ficticios.
-- Campos JSON en `snake_case`. Fechas de auditoría ISO 8601 en UTC, con `Z`.
-  Los horarios enviados incluirán zona u offset; los paneles los mostrarán en hora local.
-- Respuesta individual: `{"data": {...}}`. Listas: `{"data": [], "pagination":
-  {"limit": 20, "offset": 0, "has_more": false}}`.
-- Listas con `limit` por defecto 20, máximo 100, y `offset` desde 0.
-  Orden por `created_at` descendente, desempate por `id` descendente.
-- `201` al crear, `200` al consultar o ejecutar una acción, `400` para JSON o
-  parámetros inválidos, `404` si no existe el recurso, `409` para conflictos de
-  estado y `422` para campos que incumplen el contrato. `503` para indisponibilidad.
-- Error común: `{"error":{"code":"VALIDATION_ERROR","message":"Revisa los
-  campos enviados","fields":{"ubicacion_id":"Campo obligatorio"}}}`.
-  `fields` es opcional; `code` es estable y `message` puede cambiar.
-- El cliente enviará únicamente campos documentados. Los nuevos campos de
-  respuesta opcionales serán compatibles; los clientes ignorarán campos desconocidos.
-  Los cambios incompatibles se acordarán en el contrato antes de implementarlos.
-
-Autenticación pendiente de acordar: no se prescribe JWT, sesiones ni proveedor.
-Los endpoints operativos y reportes requerirán autorización del lado servidor;
-`401` indicará falta de autenticación y `403` falta de permiso. Ocultar un botón
-en el panel no autoriza una operación. El mecanismo y las capacidades por actor
-deberán cerrarse antes de exponer datos reales fuera del entorno de desarrollo.
-
-## 3. Endpoints del primer recorrido
-
-Las rutas de la tabla son relativas a `/v1`. Los campos marcados con `?` son
-opcionales; si no se indica otro valor, se omiten al no tener información.
-Todos los recursos incluyen `id` y `created_at` en sus respuestas.
-
-| Método y ruta | Entrada o filtros | Respuesta |
+| Actor | Credencial | Alcance |
 | --- | --- | --- |
-| `GET /catalogos` | Sin filtros | Catálogos vigentes para construir selectores |
-| `POST /solicitudes` | `ubicacion_id`, `tipo_servicio_ids[]`, `observacion?` | Solicitud y órdenes creadas, `201` |
-| `GET /solicitudes` | `ubicacion_id?`, paginación | Lista de solicitudes con sus órdenes |
-| `GET /solicitudes/{id}` | ID | Solicitud con sus órdenes |
-| `GET /ordenes` | `equipo_id?`, `estado?`, `recolector_id?`, paginación | Bandeja de órdenes |
-| `POST /ordenes/{id}/asignacion` | `recolector_id`, `inicio?`, `fin?` | Orden actualizada |
-| `POST /ordenes/{id}/resultado` | `resultado`, `motivo_id?`, `observacion?` | Orden actualizada |
-| `POST /pesajes` | Datos de pesaje descritos abajo | Pesaje confirmado, `201` |
-| `GET /pesajes` | `recolector_id?`, `desde?`, `hasta?`, paginación | Lista de pesajes |
-| `GET /reportes/resumen` | `desde`, `hasta`, `equipo_id?` | Conteos de órdenes y kilos por material |
+| Bot de WhatsApp (servicio) | `BOT_SERVICE_TOKEN` | Reservar y confirmar avisos |
+| Residente / negocio | `BOT_SERVICE_TOKEN` + `X-Canal-Celular` | Su perfil, solicitudes de sus unidades, puntos, Liga |
+| Contacto no registrado | Igual, número sin registro | Registrarse, consultar territorio y catálogos |
+| Coordinación | JWT de `POST /v1/auth/sesiones` (usuario + PIN) | Órdenes, recolectores y pesajes **de su gremio** |
+| Fundación | JWT, rol `fundacion` | Reportes agregados y Liga |
+| Administración | JWT, rol `admin` | Catálogos, configuración y cuentas |
 
-### Catálogos
+El recolector no tiene cuenta: la coordinación registra por él. El rol `admin` no concede
+bandeja ni datos personales de residentes.
 
-`GET /catalogos` devuelve `data` con arrays `tipos_servicio`, `equipos`,
-`recolectores`, `materiales` y `motivos_rechazo`. Cada entrada incluye `id`,
-`nombre` y `activo`. Los tipos de servicio, recolectores y materiales incluyen
-`equipo_id`. Los tipos representan atención por un solo equipo; seleccionar
-varios permite una solicitud mixta. La configuración de los catálogos se resolverá
-al implementar; no se propone todavía un CRUD de administración.
+## 3. Endpoints
 
-Los IDs de ubicación vendrán de datos de demostración o del futuro flujo de
-registro. Este borrador no ofrece un directorio público de hogares o teléfonos.
+`●` implementado · `○` previsto en 0.2, aún no implementado.
 
-### Solicitudes y órdenes
+### M12 · Salud, capacidades y sesión
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `GET /health/live`, `GET /health/ready` | `ready` comprueba PostgreSQL (`503` si no) |
+| ● | `GET /v1/capacidades` | Módulos activos, decimales, sync, modo de avisos, política vigente |
+| ● | `POST /v1/auth/sesiones` | `{usuario, pin}` → `{token, expira_en, cuenta}` |
 
-Crear una solicitud acepta uno o más tipos de servicio activos, sin duplicados.
-El servidor crea una orden por equipo distinto y devuelve todo en una operación
-atómica. Un tipo inexistente o inactivo produce `422`, sin creación parcial.
-El origen se deriva del adaptador que recibe la petición, no de un campo usado
-para conceder permisos. WhatsApp o una web podrán invocar el mismo caso de uso.
+### M01 · Identidad
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `GET /v1/me` | `tipo_actor`, `registrado`, unidades, consentimiento vigente, permisos, capacidades |
+| ● | `POST /v1/registros` | Canal: `{nombre, unidad_id, consentimiento}`; exige `aceptado` |
+| ● | `POST /v1/registros/asistidos` | Coordinación/admin; puede quedar `incompleto` |
+| ● | `POST /v1/me/consentimientos` | `aceptado` / `retirado` con versión vigente |
+| ● | `POST`, `GET /v1/me/solicitudes-eliminacion` | `202` con seguimiento |
+| ● | `GET`, `POST /v1/cuentas-operadoras`, `PATCH /v1/cuentas-operadoras/{id}` | Admin; PIN hasheado (scrypt) |
 
-Ejemplo de creación:
+### M02 · Territorio y catálogos
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `GET /v1/conjuntos`, `GET /v1/conjuntos/{id}/torres` | Torres con `numero_viviendas` vigente |
+| ● | `GET /v1/unidades` | Canal: solo coincidencia exacta `torre_id` + `referencia`; operadores: búsqueda |
+| ● | `POST /v1/unidades` | Admin |
+| ● | `GET /v1/catalogos` | Gremios, tipos de servicio, materiales, motivos, puntos de recepción, equivalencias vigentes |
+| ● | `GET`, `POST /v1/recolectores`, `PATCH /v1/recolectores/{id}` | Coordinación del gremio o admin |
 
-```http
-POST /v1/solicitudes
-Content-Type: application/json
-Idempotency-Key: 7621d141-dc53-42c3-b740-b19fb7d68f59
-```
+### M03 · Solicitudes y Pasaporte Circular
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `POST /v1/solicitudes` | Residente. Una orden por gremio, atómico. `unidad_id` opcional con una sola unidad |
+| ● | `GET /v1/solicitudes` | `unidad_id?`, `abiertas?`. Residente: sus unidades; coordinación: su gremio |
+| ● | `GET /v1/solicitudes/{id}` | `avance` con `estado_general`: `pendiente`, `en_curso`, `parcial`, `atendida` |
+| ● | `GET /v1/solicitudes/{id}/pasaporte` | Eventos, pesajes de procedencia (sin reparto de kg) y puntos |
 
-```json
-{
-  "ubicacion_id": "ubicacion-demo-1",
-  "tipo_servicio_ids": ["reciclables", "organicos"],
-  "observacion": "Hay cartón y restos de cocina"
-}
-```
+Regla de solicitud abierta (configurable, `REGLA_SOLICITUD_ABIERTA`): un servicio con orden
+`nueva`/`asignada` en la misma unidad → `409 OPEN_REQUEST_EXISTS` con `codigo_pasaporte`.
 
-```json
-{
-  "data": {
-    "id": "solicitud-demo-1",
-    "created_at": "2026-11-20T15:00:00Z",
-    "ubicacion_id": "ubicacion-demo-1",
-    "tipo_servicio_ids": ["reciclables", "organicos"],
-    "observacion": "Hay cartón y restos de cocina",
-    "ordenes": [
-      {
-        "id": "orden-demo-1",
-        "created_at": "2026-11-20T15:00:00Z",
-        "solicitud_id": "solicitud-demo-1",
-        "equipo_id": "equipo-reciclaje",
-        "estado": "nueva"
-      },
-      {
-        "id": "orden-demo-2",
-        "created_at": "2026-11-20T15:00:00Z",
-        "solicitud_id": "solicitud-demo-1",
-        "equipo_id": "equipo-huerta",
-        "estado": "nueva"
-      }
-    ]
-  }
-}
-```
+### M04 · Coordinación
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `GET /v1/ordenes` | Bandeja: `gremio_id?`, `estado?`, `recolector_id?`, `desde?`, `hasta?` |
+| ● | `GET /v1/ordenes/{id}` | Ubicación, contacto (nombre), asignación vigente, reasignaciones, resultado |
+| ● | `POST /v1/ordenes/{id}/asignacion` | `{version_esperada, recolector_id, inicio?, fin?, forma_aviso}`; reasigna conservando historia; aviso `asignacion` |
+| ● | `POST /v1/ordenes/{id}/resultado` | `{version_esperada, resultado, ocurrido_at, motivo_rechazo_id?, observacion?}` → `evaluacion_puntos`, `puntos_otorgados` |
 
-Estados propuestos de **orden**, no de la solicitud completa:
+### M05 · Pesajes y entregas directas
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `POST /v1/pesajes` | Crea **borrador**. Líneas `bascula` (kg) o `conversion_balde` (cantidad + equivalencia) |
+| ● | `GET /v1/pesajes`, `GET /v1/pesajes/{id}` | Coordinación del gremio; totales, valor estimado y advertencias de tiquete repetido |
+| ● | `PATCH /v1/pesajes/{id}` | Solo borrador; las listas enviadas sustituyen la lista completa |
+| ● | `POST /v1/pesajes/{id}/confirmacion` | Revalida y aplica precios vigentes; solo confirmados cuentan |
+| ● | `POST /v1/pesajes/{id}/correcciones` | Anula y crea reemplazo confirmado (`sustituye_pesaje_id`) |
+| ● | `POST /v1/entregas-directas` | `{punto_recepcion_id, unidad_id?, participante_id?, pesaje}`; puntos al confirmar |
+| ○ | `POST /v1/pesajes/desde-foto` | Papel Inteligente (M06) |
 
-```text
-nueva → asignada → recogida
-                ↘ rechazada
-```
+### M07 · Puntos
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `GET /v1/me/puntos`, `GET /v1/me/movimientos-puntos` | Saldo = suma del libro |
+| ○ | Canjes (`/catalogo-canjes`, `/canjes`) | Pendiente: titularidad del saldo por validar |
 
-La asignación exige un recolector activo del equipo de la orden. Se puede
-reasignar mientras esté `asignada`; se reemplaza la asignación vigente. Si se
-indica horario, se envían ambos extremos y `fin` debe ser posterior a `inicio`.
-La orden devuelve `asignacion` con esos datos.
+No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al confirmar recogida) y
+`entrega_directa` (+15, al confirmar el pesaje), únicos por hecho (`clave_aplicacion`).
 
-El resultado solo se registra desde `asignada`: `resultado` será `recogida` o
-`rechazada` y se convierte en su estado final. El rechazo requiere un motivo
-activo. Se devuelve además `resultado` con `motivo_id?` y `observacion?`.
-Modificar una orden finalizada produce `409`; correcciones, cancelación y rechazo
-parcial se acordarán si el reto los requiere. La solicitud conserva sus órdenes
-para que un resultado de reciclaje no cierre indebidamente el de orgánicos.
+### M08 · Educación y avisos
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `GET /v1/contenidos-educativos` | Por `motivo_rechazo_id` / `material_id`, más los generales |
+| ● | `GET /v1/ordenes/{id}/avisos` | Estado de avisos de una orden (coordinación) |
+| ● | `POST /v1/canal/avisos/reservas`, `POST /v1/canal/avisos/{id}/resultado`, `GET /v1/canal/avisos` | Bot (modo pull). Modo webhook: ver integracion-bot.md |
 
-### Pesajes
+### M09 · Liga y reportes
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `GET /v1/liga` | `conjunto_id, desde, hasta`. % hogares con entrega válida / viviendas vigentes; desempate por kg atribuidos |
+| ● | `GET /v1/reportes/resumen` | Órdenes por estado, resultados, kg por material (báscula/estimado), valor estimado, hogares, tasas, cobertura |
+| ● | `GET /v1/reportes/serie` | kg por `dia`/`semana`/`mes` local, para gráficas |
+| ○ | Exportaciones, Certificado Verde, hoja de ruta, `/trabajos/{id}` | Pendiente |
 
-`POST /pesajes` recibe `recolector_id`, `orden_ids` (array, puede estar vacío),
-`fecha` (instante con zona), `lineas` y `observacion?`. Cada línea contiene
-`material_id`, `kg_aceptados`, `kg_rechazados` y `motivo_id?`.
+### M10 · Configuración (admin)
+● `POST /v1/materiales`, `PATCH /v1/materiales/{id}`, `POST /v1/motivos-rechazo`,
+`POST /v1/contenidos-educativos`, `POST /v1/precios-material`, `POST /v1/equivalencias`,
+`POST /v1/reglas-incentivo` (parámetros v1: `{"puntos": "10"}`), `POST /v1/torres/{id}/capacidades`,
+`GET /v1/configuracion?tipo=`. Una versión nueva cierra la vigente; los solapamientos dan `409`.
 
-Los kilos son números finitos no negativos; una línea debe tener algún peso
-mayor que cero. No se repiten materiales. Si hay kilos rechazados, se exige
-motivo. Debe existir al menos una línea. Materiales y recolector pertenecen al
-mismo equipo. Las órdenes vinculadas deben estar `recogida`, corresponder a ese
-equipo y tener asignado ese recolector. IDs duplicados o inconsistentes dan `422`.
+### M11 · Sincronización offline
+● `POST /v1/sync` `{dispositivo_id, operaciones[]}`. Acciones: `crear_pesaje`,
+`actualizar_borrador_pesaje`, `confirmar_pesaje`, `registrar_entrega_directa`, `asignar_orden`,
+`registrar_resultado_orden`. Estados por operación: `aplicada`, `repetida`, `conflicto`,
+`rechazada`, `bloqueada`; `referencias` mapea IDs locales a IDs del servidor.
 
-Un registro puede representar un lote de varias órdenes, o material sin órdenes
-individualizadas (`orden_ids: []`). **Vincular órdenes no reparte los kilos entre
-ellas**. La API no atribuye peso a un apartamento sin una medición individual.
-Para esa atribución, el equipo deberá confirmar un contrato adicional de pesaje
-individual. Registrar kilos no cambia automáticamente el estado de las órdenes.
-La respuesta devuelve los datos aceptados, su ID y fecha de creación.
+## 4. Diferencias respecto del contrato 0.2
 
-El registro de esta versión es manual y confirmado por el operador autorizado.
-La futura lectura por IA producirá un borrador para revisión, no un pesaje
-confirmado. Edición y ajustes de pesajes quedan pendientes de definir.
-
-### Resumen
-
-`desde` es inclusivo y `hasta` exclusivo, ambos instantes con zona. Se exige
-`desde < hasta`. Para órdenes se filtra por `created_at`; para pesajes, por `fecha`.
-La respuesta incluye `periodo`, `ordenes_por_estado` (todos los estados, incluso
-con cero) y `materiales` con `material_id`, `kg_aceptados` y `kg_rechazados`.
-Sin registros devuelve ceros y un array de materiales vacío. No calcula puntos,
-ingresos ni rankings; tampoco suma peso por hogar a partir de lotes.
-
-## 4. Reintentos y errores
-
-Los POST de creación y acciones exigirán `Idempotency-Key` (string único generado
-por el cliente para cada operación lógica). Reutilizarlo en un reintento devuelve
-el mismo código y cuerpo exitoso, sin repetir la escritura. La clave se delimita
-por actor autenticado y ruta; cambiar el cuerpo con la misma clave produce `409`.
-Sin clave se responde `400`. Las escrituras y el registro de la clave serán
-atómicos; se conservarán al menos 24 horas. Los errores de validación no consumen
-la clave. Esto evita duplicar pesajes por doble clic o pérdida de una respuesta;
-no constituye un protocolo de sincronización offline.
-
-El cliente conserva el formulario ante error de red y reintenta con la misma
-clave. No muestra éxito antes de recibir confirmación. Los `409` requieren
-recargar el recurso para que el operador revise su estado actual.
-
-## 5. Salud y criterios para implementar
-
-- `GET /health/live`: `200`, `{"status":"ok"}` si el proceso atiende.
-- `GET /health/ready`: `200`, `{"status":"ready"}` si conecta a PostgreSQL;
-  `503`, `{"status":"unavailable"}` si no está disponible. Sin detalles internos.
-
-Al implementar, comprobar el recorrido mixto, filtros y paginación, reasignación,
-rechazo con motivo, transición inválida, registro de lote sin atribución de kilos,
-resumen sin datos, límites del periodo y reintentos sin duplicación. Verificar
-también que un operador sin permisos no pueda consultar o modificar recursos de
-otro ámbito. Las pruebas vivirán con la aplicación y su framework elegido.
-
-## 6. Qué confirmar con el contexto del reto
-
-Antes de implementar el dominio, validar ubicación e identidad, actores y permisos,
-catálogos reales, estados finales y correcciones, solicitud mixta y pesajes por
-lote. Si cambian, actualizar primero este documento y sus ejemplos con el equipo.
-
-WhatsApp, IA, incentivos, canjes, educación, archivos, certificados y offline no
-forman parte del primer recorrido. Se añadirán mediante contratos propios cuando
-se prioricen. Los paneles dependerán de esta interfaz, no del framework ni de las
-tablas internas. Después de aprobarla se podrá traducir a OpenAPI para generar
-documentación y facilitar mocks, sin mantener dos contratos distintos a mano.
+- El webhook de WhatsApp vive en el bot, no en la API; se añade el módulo **canal**
+  (`/v1/canal/avisos/*`) y la entrega opcional por webhook firmado hacia el bot.
+- `POST /v1/solicitudes` admite omitir `unidad_id` cuando el residente tiene una sola unidad.
+- `GET /v1/solicitudes` añade el filtro `abiertas`; `GET /v1/reportes/serie` es nuevo.
+- Los avisos incluyen `texto_sugerido` en la voz de Brisa.
+- La Liga usa una fórmula fija identificada (`participacion_hogares_v1`) y el número de viviendas
+  vigente al cierre del periodo; `version_regla_liga` queda para cuando se apruebe otra fórmula.
+- No implementados todavía: archivos e IA (M06), canjes, exportaciones, certificados, hojas de ruta.
