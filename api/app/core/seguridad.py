@@ -160,6 +160,22 @@ def get_actor(request: Request, db: Session = Depends(get_db)) -> Actor:
         if not celular_hdr:
             return Actor(tipo="servicio_bot", canal="whatsapp")
         celular = normalizar_celular(celular_hdr)
+        # Una cuenta de coordinación con ese celular opera desde WhatsApp con sus permisos.
+        # Si el número es a la vez de un vecino, prevalece la cuenta operadora.
+        cuenta = db.execute(
+            select(CuentaOperadora).where(
+                CuentaOperadora.celular_normalizado == celular, CuentaOperadora.activo.is_(True)
+            )
+        ).scalar_one_or_none()
+        if cuenta is not None:
+            return Actor(
+                tipo="operador",
+                canal="whatsapp",
+                celular=celular,
+                cuenta_id=cuenta.id,
+                nombre=cuenta.nombre,
+                permisos=[(pm.rol, pm.gremio_id) for pm in cuenta.permisos],
+            )
         p = db.execute(
             select(Participante).where(
                 Participante.celular_normalizado == celular, Participante.estado != "eliminado"

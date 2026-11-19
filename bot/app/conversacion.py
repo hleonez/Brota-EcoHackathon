@@ -20,6 +20,7 @@ from typing import Any
 
 from app import textos as T
 from app.brota import Brota, ErrorBrota
+from app.coordinacion import Coordinacion
 from app.whatsapp import Boton, Entrante, Fila, WhatsApp
 
 log = logging.getLogger("brota.bot.conversacion")
@@ -86,12 +87,15 @@ class Brisa:
         self.wa = wa
         self.api = api
         self.memoria = memoria or Memoria()
+        self.coordinacion = Coordinacion(wa, api)
 
     async def atender(self, m: Entrante) -> None:
         await self.wa.marcar_leido(m.wamid)
         try:
             me = await self.api.me(m.de)
-            if me["registrado"]:
+            if me.get("tipo_actor") == "operador":
+                await self.coordinacion.atender(m, me)
+            elif me["registrado"]:
                 self.memoria.borrar(m.de)  # el registro terminó; ya no hace falta estado
                 await self._registrado(m, me)
             else:

@@ -13,15 +13,31 @@ import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from app import avisos
+from app import avisos, laboratorio
 from app.brota import Brota
 from app.config import Settings, get_settings
 from app.conversacion import Brisa
-from app.whatsapp import Entrante, WhatsApp, firma_valida, leer_webhook
+from app.whatsapp import Entrante, ErrorWhatsApp, WhatsApp, firma_valida, leer_webhook
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # el bucle de avisos consulta cada pocos segundos
 log = logging.getLogger("brota.bot")
+
+TOKEN_VENCIDO = (
+    "Meta rechazó el token de WhatsApp (190): venció o se regeneró. Genera uno nuevo en "
+    "developers.facebook.com → tu app → WhatsApp → Configuración de la API, ponlo en WHATSAPP_TOKEN "
+    "de bot/.env y reinicia el bot."
+)
+
+
+class SinSondeoDelLab(logging.Filter):
+    """La página del laboratorio consulta cada segundo; no llenar la consola con eso."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/lab/" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(SinSondeoDelLab())
 
 
 class Vistos:
@@ -50,6 +66,8 @@ def crear_app(settings: Settings | None = None, cliente: httpx.AsyncClient | Non
         propio = cliente is None
         http = cliente or httpx.AsyncClient()
         app.state.wa = WhatsApp(s, http)
+        app.state.lab = laboratorio.Laboratorio() if s.lab_activo else None
+        app.state.wa.lab = app.state.lab
         app.state.api = Brota(s, http)
         app.state.brisa = Brisa(app.state.wa, app.state.api)
         app.state.vistos = Vistos()
@@ -70,8 +88,15 @@ def crear_app(settings: Settings | None = None, cliente: httpx.AsyncClient | Non
     async def _atender(m: Entrante) -> None:
         candado = app.state.candados.setdefault(m.de, asyncio.Lock())
         async with candado:  # mensajes del mismo vecino, en orden
+            if app.state.lab is not None:
+                app.state.lab.entrante(m)
             try:
                 await app.state.brisa.atender(m)
+            except ErrorWhatsApp as e:
+                if e.codigo == 190:
+                    log.error(TOKEN_VENCIDO)
+                else:
+                    log.exception("Error atendiendo %s", m.wamid)
             except Exception:  # noqa: BLE001
                 log.exception("Error atendiendo %s", m.wamid)
 
@@ -118,6 +143,9 @@ def crear_app(settings: Settings | None = None, cliente: httpx.AsyncClient | Non
         bandeja = app.state.wa.bandeja
         return {"data": [b for b in bandeja if para is None or b.get("to") == para]}
 
+    if s.lab_activo:
+        laboratorio.montar(app, _atender)
+
     return app
 
 
@@ -128,6 +156,8 @@ def _advertencias(s: Settings) -> None:
         log.warning("Falta WHATSAPP_APP_SECRET: todos los webhooks se rechazarán.")
     if not s.whatsapp_dry_run and not (s.whatsapp_token and s.whatsapp_phone_number_id):
         log.warning("Faltan WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID (o activa WHATSAPP_DRY_RUN=true).")
+    if s.lab_activo:
+        log.info("Laboratorio activo: abre http://localhost:%s/lab (solo desde esta máquina).", s.port)
     if s.whatsapp_dry_run:
         log.info("Modo dry-run: no se envía nada a Meta; revisa GET /dev/mensajes.")
 

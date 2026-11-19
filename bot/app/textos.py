@@ -37,6 +37,31 @@ ERROR = "Uy, tuve un problema para procesar eso 🙏 Intenta de nuevo en un mome
 
 SERVICIOS = {"RECICLABLES": "reciclables ♻", "ORGANICOS": "orgánicos 🍌"}
 
+# --------------------------------------------------------------------------- modo coordinación
+C_SOLO_PANEL = (
+    "¡Hola, {nombre}! 👋 {cuantas}\nLas solicitudes se asignan y se cierran en el panel de coordinación{enlace}. "
+    "Por aquí te aviso cada solicitud nueva."
+)
+C_ALERTA_PANEL = "👉 Asígnala en el panel de coordinación{enlace}."
+C_MENU = "¡Hola, {nombre}! 👋 {cuantas}\n¿Qué quieres revisar?"
+C_MENU_PIE = "También puedes escribir BANDEJA o ASIGNADAS"
+C_LISTA_NUEVAS = "📋 Solicitudes nuevas. Elige una para asignarla:"
+C_LISTA_ASIGNADAS = "🚲 Solicitudes asignadas. Elige una para registrar cómo le fue:"
+C_SIN_NUEVAS = "✅ No hay solicitudes nuevas por ahora."
+C_SIN_ASIGNADAS = "No hay solicitudes asignadas pendientes."
+C_SIN_RECOLECTORES = "No hay recolectores activos en tu gremio. Pide a administración que los registre."
+C_ELIGE_RECOLECTOR = "{codigo} · {ubicacion}\n¿Quién la recoge?"
+C_ELIGE_FRANJA = "¿En qué horario pasa?"
+C_LLAMAR = "📞 Llama a {nombre}: {telefono}"
+C_RECADO = "📞 Avísale al recolector por llamada o recado."
+C_ASIGNADA = "✅ {codigo} asignada a {recolector} ({horario}).\n{llamar}\nYa le avisé al vecino 💚"
+C_COMO_LE_FUE = "{codigo} · {ubicacion}\nCuando {recolector} vuelva, dime cómo le fue:"
+C_ELIGE_MOTIVO = "¿Por qué no se pudo recoger?"
+C_RECOGIDA = "✅ {codigo} registrada como recogida."
+C_RECHAZADA = "Registrado: {codigo} no se pudo recoger. Le envié al vecino el consejo para la próxima 📘"
+C_ORDEN_CAMBIO = "Esa solicitud ya cambió (otra persona la atendió o ya se cerró). Escribe BANDEJA para ver la actual."
+C_ORDEN_NO_ENCONTRADA = "No encontré esa solicitud en tu gremio. Escribe BANDEJA para ver la actual."
+
 ESTADO_ORDEN = {
     "nueva": "recibida, buscando quién pase",
     "asignada": "asignada",

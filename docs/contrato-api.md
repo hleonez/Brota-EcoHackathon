@@ -66,7 +66,7 @@ bandeja ni datos personales de residentes.
 | ● | `POST /v1/registros/asistidos` | Coordinación/admin; puede quedar `incompleto` |
 | ● | `POST /v1/me/consentimientos` | `aceptado` / `retirado` con versión vigente |
 | ● | `POST`, `GET /v1/me/solicitudes-eliminacion` | `202` con seguimiento |
-| ● | `GET`, `POST /v1/cuentas-operadoras`, `PATCH /v1/cuentas-operadoras/{id}` | Admin; PIN hasheado (scrypt) |
+| ● | `GET`, `POST /v1/cuentas-operadoras`, `PATCH /v1/cuentas-operadoras/{id}` | Admin; PIN hasheado (scrypt); `celular` opcional para operar por WhatsApp (único) |
 
 ### M02 · Territorio y catálogos
 | | Ruta | Notas |
@@ -150,6 +150,9 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 - `POST /v1/solicitudes` admite omitir `unidad_id` cuando el residente tiene una sola unidad.
 - `GET /v1/solicitudes` añade el filtro `abiertas`; `GET /v1/reportes/serie` es nuevo.
 - Los avisos incluyen `texto_sugerido` en la voz de Brisa.
+- Coordinación por WhatsApp: una cuenta operadora con `celular` se autentica con el token del bot
+  y `X-Canal-Celular` (mismos permisos que con JWT). Nuevo aviso `nueva_orden` hacia la coordinación
+  del gremio; los avisos indican `destino.tipo` (`participante` u `operador`).
 - La Liga usa una fórmula fija identificada (`participacion_hogares_v1`) y el número de viviendas
   vigente al cierre del periodo; `version_regla_liga` queda para cuando se apruebe otra fórmula.
 - No implementados todavía: archivos e IA (M06), canjes, exportaciones, certificados, hojas de ruta.

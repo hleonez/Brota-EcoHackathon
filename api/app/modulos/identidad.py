@@ -132,6 +132,7 @@ class CuentaIn(Entrada):
     usuario: str = Field(min_length=3, max_length=60, pattern=r"^[a-zA-Z0-9._-]+$")
     pin: str = Field(min_length=4, max_length=12, pattern=r"^\d+$")
     permisos: list[PermisoIn] = Field(min_length=1)
+    celular: str | None = Field(default=None, max_length=20, description="Para operar desde WhatsApp con Brisa")
 
 
 class CuentaPatch(Entrada):
@@ -139,12 +140,14 @@ class CuentaPatch(Entrada):
     activo: bool | None = None
     pin: str | None = Field(default=None, min_length=4, max_length=12, pattern=r"^\d+$")
     permisos: list[PermisoIn] | None = None
+    celular: str | None = Field(default=None, max_length=20, description="null lo quita")
 
 
 class CuentaOut(Salida):
     id: uuid.UUID
     nombre: str
     usuario: str
+    celular: str | None
     activo: bool
     version: int
     permisos: list[PermisoOut]
@@ -285,6 +288,7 @@ def _cuenta_out(c: CuentaOperadora) -> CuentaOut:
         id=c.id,
         nombre=c.nombre,
         usuario=c.usuario,
+        celular=c.celular_normalizado,
         activo=c.activo,
         version=c.version,
         permisos=[PermisoOut(rol=p.rol, gremio_id=p.gremio_id) for p in c.permisos],
@@ -390,14 +394,19 @@ def post_cuenta(
 ):
     def _fn() -> CuentaOut:
         _validar_permisos(db, datos.permisos)
-        c = CuentaOperadora(nombre=datos.nombre, usuario=datos.usuario.lower(), pin_hash=hash_pin(datos.pin))
+        c = CuentaOperadora(
+            nombre=datos.nombre,
+            usuario=datos.usuario.lower(),
+            pin_hash=hash_pin(datos.pin),
+            celular_normalizado=normalizar_celular(datos.celular) if datos.celular else None,
+        )
         c.permisos = [PermisoOperador(rol=p.rol, gremio_id=p.gremio_id) for p in datos.permisos]
         db.add(c)
         try:
             db.flush()
         except IntegrityError:
             db.rollback()
-            raise AppError(409, "DUPLICATE", "Ya existe una cuenta con ese usuario.") from None
+            raise AppError(409, "DUPLICATE", "Ya existe una cuenta con ese usuario o celular.") from None
         db.refresh(c)
         registrar_evento(db, "cuenta_creada", actor, datos={"cuenta_id": str(c.id), "usuario": c.usuario})
         return _cuenta_out(c)
@@ -424,8 +433,14 @@ def patch_cuenta(
         if datos.permisos is not None:
             _validar_permisos(db, datos.permisos)
             c.permisos = [PermisoOperador(rol=p.rol, gremio_id=p.gremio_id) for p in datos.permisos]
+        if "celular" in datos.model_fields_set:
+            c.celular_normalizado = normalizar_celular(datos.celular) if datos.celular else None
         c.version += 1
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            raise AppError(409, "DUPLICATE", "Ese celular ya pertenece a otra cuenta.") from None
         registrar_evento(db, "cuenta_actualizada", actor, datos={"cuenta_id": str(c.id)})
         return _cuenta_out(c)
 

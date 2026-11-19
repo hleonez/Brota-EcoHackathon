@@ -38,6 +38,7 @@ from app.models import (
     solicitud_pasaporte_seq,
 )
 from app.modulos.comun import (
+    encolar_aviso_coordinacion,
     etiqueta_unidad,
     exigir_consentimiento,
     registrar_evento,
@@ -337,8 +338,31 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
     registrar_evento(
         db, "solicitud_creada", actor, solicitud_id=s.id, datos={"ordenes": len(ordenes), "canal": actor.canal}
     )
-    for o in ordenes.values():
+    for gremio_id, o in ordenes.items():
         registrar_evento(db, "orden_creada", actor, solicitud_id=s.id, orden_id=o.id)
+        servicios = [por_id[t].nombre for t in ids if por_id[t].gremio_id == gremio_id]
+        lineas = [f"🆕 Nueva solicitud {s.codigo_pasaporte}", f"📍 {s.ubicacion_operativa}", " · ".join(servicios)]
+        if actor.nombre:
+            lineas.append(f"👤 {actor.nombre}")
+        if datos.observacion:
+            lineas.append(f"📝 {datos.observacion}")
+        encolar_aviso_coordinacion(
+            db,
+            "nueva_orden",
+            gremio_id,
+            {
+                "orden_id": str(o.id),
+                "version": 1,
+                "codigo_pasaporte": s.codigo_pasaporte,
+                "ubicacion": s.ubicacion_operativa,
+                "servicios": servicios,
+                "contacto_nombre": actor.nombre,
+                "observacion": datos.observacion,
+                "texto_sugerido": "\n".join(lineas),
+            },
+            solicitud_id=s.id,
+            orden_id=o.id,
+        )
     db.flush()
     db.expire(s)
     return solicitud_out(db, cargar_solicitud(db, s.id), actor)

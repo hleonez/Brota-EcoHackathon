@@ -217,10 +217,22 @@ class Gremio(Base):
 
 
 class CuentaOperadora(Base):
+    """Coordinación, Fundación o administración. Puede operar desde la tablet (usuario + PIN)
+    y, si tiene `celular_normalizado`, también desde WhatsApp con Brisa."""
+
     __tablename__ = "cuenta_operadora"
+    __table_args__ = (
+        Index(
+            "uq_cuenta_operadora_celular",
+            "celular_normalizado",
+            unique=True,
+            postgresql_where=text("celular_normalizado IS NOT NULL"),
+        ),
+    )
     id: Mapped[uuid.UUID] = _pk()
     nombre: Mapped[str] = mapped_column(String(120))
     usuario: Mapped[str] = mapped_column(String(60), unique=True)
+    celular_normalizado: Mapped[str | None] = mapped_column(String(20))
     pin_hash: Mapped[str | None] = mapped_column(String(200))
     referencia_autenticacion: Mapped[str | None] = mapped_column(String(200))
     activo: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), default=True)
@@ -647,19 +659,22 @@ class EventoDominio(Base):
 
 
 class EventoSalida(Base):
-    """Bandeja de salida (outbox) de avisos al residente vía el bot.
+    """Bandeja de salida (outbox) de avisos por WhatsApp vía el bot.
 
-    El destino se referencia por `participante_id`; el celular se resuelve al entregar.
+    El destino es un vecino (`participante_id`) o una cuenta de coordinación
+    (`cuenta_operadora_id`); el celular se resuelve al entregar, no se copia aquí.
     """
 
     __tablename__ = "evento_salida"
     __table_args__ = (
         CheckConstraint("estado IN ('pendiente','en_envio','enviado','fallido','descartado')", name="estado"),
+        CheckConstraint("participante_id IS NULL OR cuenta_operadora_id IS NULL", name="un_destino"),
         Index("ix_evento_salida_pendientes", "estado", "proximo_intento_at"),
     )
     id: Mapped[uuid.UUID] = _pk()
     tipo: Mapped[str] = mapped_column(String(40))
     participante_id: Mapped[uuid.UUID | None] = _fk("participante.id", nullable=True)
+    cuenta_operadora_id: Mapped[uuid.UUID | None] = _fk("cuenta_operadora.id", nullable=True)
     solicitud_id: Mapped[uuid.UUID | None] = _fk("solicitud.id", nullable=True)
     orden_id: Mapped[uuid.UUID | None] = _fk("orden.id", nullable=True)
     datos: Mapped[dict[str, Any]] = mapped_column(JSONB)

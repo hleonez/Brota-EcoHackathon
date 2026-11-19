@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     avisos_intervalo_segundos: float = 3.0
     avisos_lote: int = 10
 
+    # Coordinación. false (por defecto): la coordinadora gestiona en el panel (web/coordinacion) y
+    # por WhatsApp solo recibe la alerta de cada solicitud nueva. true: también puede asignar y
+    # cerrar desde WhatsApp (respaldo si no hay tablet).
+    coordinacion_por_whatsapp: bool = False
+    panel_coordinacion_url: str = ""
+
+    # Laboratorio (solo desarrollo): http://localhost:8090/lab con celulares simulados.
+    # Lo que Brisa envíe a un celular simulado se queda en el laboratorio; nunca sale a Meta.
+    lab_activo: bool = False
+
     def graph_base(self) -> str:
         return f"{self.graph_api_url.rstrip('/')}/{self.graph_api_version}"
 

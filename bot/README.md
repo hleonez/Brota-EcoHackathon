@@ -10,14 +10,39 @@ app/
 ├─ whatsapp.py      Cliente de la Graph API: texto, botones, listas, plantillas, firma, lectura del webhook
 ├─ brota.py         Cliente de la API de Brota (X-Canal-Celular + Idempotency-Key = wamid)
 ├─ conversacion.py  Máquina de estados de Brisa: registro → consentimiento → menú
+├─ coordinacion.py  Modo coordinación: bandeja, asignar recolector y franja, cerrar
+├─ meta.py          Utilidades de Meta: estado y suscripción de la cuenta de WhatsApp
+├─ laboratorio.py   Laboratorio local (/lab): celulares simulados + tablero de órdenes y rutas
 ├─ textos.py        Todo lo que dice Brisa (edítalo aquí)
 ├─ avisos.py        Bucle: reservar avisos en la API → enviar por WhatsApp → confirmar
 ├─ simular.py       Simulador de mensajes entrantes (sin Meta)
 └─ config.py        Variables de entorno (bot/.env)
 ```
 
-Lo que ya entiende: «hola» (menú o registro), botones ♻ Reciclable / 🍌 Orgánico / 🔄 Los dos,
+**Coordinación:** la coordinadora trabaja en el panel ([web/coordinacion](../web/coordinacion/README.md)).
+Si su número está en su cuenta (campo `celular` en la API), Brisa le manda una alerta por cada
+solicitud nueva con el enlace al panel (`PANEL_COORDINACION_URL`). Con `COORDINACION_POR_WHATSAPP=true`
+también puede asignar y cerrar desde el chat (BANDEJA, ASIGNADAS), como respaldo si no hay tablet.
+Detalle en [docs/integracion-bot.md](../docs/integracion-bot.md) §4.
+
+**Si el webhook está verificado pero no llega ningún mensaje:** conecta la app a la cuenta de WhatsApp:
+`uv run python -m app.meta suscribir --waba <WhatsApp Business Account ID>`.
+
+Lo que ya entiende un vecino: «hola» (menú o registro), botones ♻ Reciclable / 🍌 Orgánico / 🔄 Los dos,
 PUNTOS, ESTADO, LIGA y BORRAR MIS DATOS. Audios y fotos responden «pronto» (llegarán con Gemini).
+
+## Laboratorio: ver el flujo completo en el navegador
+
+Con `LAB_ACTIVO=true` en `bot/.env`, abre `http://localhost:8090/lab`:
+
+- Dos teléfonos tipo WhatsApp: vecinos de prueba (Laura, Carlos, Sofía) y las dos coordinaciones.
+- Tablero con las órdenes por estado y las **rutas de los recolectores**.
+- La primera vez, «Preparar demo» con el usuario `admin` y su PIN: les da a las cuentas de
+  coordinación los celulares simulados (`573000000101`, `573000000102`).
+
+Todo pasa por el bot y la API de verdad; lo que Brisa le envía a un celular simulado se queda en el
+laboratorio y nunca sale a Meta. Tu celular real puede ser el vecino por WhatsApp mientras la
+coordinación responde desde el navegador. Solo responde desde tu máquina (por el túnel da 404).
 
 ## 1 · Probar sin Meta (modo dry-run)
 

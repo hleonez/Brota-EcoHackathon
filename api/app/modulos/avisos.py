@@ -33,6 +33,7 @@ from app.models import (
     ContenidoEducativo,
     ContenidoMaterial,
     ContenidoMotivo,
+    CuentaOperadora,
     EventoSalida,
     Participante,
 )
@@ -45,7 +46,9 @@ canal = APIRouter(prefix="/canal", tags=["canal WhatsApp (bot)"])
 
 
 class DestinoOut(Salida):
-    participante_id: uuid.UUID
+    tipo: Literal["participante", "operador"] = "participante"
+    participante_id: uuid.UUID | None = None
+    cuenta_operadora_id: uuid.UUID | None = None
     celular: str
     nombre: str
 
@@ -96,6 +99,21 @@ class ContenidoOut(Salida):
 # --------------------------------------------------------------------------- servicio
 
 
+def _destino(db: Session, ev: EventoSalida) -> DestinoOut | None:
+    """Resuelve el celular al momento de entregar (no se copia en el aviso)."""
+    if ev.participante_id:
+        p = db.get(Participante, ev.participante_id)
+        if p is None or p.estado == "eliminado" or not p.celular_normalizado:
+            return None
+        return DestinoOut(participante_id=p.id, celular=p.celular_normalizado, nombre=p.nombre)
+    if ev.cuenta_operadora_id:
+        c = db.get(CuentaOperadora, ev.cuenta_operadora_id)
+        if c is None or not c.activo or not c.celular_normalizado:
+            return None
+        return DestinoOut(tipo="operador", cuenta_operadora_id=c.id, celular=c.celular_normalizado, nombre=c.nombre)
+    return None
+
+
 def reservar(db: Session, limite: int) -> list[AvisoOut]:
     """Toma avisos pendientes (o con reserva vencida) sin bloquear a otros consumidores."""
     s = get_settings()
@@ -113,10 +131,10 @@ def reservar(db: Session, limite: int) -> list[AvisoOut]:
     )
     salida: list[AvisoOut] = []
     for ev in filas:
-        p = db.get(Participante, ev.participante_id) if ev.participante_id else None
-        if p is None or p.estado == "eliminado" or not p.celular_normalizado:
+        destino = _destino(db, ev)
+        if destino is None:
             ev.estado = "descartado"
-            ev.ultimo_error = "Destino sin celular o eliminado"
+            ev.ultimo_error = "Destino sin celular, inactivo o eliminado"
             continue
         if ev.intentos >= s.avisos_max_intentos:
             ev.estado = "fallido"
@@ -131,7 +149,7 @@ def reservar(db: Session, limite: int) -> list[AvisoOut]:
                 tipo=ev.tipo,
                 estado=ev.estado,
                 intentos=ev.intentos,
-                destino=DestinoOut(participante_id=p.id, celular=p.celular_normalizado, nombre=p.nombre),
+                destino=destino,
                 solicitud_id=ev.solicitud_id,
                 orden_id=ev.orden_id,
                 datos=ev.datos,

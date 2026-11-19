@@ -127,8 +127,10 @@ Tipos de aviso y `datos`:
 | `recoleccion_confirmada` | Orden recogida | `puntos_otorgados`, `saldo`, `evaluacion_puntos` |
 | `rechazo_educativo` | Orden rechazada | `motivo`, `motivo_codigo`, `contenido` (`titulo`, `tipo`, `recurso`, `texto`) |
 | `entrega_directa_confirmada` | Entrega en huerta/acopio con puntos | `pesaje_codigo`, `puntos_otorgados`, `saldo` |
+| `nueva_orden` | Un vecino pide; va a la **coordinación del gremio** | `orden_id`, `codigo_pasaporte`, `ubicacion`, `servicios[]`, `contacto_nombre`, `observacion` |
 
-Todos traen `texto_sugerido` en la voz de Brisa (puedes enviarlo tal cual o usar tu plantilla).
+`destino.tipo` es `participante` (vecino) o `operador` (coordinación). Todos traen
+`texto_sugerido` en la voz de Brisa (puedes enviarlo tal cual o usar tu plantilla).
 Fuera de la ventana de 24 h de WhatsApp necesitas **plantillas aprobadas** por Meta: mapea cada
 `tipo` a una plantilla y usa `datos` como variables.
 
@@ -184,7 +186,33 @@ const ok = crypto.timingSafeEqual(Buffer.from(esperado), Buffer.from(req.get('X-
 
 En Python: `hmac.compare_digest(esperado, firma)` con `hmac.new(secret, raw, hashlib.sha256)`.
 
-## 4. Probar sin WhatsApp
+## 4. Coordinación por WhatsApp
+
+> **Por defecto la coordinación trabaja en el panel** ([web/coordinacion](../web/coordinacion/README.md)).
+> Por WhatsApp recibe solo la alerta `nueva_orden` con el enlace al panel (`PANEL_COORDINACION_URL`),
+> y si le escribe a Brisa recibe cuántas solicitudes nuevas tiene. El recorrido de esta sección
+> (asignar y cerrar desde el chat) queda como respaldo con `COORDINACION_POR_WHATSAPP=true` en el bot.
+
+Una cuenta operadora con `celular` (`PATCH /v1/cuentas-operadoras/{id}` como administración)
+opera desde el mismo número de Brisa: con `X-Canal-Celular` de ese número, `GET /v1/me` devuelve
+`tipo_actor: "operador"` con sus permisos, y la API aplica exactamente los permisos de la tablet
+(solo su gremio). Si un número es a la vez de un vecino, prevalece la cuenta operadora.
+
+Recorrido en el bot (`bot/app/coordinacion.py`):
+
+| Paso | Lo que ve la coordinadora | Llamada a la API |
+| --- | --- | --- |
+| Aviso `nueva_orden` | «🆕 Nueva solicitud BR-00002 · Torre 2 · Apto 403» + [🚲 Asignar] [📋 Ver bandeja] | — |
+| Asignar | Lista de recolectores (con teléfono) → lista de franjas | `GET /v1/recolectores`, `GET /v1/ordenes/{id}` |
+| Franja elegida | «✅ Asignada a Rosa · 📞 Llama a Rosa: 300…» + [✅ Recogida] [❌ Rechazada] | `POST /v1/ordenes/{id}/asignacion` (`forma_aviso: llamada`) |
+| Recogida / Rechazada + motivo | Confirmación; el vecino recibe puntos o el consejo | `POST /v1/ordenes/{id}/resultado` |
+| «BANDEJA» / «ASIGNADAS» | Listas de órdenes nuevas o por cerrar | `GET /v1/ordenes?estado=` |
+
+Los botones llevan la orden en su `id` (`C_ASG:<orden>`, `C_OK:<orden>`…), así el flujo no depende
+de memoria. Si la orden cambió (otra persona la atendió), la API responde `409` y Brisa lo explica.
+El recolector no usa el sistema: la coordinadora lo llama con el teléfono que muestra Brisa.
+
+## 5. Probar sin WhatsApp
 
 Con la API en marcha y la semilla aplicada (ver `api/README.md`):
 

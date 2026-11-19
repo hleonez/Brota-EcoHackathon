@@ -16,8 +16,10 @@ from app.core.tipos import ahora, zona
 from app.models import (
     Base,
     Consentimiento,
+    CuentaOperadora,
     EventoDominio,
     EventoSalida,
+    PermisoOperador,
     Torre,
     Unidad,
     VinculoUnidad,
@@ -127,6 +129,36 @@ def encolar_aviso(
     )
     db.add(ev)
     return ev
+
+
+def encolar_aviso_coordinacion(
+    db: Session,
+    tipo: str,
+    gremio_id: uuid.UUID,
+    datos: dict[str, Any],
+    *,
+    solicitud_id: uuid.UUID | None = None,
+    orden_id: uuid.UUID | None = None,
+) -> int:
+    """Un aviso por cada cuenta activa de coordinación del gremio que opera por WhatsApp."""
+    cuentas = db.execute(
+        select(CuentaOperadora.id)
+        .join(PermisoOperador, PermisoOperador.cuenta_id == CuentaOperadora.id)
+        .where(
+            PermisoOperador.rol == "coordinacion",
+            PermisoOperador.gremio_id == gremio_id,
+            CuentaOperadora.activo.is_(True),
+            CuentaOperadora.celular_normalizado.is_not(None),
+        )
+        .distinct()
+    ).scalars().all()
+    for cuenta_id in cuentas:
+        db.add(
+            EventoSalida(
+                tipo=tipo, cuenta_operadora_id=cuenta_id, solicitud_id=solicitud_id, orden_id=orden_id, datos=datos
+            )
+        )
+    return len(cuentas)
 
 
 # --------------------------------------------------------------------------- textos en voz de Brisa

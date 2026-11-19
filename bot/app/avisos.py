@@ -12,9 +12,10 @@ from typing import Any
 
 import httpx
 
+from app import textos as T
 from app.brota import Brota, ErrorBrota
 from app.config import Settings
-from app.whatsapp import ErrorWhatsApp, WhatsApp
+from app.whatsapp import Boton, ErrorWhatsApp, WhatsApp
 
 log = logging.getLogger("brota.bot.avisos")
 
@@ -24,6 +25,7 @@ PLANTILLAS: dict[str, tuple[str, list[str]]] = {
     "recoleccion_confirmada": ("brota_recoleccion", ["puntos_otorgados", "saldo"]),
     "entrega_directa_confirmada": ("brota_recoleccion", ["puntos_otorgados", "saldo"]),
     "rechazo_educativo": ("brota_rechazo", ["motivo"]),
+    "nueva_orden": ("brota_nueva_orden", ["codigo_pasaporte", "ubicacion", "servicios"]),
 }
 
 
@@ -46,6 +48,8 @@ def _parametros(datos: dict[str, Any], campos: list[str]) -> list[str]:
     valores = []
     for c in campos:
         v = datos.get(c)
+        if isinstance(v, list):
+            v = ", ".join(str(x) for x in v)
         if isinstance(v, str) and c in ("puntos_otorgados", "saldo") and "." in v:
             v = v.rstrip("0").rstrip(".")
         valores.append(str(v) if v not in (None, "") else "-")  # Meta rechaza parámetros vacíos
@@ -56,6 +60,15 @@ async def enviar(wa: WhatsApp, settings: Settings, aviso: dict[str, Any]) -> str
     a = aviso["destino"]["celular"].lstrip("+")
     texto, enlace = _texto(aviso)
     try:
+        if aviso["tipo"] == "nueva_orden":  # a la coordinación
+            if settings.coordinacion_por_whatsapp:  # respaldo: asignar desde el mismo chat
+                orden_id = aviso["datos"]["orden_id"]
+                return await wa.botones(
+                    a, texto, [Boton(f"C_ASG:{orden_id}", "🚲 Asignar"), Boton("C_BANDEJA", "📋 Ver bandeja")]
+                )
+            url = settings.panel_coordinacion_url
+            texto += "\n\n" + T.C_ALERTA_PANEL.format(enlace=f": {url}" if url else "")
+            return await wa.texto(a, texto, vista_previa=bool(url))
         return await wa.texto(a, texto, vista_previa=enlace)
     except ErrorWhatsApp as e:
         if e.fuera_de_ventana and settings.whatsapp_usar_plantillas and aviso["tipo"] in PLANTILLAS:
@@ -71,7 +84,10 @@ async def procesar_lote(wa: WhatsApp, api: Brota, settings: Settings) -> int:
             wamid = await enviar(wa, settings, aviso)
             await api.confirmar_aviso(aviso["id"], True, id_externo=wamid)
         except ErrorWhatsApp as e:
-            log.warning("Aviso %s no enviado: %s", aviso["id"], e)
+            if e.codigo == 190:
+                log.error("Aviso %s no enviado: el token de WhatsApp venció (190). Renuévalo en bot/.env.", aviso["id"])
+            else:
+                log.warning("Aviso %s no enviado: %s", aviso["id"], e)
             # Fuera de ventana sin plantilla: reintentar no sirve.
             await api.confirmar_aviso(aviso["id"], False, error=str(e), reintentar=not e.fuera_de_ventana)
         except httpx.HTTPError as e:

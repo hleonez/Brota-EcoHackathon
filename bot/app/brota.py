@@ -115,6 +115,46 @@ class Brota:
     async def pedir_eliminacion(self, celular: str, clave: str) -> dict[str, Any]:
         return (await self._pedir("POST", "/v1/me/solicitudes-eliminacion", celular, clave=clave, json={}))["data"]
 
+    # ------------------------------------------------------------------ coordinación (cuenta operadora)
+
+    async def ordenes(self, celular: str, estado: str | None, limite: int = 10) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limite}
+        if estado:
+            params["estado"] = estado
+        return (await self._pedir("GET", "/v1/ordenes", celular, params=params))["data"]
+
+    async def orden(self, celular: str, orden_id: str) -> dict[str, Any]:
+        return (await self._pedir("GET", f"/v1/ordenes/{orden_id}", celular))["data"]
+
+    async def recolectores(self, celular: str, gremio_id: str) -> list[dict[str, Any]]:
+        params = {"gremio_id": gremio_id, "activo": "true", "limit": 10}
+        return (await self._pedir("GET", "/v1/recolectores", celular, params=params))["data"]
+
+    async def asignar(
+        self, celular: str, clave: str, orden_id: str, version: int, recolector_id: str,
+        inicio: str | None, fin: str | None,
+    ) -> dict[str, Any]:
+        cuerpo: dict[str, Any] = {"version_esperada": version, "recolector_id": recolector_id, "forma_aviso": "llamada"}
+        if inicio and fin:
+            cuerpo |= {"inicio": inicio, "fin": fin}
+        return (await self._pedir("POST", f"/v1/ordenes/{orden_id}/asignacion", celular, clave=clave, json=cuerpo))[
+            "data"
+        ]
+
+    async def registrar_resultado(
+        self, celular: str, clave: str, orden_id: str, version: int, resultado: str, motivo_id: str | None = None,
+    ) -> dict[str, Any]:
+        cuerpo: dict[str, Any] = {
+            "version_esperada": version,
+            "resultado": resultado,
+            "ocurrido_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if motivo_id:
+            cuerpo["motivo_rechazo_id"] = motivo_id
+        return (await self._pedir("POST", f"/v1/ordenes/{orden_id}/resultado", celular, clave=clave, json=cuerpo))[
+            "data"
+        ]
+
     # ------------------------------------------------------------------ avisos (como servicio)
 
     async def reservar_avisos(self, limite: int) -> list[dict[str, Any]]:

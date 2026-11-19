@@ -9,16 +9,20 @@ Se actualiza en cada paso de trabajo.
 | Pieza | Estado | Dónde |
 | --- | --- | --- |
 | PostgreSQL 18 (Docker) | Funcionando | `infra/` |
-| API central (FastAPI) | Núcleo funcionando, 20 pruebas en verde | `api/`, rama `feat/api-nucleo` |
-| Integración con el bot | Probada de punta a punta (dry-run contra la API real) | [integracion-bot.md](integracion-bot.md) |
-| Bot de WhatsApp (Meta) | Esqueleto funcionando, 14 pruebas; falta conectarlo al webhook de Meta | `bot/`, rama `feat/bot-whatsapp` |
-| App de Meta | Creada (BrotaBrisa), número de prueba enviando | [guia-bot-meta.md](guia-bot-meta.md) |
-| Paneles / tablet | Pospuesto | `web/` |
+| API central (FastAPI) | Núcleo + coordinación por WhatsApp, 21 pruebas en verde | `api/` |
+| Integración con el bot | Probada con WhatsApp real (vecino) | [integracion-bot.md](integracion-bot.md) |
+| Bot de WhatsApp (Meta) | Vecinos; a la coordinación solo alerta; 25 pruebas; webhook real conectado | `bot/` |
+| Laboratorio de pruebas | `http://localhost:8090/lab`: celulares simulados + tablero de órdenes y rutas | `bot/app/laboratorio.py` |
+| App de Meta | BrotaBrisa conectada al número de prueba (webhook + suscripción de la cuenta) | [guia-bot-meta.md](guia-bot-meta.md) |
+| Panel de coordinación (tablet) | Bandeja, asignar, rutas, cerrar e historial; probado de punta a punta | `web/coordinacion/` |
+| Coordinación por WhatsApp | Respaldo opcional (`COORDINACION_POR_WHATSAPP=true`); por defecto solo alerta | [integracion-bot.md](integracion-bot.md) §4 |
+| Pesajes en el panel, panel de la Fundación | Pendiente | `web/` |
 | IA con Gemini (tiquete, audios) | Decidido, por construir en la API | — |
 | Canjes, certificado, exportaciones | Pendiente | — |
 
-Ramas: `feat/api-nucleo` (subida a GitHub) y `feat/bot-whatsapp` (sale de la anterior; aún
-local). **`main` no se ha modificado**; se fusiona después de verificar.
+Ramas en GitHub, cada una sobre la anterior: `feat/api-nucleo` → `feat/bot-whatsapp` →
+`feat/coordinacion-whatsapp` (esta última aún local). **`main` no se ha modificado**; se fusiona
+la última rama después de verificar.
 
 ---
 
@@ -196,12 +200,126 @@ token permanente y número propio.
 
 ---
 
+## 7 · 18-nov-2026 · Bot con WhatsApp real y coordinación por WhatsApp (rama `feat/coordinacion-whatsapp`)
+
+**Conexión real con Meta:**
+- `bot/.env` con token, Phone Number ID y App Secret; bot local + túnel `cloudflared`; webhook
+  verificado por Meta y suscrito a `messages`.
+- Problema encontrado: el webhook estaba verificado pero no llegaba ningún mensaje. La cuenta de
+  WhatsApp de prueba solo tenía suscrita la app interna de Meta. Se resolvió con
+  `POST /{WABA_ID}/subscribed_apps` (nuevo script `uv run python -m app.meta suscribir --waba …`).
+- Prueba desde un celular real: registro (Torre 2 · Apto 403), consentimiento y solicitud
+  **BR-00002** creada en la API.
+
+**Decisión:** la coordinadora gestiona por **WhatsApp con Brisa** (sin frontend por ahora; la tablet
+llegará después sobre la misma API). Para probar, el celular de un compañero hace de coordinadora.
+
+**API (migración `0002`):**
+- `cuenta_operadora.celular_normalizado` (único). Con `X-Canal-Celular` de ese número, la API
+  trata la llamada como la cuenta operadora y aplica sus permisos por gremio.
+- `evento_salida.cuenta_operadora_id`: avisos dirigidos a la coordinación. Nuevo aviso
+  `nueva_orden` para cada cuenta de coordinación del gremio con celular, al crear una solicitud.
+- `PATCH /v1/cuentas-operadoras/{id}` admite `celular`.
+
+**Bot (`bot/app/coordinacion.py`):** menú de coordinación, bandeja de nuevas y asignadas,
+asignar recolector (lista con su teléfono) y franja (próximas franjas de hoy y mañana), cerrar como
+recogida o rechazada con motivo del gremio. El aviso `nueva_orden` llega con el botón «Asignar».
+Los botones llevan la orden en su `id`, así el flujo no depende de memoria.
+
+**Verificación:** API 21 pruebas (nueva: coordinación por WhatsApp de punta a punta, permisos por
+gremio y celular único); bot 19 pruebas (nuevas: menú, asignar y cerrar, rechazo con motivo,
+franjas, aviso con botón). Migración probada de subida y bajada; contenedor de la API actualizado.
+
+**Pendiente:** número del compañero en la cuenta `coord-reciclaje`, agregarlo como destinatario en
+Meta y probar el ciclo completo con dos celulares.
+
+---
+
+## 8 · 19-nov-2026 · Laboratorio para ver el flujo completo (rama `feat/coordinacion-whatsapp`)
+
+**Por qué:** aún no tenemos el número del compañero y queríamos ver el recorrido entero (vecino →
+coordinación → recolector → cierre) sin depender de varios celulares.
+
+**Qué es:** una página local servida por el bot, `http://localhost:8090/lab` (`LAB_ACTIVO=true`):
+- Dos teléfonos tipo WhatsApp con personas de prueba: vecinos Laura, Carlos y Sofía; Coordinación
+  Asorescatar y Coordinación Huerta Ecorazón. Botones y listas se tocan igual que en WhatsApp.
+- Conversan con el **bot real y la API real**; solo cambia el último paso: lo que Brisa envía a un
+  celular simulado se queda en el laboratorio y **nunca sale a Meta**. Los celulares reales siguen por
+  WhatsApp y su conversación también se ve (solo lectura, número enmascarado).
+- Tablero: órdenes por estado (nuevas, asignadas, recogidas, rechazadas) y **rutas de recolectores**
+  (paradas pendientes por franja). El recolector no usa app: la coordinación lo llama.
+- «Preparar demo»: con el PIN de `admin`, asigna a `coord-reciclaje` y `coord-huerta` los celulares
+  simulados `573000000101` y `573000000102` (se cambian por el del compañero cuando lo tengamos).
+- Seguridad: apagado por defecto y solo responde desde esta máquina; por el túnel de cloudflared o
+  cualquier proxy devuelve 404.
+
+**Verificación:** 4 pruebas nuevas (apagado por defecto, bloqueo por túnel, simulado no sale a Meta
+y real sí, preparar demo); bot 23 pruebas. Recorrido hecho en el navegador: Carlos se registra
+(Torre 1 · Apto 203) → pide reciclables (BR-00003) → la coordinación recibe «🆕» con «Asignar» →
+Rosa, hoy 2–4 pm → Carlos recibe «🚲 Rosa pasa…» → la parada aparece en la ruta de Rosa → la
+coordinación marca «Recogida» → Carlos recibe «+10 puntos · Tienes 10».
+
+**Nota:** en el seed hay apartamentos del 101 al 504 (pisos 1–5, aptos 01–04). Una vivienda con
+solicitud abierta no puede pedir otra del mismo servicio: Brisa le recuerda la que tiene.
+
+**Incidente (19-nov, 2:45 a. m.):** Brisa no respondió al celular real. Los mensajes sí llegaban,
+pero Meta rechazaba los envíos con el error 190: el token temporal de WhatsApp venció. Arreglo:
+token nuevo en `bot/.env`. Ahora la consola lo dice en una línea clara en vez de un error largo, y ya
+no se llena con las consultas del laboratorio. Solución de fondo: token permanente (usuario del
+sistema), en la guía del número propio.
+
+---
+
+## 9 · 19-nov-2026 · Panel de coordinación para tablet (rama `feat/coordinacion-whatsapp`)
+
+**Por qué:** en el diseño del sistema la coordinadora trabaja en la tablet, no en WhatsApp. Por
+WhatsApp se ve una solicitud a la vez y no hay cómo registrar pesajes. La coordinación por WhatsApp
+había sido un puente mientras no teníamos frontend.
+
+**Qué se hizo:**
+- `web/coordinacion/`: React 19 + Vite + TypeScript, puerto 3000, tablet primero (botones grandes,
+  modo oscuro). Ingreso con usuario y PIN (JWT de la API).
+  - **Bandeja:** nuevas y asignadas; se actualiza sola cada 15 s y avisa cuando llega una nueva.
+  - **Asignar o reasignar:** recolector, franja y forma de aviso (llamada o recado).
+  - **Rutas de hoy:** paradas por recolector, ordenadas por franja.
+  - **Cerrar:** recogida o rechazada con motivo.
+  - **Historial:** órdenes cerradas con totales del día.
+  - Cada escritura usa `version_esperada` e `Idempotency-Key`. Si otra persona cambió la orden, el
+    panel lo dice y recarga.
+- Bot: a la coordinación ahora le llega **solo la alerta** «🆕 Nueva solicitud… 👉 Asígnala en el panel».
+  Si le escribe a Brisa, recibe cuántas nuevas tiene y el enlace al panel. Las variables:
+  - `COORDINACION_POR_WHATSAPP=true` devuelve los botones para asignar y cerrar desde el chat (respaldo
+    si no hay tablet).
+  - `PANEL_COORDINACION_URL` pone el enlace al panel en la alerta.
+- La API no cambió: el panel usa `/v1/auth/sesiones`, `/v1/ordenes`, `/v1/recolectores`,
+  `/v1/catalogos`, `asignacion` y `resultado`.
+
+**Verificación:** el panel compila sin errores de tipos; bot 25 pruebas (nuevas: alerta hacia el
+panel, botones en modo respaldo, la coordinadora que escribe recibe el enlace). Recorrido en el
+navegador:
+1. Sofía pide «Los dos» (BR-00004) y el panel la muestra sola, sin recargar.
+2. Se asigna a Marta, hoy 2–4 pm: Sofía recibe «🚲 Marta pasa…» y la parada aparece en Rutas.
+3. Se rechaza por «Material mojado»: Sofía recibe el consejo del cartón.
+4. Laura pide reciclables (BR-00005): la coordinación recibe la alerta de solo texto, se asigna en el
+   panel y se marca recogida. Laura gana +10 puntos.
+
+Revisado en tamaño tablet (768 × 1024) sin errores en la consola.
+
+**Incidente resuelto:** el token nuevo de WhatsApp ya funciona (Meta responde con los datos del número).
+
+---
+
 ## Próximos pasos
 
-- [ ] Revisar las ramas `feat/api-nucleo` y `feat/bot-whatsapp` y fusionarlas a `main`.
+- [ ] Revisar las ramas y fusionar `feat/coordinacion-whatsapp` a `main`.
 - [x] Bot: Fase 1 de la guía (app de Meta y número de prueba).
 - [x] Bot: esqueleto con registro, menú, solicitudes y avisos contra la API.
-- [ ] Bot: Fase 2 (webhook real con `cloudflared`) y prueba desde el celular.
+- [x] Bot: Fase 2 (webhook real con `cloudflared`) y prueba desde el celular.
+- [x] Coordinación: ciclo completo probado en el laboratorio.
+- [ ] Coordinación: probar con el celular de un compañero (asignar → aviso al vecino → cerrar).
+- [x] Panel de coordinación para tablet (bandeja, asignar, rutas, cerrar, historial).
+- [ ] Panel: pesajes (kg por material, tiquete con Gemini) y modo sin conexión.
+- [ ] Bot con número propio, token permanente y Gemini (guía por escribir).
 - [ ] Plantillas de WhatsApp enviadas a aprobación.
 - [ ] API: CI en GitHub Actions y configuración de ruff.
 - [ ] API: módulo M06 con Gemini (interpretar audio/texto y leer el tiquete de pesaje).
