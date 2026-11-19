@@ -14,7 +14,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
-from app.core.errores import AppError, invalido, no_encontrado, prohibido
+from app.core.errores import AppError, invalido, no_encontrado, prohibido, transicion_invalida
 from app.core.idempotencia import escritura
 from app.core.paginacion import Paginacion, paginacion, paginar
 from app.core.seguridad import Actor, actor_participante, get_actor
@@ -56,7 +56,7 @@ from app.modulos.residuos import (
 router = APIRouter(tags=["solicitudes"])
 
 ABIERTAS = ("nueva", "asignada")
-FINALES = ("recogida", "rechazada")
+FINALES = ("recogida", "rechazada", "cancelada")
 
 # --------------------------------------------------------------------------- esquemas
 
@@ -473,6 +473,45 @@ def post_solicitud(
     datos: SolicitudIn, request: Request, actor: Actor = Depends(actor_participante), db: Session = Depends(get_db)
 ):
     return escritura(request, db, actor, datos, lambda: crear_solicitud(db, actor, datos), status=201)
+
+
+class CancelacionIn(Entrada):
+    motivo: str | None = Field(default=None, max_length=200)
+
+
+def cancelar_solicitud(db: Session, actor: Actor, solicitud_id: uuid.UUID, datos: CancelacionIn) -> SolicitudOut:
+    """El vecino cancela lo que aún no se ha recogido. Se avisa a la coordinación de cada orden."""
+    s = solicitud_visible(db, actor, solicitud_id)
+    ordenes = db.execute(
+        select(Orden).where(Orden.solicitud_id == s.id, Orden.estado.in_(ABIERTAS)).with_for_update()
+    ).scalars().all()
+    if not ordenes:
+        raise transicion_invalida(f"La solicitud {s.codigo_pasaporte} ya no se puede cancelar.")
+    for o in ordenes:
+        vigente = next((a for a in o.asignaciones if a.vigente_hasta is None), None)
+        o.estado = "cancelada"
+        o.version += 1
+        registrar_evento(db, "orden_cancelada", actor, solicitud_id=s.id, orden_id=o.id,
+                         datos={"motivo": datos.motivo} if datos.motivo else {})
+        aviso = f"❌ {actor.nombre or 'El vecino'} canceló la solicitud {s.codigo_pasaporte} ({s.ubicacion_operativa})."
+        if vigente is not None:
+            aviso += f" Avísale a {vigente.recolector.nombre} que ya no pase."
+        if datos.motivo:
+            aviso += f"\nMotivo: {datos.motivo}"
+        encolar_aviso_coordinacion(db, "orden_cancelada", o.gremio_id,
+                                   {"orden_id": str(o.id), "codigo_pasaporte": s.codigo_pasaporte, "texto_sugerido": aviso},
+                                   solicitud_id=s.id, orden_id=o.id)
+    db.flush()
+    db.expire(s)
+    return solicitud_out(db, cargar_solicitud(db, s.id), actor)
+
+
+@router.post("/solicitudes/{solicitud_id}/cancelacion")
+def post_cancelacion(
+    solicitud_id: uuid.UUID, datos: CancelacionIn, request: Request,
+    actor: Actor = Depends(actor_participante), db: Session = Depends(get_db),
+):
+    return escritura(request, db, actor, datos, lambda: cancelar_solicitud(db, actor, solicitud_id, datos))
 
 
 @router.get("/solicitudes")

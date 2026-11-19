@@ -130,6 +130,11 @@ input, textarea {
 .marca-ok { color: var(--exito); }
 .marca-revisar { color: var(--asignada); font-size: 13px; font-weight: 600; }
 .chequeos { font-size: 13px; }
+.tarjeta.caso-abierto { border-left-color: var(--peligro); }
+.relato { margin: 4px 0; padding: 8px 12px; border-left: 3px solid var(--linea); font-size: 15px; }
+.responder { display: flex; flex-direction: column; gap: 8px; }
+.responder .btn { align-self: flex-start; }
+.historial li.estado-cancelada { opacity: 0.75; }
 .nota { font-size: 14px; padding: 6px 10px; border-radius: 8px; background: var(--fondo); }
 .asignacion { font-size: 15px; display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
 .acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

@@ -92,6 +92,16 @@ bandeja de coordinación.
 Regla de solicitud abierta (configurable, `REGLA_SOLICITUD_ABIERTA`): un servicio con orden
 `nueva`/`asignada` en la misma unidad → `409 OPEN_REQUEST_EXISTS` con `codigo_pasaporte`.
 
+`POST /v1/solicitudes/{id}/cancelacion` (residente, `{motivo?}`): las órdenes `nueva`/`asignada` pasan a
+`cancelada` y se avisa a la coordinación (`orden_cancelada`); si no queda ninguna abierta → `409`.
+
+### M13 · Casos (reportes y «hablar con una persona»)
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `POST /v1/casos` | Residente. `{tipo: queja\|ayuda, texto, codigo_pasaporte?}` → `CA-00001`. Alerta `nuevo_caso` a la coordinación del gremio de esa solicitud, o a todas si no nombra una |
+| ● | `GET /v1/casos` | Coordinación (su gremio y los sin gremio) o admin. `estado?` = abierto/atendido |
+| ● | `POST /v1/casos/{id}/atencion` | `{version_esperada, respuesta}` → `atendido`; la respuesta le llega al vecino (`caso_respuesta`) |
+
 ### M04 · Coordinación
 | | Ruta | Notas |
 | --- | --- | --- |

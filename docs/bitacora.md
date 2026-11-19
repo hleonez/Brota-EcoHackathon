@@ -18,7 +18,7 @@ Se actualiza en cada paso de trabajo.
 | Panel de coordinación (tablet) | Bandeja, asignar, rutas, cerrar e historial; probado de punta a punta | `web/coordinacion/` |
 | Coordinación por WhatsApp | Respaldo opcional (`COORDINACION_POR_WHATSAPP=true`); por defecto solo alerta | [integracion-bot.md](integracion-bot.md) §4 |
 | Pesajes en el panel, panel de la Fundación | Pendiente | `web/` |
-| Brisa IA | Fases 1–3 construidas (fichas, Gemini, audios y fotos); falta la 4 (casos) y la 5 | [brisa-ia.md](brisa-ia.md) |
+| Brisa IA | Fases 1–4 construidas (fichas, Gemini, audios, fotos, reportes y cancelar); falta la 5 | [brisa-ia.md](brisa-ia.md) |
 | Canjes, certificado, exportaciones | Pendiente | — |
 
 Ramas en GitHub, cada una sobre la anterior: `feat/api-nucleo` → `feat/bot-whatsapp` →
@@ -502,6 +502,50 @@ un VPS, y más adelante un dominio con túnel con nombre.
 
 ---
 
+## 15 · 19-nov-2026 · Reportes, hablar con una persona y cancelar (fase 4)
+
+**Plantillas:** Meta reclasificó 3 de las 4 como MARKETING por frases de ánimo («Sigue separando con
+Brota»).
+- Se borraron y se enviaron versiones informativas: `brota_recoleccion_v2`, `brota_rechazo_v2` y
+  `brota_nueva_orden_v2`, con el código de la solicitud. Un nombre borrado no se puede reusar en 30 días.
+- Las 4 quedaron como UTILITY, en revisión.
+
+**Incidente:** la base de datos de desarrollo se detuvo otra vez (`Exited 255`). No tenía reinicio
+automático, así que la API quedó caída unas 3 horas. Ahora `infra/compose.dev.yaml` le da
+`restart: unless-stopped`. Además, el túnel en Docker no lograba conectar por QUIC (UDP), así que
+ahora usa `--protocol http2`, que conectó al instante.
+
+**API (migración `0004`):**
+- Tabla `caso` (`CA-00001`, queja/ayuda, abierto/atendido, respuesta).
+  - `POST /v1/casos`
+  - `GET /v1/casos`
+  - `POST /v1/casos/{id}/atencion`
+- Alerta `nuevo_caso` a la coordinación y respuesta `caso_respuesta` al vecino.
+- Estado de orden **`cancelada`** y `POST /v1/solicitudes/{id}/cancelacion`, con aviso `orden_cancelada`
+  (si estaba asignada, recuerda avisarle al recolector). Una cancelada no bloquea pedir otra vez.
+
+**Bot (`app/soporte.py`):**
+- Menú con ⚠ Reportar un problema y 🙋 Hablar con alguien. El detalle se puede escribir o dictar.
+- CANCELAR muestra las solicitudes abiertas y pide confirmación.
+- La IA lleva quejas, ayuda y cancelar a estos flujos; si la queja ya trae el relato, se registra de una vez.
+- ESTADO recuerda que se puede cancelar.
+
+**Panel:**
+- Pestaña **Reportes**: por responder y respondidos, con respuesta que le llega al vecino.
+- El historial incluye las canceladas.
+
+**Verificación:** API 30 pruebas (2 nuevas); bot 52 (12 nuevas); panel sin errores de tipos. Recorrido
+real:
+1. Carlos reporta «Marta no pasó por la BR-00007» → CA-00001 con su nombre y su apartamento.
+2. Cancela BR-00007: solo se cancela la orden aún abierta (la de reciclaje ya estaba recogida).
+3. En el panel, Reportes → «Disculpa, Carlos. Marta pasa mañana…» → la respuesta queda en la cola de
+   avisos del bot.
+
+**Pendiente:** las cuentas de coordinación tienen los celulares del laboratorio; para que las alertas
+lleguen a las coordinadoras reales, poner sus números (`PATCH /v1/cuentas-operadoras/{id}`).
+
+---
+
 ## Próximos pasos
 
 - [ ] Revisar las ramas y fusionar `feat/coordinacion-whatsapp` a `main`.
@@ -515,7 +559,7 @@ un VPS, y más adelante un dominio con túnel con nombre.
 - [x] Brisa IA fase 1: catálogo con fichas, flujo guiado y resumen (sin IA).
 - [ ] Validar las fichas con Asorescatar y la Huerta Ecorazón.
 - [x] Brisa IA fases 2 y 3: IA de texto, audios y fotos con Gemini.
-- [ ] Brisa IA fase 4: casos (quejas, hablar con una persona) y cancelar una solicitud enviada.
+- [x] Brisa IA fase 4: casos (quejas, hablar con una persona) y cancelar una solicitud enviada.
 - [x] Token permanente (usuario del sistema `bot-dev`).
 - [x] Arranque con un comando y webhook de Meta automático (`.\brota.ps1`).
 - [ ] Publicar 24/7: VM gratis (Oracle Cloud Always Free) con el mismo Docker.

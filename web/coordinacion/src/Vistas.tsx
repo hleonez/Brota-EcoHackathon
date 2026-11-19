@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { api, ErrorApi } from "./api";
 import type { Accion } from "./Panel";
-import type { ItemCatalogo, Orden, Recolector } from "./tipos";
-import { diaDe, hace, textoFranja } from "./util";
+import type { Caso, ItemCatalogo, Orden, Recolector } from "./tipos";
+import { claveParaEnvio, diaDe, hace, textoFranja } from "./util";
 
 interface Comunes {
   servicios: Map<string, ItemCatalogo>;
@@ -155,13 +156,13 @@ export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asigna
 
 // ------------------------------------------------------------------ historial
 
-type FiltroResultado = "todas" | "recogida" | "rechazada";
+type FiltroResultado = "todas" | "recogida" | "rechazada" | "cancelada";
 
 export function VistaHistorial({ ordenes, servicios }: Comunes & { ordenes: Orden[] }) {
   const [filtro, setFiltro] = useState<FiltroResultado>("todas");
   const cerradas = ordenes
-    .filter((o) => o.estado === "recogida" || o.estado === "rechazada")
-    .sort((a, b) => ((a.resultado?.ocurrido_at ?? "") < (b.resultado?.ocurrido_at ?? "") ? 1 : -1));
+    .filter((o) => o.estado === "recogida" || o.estado === "rechazada" || o.estado === "cancelada")
+    .sort((a, b) => ((a.resultado?.ocurrido_at ?? a.created_at) < (b.resultado?.ocurrido_at ?? b.created_at) ? 1 : -1));
   const hoy = cerradas.filter((o) => diaDe(o.resultado?.ocurrido_at ?? null) === "hoy");
   const visibles = cerradas.filter((o) => filtro === "todas" || o.estado === filtro);
   return (
@@ -172,7 +173,7 @@ export function VistaHistorial({ ordenes, servicios }: Comunes & { ordenes: Orde
         <div className="kpi"><span className="kpi-n">{cerradas.length}</span>cerradas en total</div>
       </div>
       <div className="filtros" role="group" aria-label="Resultado">
-        {([["todas", "Todas"], ["recogida", "Recogidas"], ["rechazada", "Rechazadas"]] as const).map(([k, t]) => (
+        {([["todas", "Todas"], ["recogida", "Recogidas"], ["rechazada", "Rechazadas"], ["cancelada", "Canceladas"]] as const).map(([k, t]) => (
           <button key={k} className={`chip-filtro ${filtro === k ? "activo" : ""}`} onClick={() => setFiltro(k)}>{t}</button>
         ))}
       </div>
@@ -184,15 +185,96 @@ export function VistaHistorial({ ordenes, servicios }: Comunes & { ordenes: Orde
               <span>{o.ubicacion_operativa}</span>
               <span className="tenue">👤 {o.contacto_nombre ?? "—"} · {o.tipo_servicio_ids.map((id) => servicios.get(id)?.nombre).filter(Boolean).join(", ")}</span>
               <span>
-                {o.estado === "recogida" ? "✅ Recogida" : `❌ ${o.resultado?.motivo_rechazo_nombre ?? "Rechazada"}`}
+                {o.estado === "recogida" ? "✅ Recogida" : o.estado === "cancelada" ? "🚫 Cancelada por el vecino"
+                  : `❌ ${o.resultado?.motivo_rechazo_nombre ?? "Rechazada"}`}
                 {o.asignacion && <span className="tenue"> · 🚲 {o.asignacion.recolector_nombre}</span>}
               </span>
-              <span className="tenue">{o.resultado ? hace(o.resultado.ocurrido_at) : ""}</span>
+              <span className="tenue">{hace(o.resultado?.ocurrido_at ?? o.created_at)}</span>
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ reportes (quejas y «hablar con alguien»)
+
+export function VistaReportes({
+  casos,
+  onRespondido,
+  onConflicto,
+}: {
+  casos: Caso[];
+  onRespondido: (c: Caso) => void;
+  onConflicto: (e: ErrorApi) => void;
+}) {
+  const abiertos = casos.filter((c) => c.estado === "abierto").sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+  const atendidos = casos.filter((c) => c.estado === "atendido");
+  return (
+    <div className="columnas">
+      <section>
+        <h2>Por responder <span className="tenue">({abiertos.length})</span></h2>
+        {abiertos.length ? abiertos.map((c) => <TarjetaCaso key={c.id} caso={c} onRespondido={onRespondido} onConflicto={onConflicto} />)
+          : <Vacio texto="No hay reportes pendientes. Cuando un vecino reporte algo o pida hablar con alguien, aparece aquí." />}
+      </section>
+      <section>
+        <h2>Respondidos <span className="tenue">({atendidos.length})</span></h2>
+        {atendidos.length ? atendidos.map((c) => <TarjetaCaso key={c.id} caso={c} onRespondido={onRespondido} onConflicto={onConflicto} />)
+          : <Vacio texto="Aún no hay reportes respondidos." />}
+      </section>
+    </div>
+  );
+}
+
+function TarjetaCaso({ caso: c, onRespondido, onConflicto }: { caso: Caso; onRespondido: (c: Caso) => void; onConflicto: (e: ErrorApi) => void }) {
+  const [respuesta, setRespuesta] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [clave] = useState(() => claveParaEnvio());
+
+  async function responder(e: FormEvent) {
+    e.preventDefault();
+    const texto = respuesta.trim();
+    if (!texto) return;
+    setEnviando(true);
+    setError(null);
+    try {
+      onRespondido(await api.responderCaso(c, texto, clave({ caso: c.id, version: c.version, texto })));
+    } catch (err) {
+      if (err instanceof ErrorApi && err.ordenCambio) onConflicto(err);
+      else setError((err as Error).message);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <article className={`tarjeta caso caso-${c.estado}`}>
+      <div className="tarjeta-cabeza">
+        <span className="codigo">{c.codigo} · {c.tipo === "queja" ? "⚠ Reporte" : "🙋 Quiere hablar con alguien"}</span>
+        <span className="tenue">{hace(c.created_at)}</span>
+      </div>
+      <div className="fila-datos">
+        <span>👤 {c.contacto_nombre ?? "Vecino"}</span>
+        {c.ubicacion && <span>📍 {c.ubicacion}</span>}
+        {c.codigo_pasaporte && <span className="chip">{c.codigo_pasaporte}</span>}
+      </div>
+      <blockquote className="relato">«{c.texto}»</blockquote>
+      {c.estado === "atendido" ? (
+        <div className="nota">💬 {c.respuesta}</div>
+      ) : (
+        <form className="responder" onSubmit={responder}>
+          <label className="campo">
+            Respuesta (le llega por WhatsApp)
+            <textarea value={respuesta} onChange={(e) => setRespuesta(e.target.value)} maxLength={1000} rows={2}
+              placeholder="Ej.: Rosa pasa mañana entre 8 y 10 am. Disculpa la demora." />
+          </label>
+          {error && <p className="error" role="alert">{error}</p>}
+          <button className="btn primario" disabled={enviando || !respuesta.trim()}>{enviando ? "Enviando…" : "💬 Responder"}</button>
+        </form>
+      )}
+    </article>
   );
 }
 

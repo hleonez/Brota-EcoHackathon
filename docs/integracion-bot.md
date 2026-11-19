@@ -129,6 +129,15 @@ la media de Meta (`GET /{media_id}` → URL temporal con el mismo token) y la en
 responde `503 IA_NO_DISPONIBLE` o no responde, el bot sigue con sinónimos y listas
 (`/v1/capacidades` → `ia_mensajes`).
 
+### E · Soporte: reportes, hablar con una persona y cancelar
+
+- **⚠ Reportar un problema / 🙋 Hablar con alguien:** Brisa pide el detalle en un mensaje (texto o nota de
+  voz) y llama a `POST /v1/casos` (si menciona «BR-…», lo asocia a esa solicitud). Si la IA detecta una
+  queja con suficiente detalle, el caso se crea de una vez. La respuesta de la coordinación llega como
+  aviso `caso_respuesta`.
+- **CANCELAR** (o la IA detecta «ya no quiero que vengan»): sin pedido a medias, Brisa muestra las
+  solicitudes abiertas, pide confirmación y llama a `POST /v1/solicitudes/{id}/cancelacion`.
+
 ## 3. Avisos de la API al residente (sincronización)
 
 Cuando la coordinación asigna, confirma una recogida, rechaza o confirma una entrega directa,

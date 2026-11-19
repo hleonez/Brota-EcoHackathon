@@ -1,4 +1,4 @@
-import type { Catalogo, Orden, OrdenCerrada, Recolector, Sesion } from "./tipos";
+import type { Caso, Catalogo, Orden, OrdenCerrada, Recolector, Sesion } from "./tipos";
 
 const BASE = (import.meta.env.VITE_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
@@ -84,6 +84,9 @@ export const api = {
     if (datos.inicio && datos.fin) Object.assign(cuerpo, { inicio: datos.inicio, fin: datos.fin });
     return pedir<Orden>("POST", `/v1/ordenes/${o.id}/asignacion`, { cuerpo, clave });
   },
+  casos: () => pedir<Caso[]>("GET", "/v1/casos", { params: { limit: 100 } }),
+  responderCaso: (c: Caso, respuesta: string, clave: string) =>
+    pedir<Caso>("POST", `/v1/casos/${c.id}/atencion`, { cuerpo: { version_esperada: c.version, respuesta }, clave }),
   cerrar: (
     o: Orden,
     datos: { resultado: "recogida" | "rechazada"; motivo_rechazo_id?: string; observacion?: string; ocurrido_at: string },

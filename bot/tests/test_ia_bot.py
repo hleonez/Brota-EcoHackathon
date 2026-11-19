@@ -53,14 +53,19 @@ def test_sin_ia_el_texto_libre_usa_los_sinonimos(entorno):
 
 
 @pytest.mark.parametrize(
-    ("intencion", "esperado"),
-    [("queja", "Lamento mucho"), ("persona", "hablar por aquí con una persona"), ("cancelar", "Todavía no puedo cancelar")],
+    ("mensaje", "intencion", "esperado"),
+    [
+        ("nadie ha venido por mis cosas desde ayer", "queja", "lo dejé registrado (CA-00001)"),
+        ("tengo un problema", "queja", "Cuéntame qué pasó"),
+        ("quiero hablar con alguien", "persona", "una persona del equipo te responde"),
+        ("ya no quiero que vengan", "cancelar", "No tienes solicitudes pendientes por cancelar"),
+    ],
 )
-def test_intenciones_sin_flujo_todavia_responden_con_honestidad(entorno, intencion, esperado):
+def test_la_ia_lleva_quejas_ayuda_y_cancelar_a_su_flujo(entorno, mensaje, intencion, esperado):
     c, api = entorno
     api.registrados[CEL] = "Carmen"
     api.ia = {"intencion": intencion}
-    assert esperado in _texto(enviar(c, "mensaje cualquiera")[0])
+    assert esperado in _texto(enviar(c, mensaje)[0])
 
 
 # ------------------------------------------------------------------ fotos y audios (vía laboratorio)

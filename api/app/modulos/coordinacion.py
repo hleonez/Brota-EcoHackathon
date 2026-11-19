@@ -300,7 +300,7 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
 @router.get("/ordenes")
 def get_ordenes(
     gremio_id: uuid.UUID | None = Query(None),
-    estado: Literal["nueva", "asignada", "recogida", "rechazada"] | None = Query(None),
+    estado: Literal["nueva", "asignada", "recogida", "rechazada", "cancelada"] | None = Query(None),
     recolector_id: uuid.UUID | None = Query(None),
     desde: InstanteEntrada | None = Query(None),
     hasta: InstanteEntrada | None = Query(None),

@@ -15,6 +15,7 @@ from app.core.errores import registrar_manejadores
 from app.despachador import Despachador
 from app.modulos import (
     avisos,
+    casos,
     configuracion,
     coordinacion,
     ia,
@@ -93,6 +94,7 @@ def crear_app(iniciar_despachador: bool = True) -> FastAPI:
         configuracion,
         sincronizacion,
         ia,
+        casos,
     ):
         app.include_router(m.router, prefix="/v1")
     app.include_router(avisos.canal, prefix="/v1")

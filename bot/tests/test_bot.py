@@ -43,6 +43,8 @@ class APIFalsa:
         self.cuerpos_solicitud: list[dict] = []
         self.ia: dict | None = None  # respuesta de /v1/ia/interpretar; None = IA no disponible (503)
         self.cuerpos_ia: list[dict] = []
+        self.casos: list[dict] = []
+        self.solicitudes: list[dict] = []  # abiertas, para ESTADO y CANCELAR
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.llamadas.append(req)
@@ -69,6 +71,18 @@ class APIFalsa:
             assert cuerpo["consentimiento"] == {"version_politica": "2026-11", "decision": "aceptado"}
             self.registrados[cel] = cuerpo["nombre"]
             return _ok({"participante_id": "p1", "estado_registro": "completo"}, 201)
+        if p == "/v1/casos" and m == "POST":
+            self.casos.append(json.loads(req.content) | {"clave": req.headers["Idempotency-Key"]})
+            return _ok({"id": f"c{len(self.casos)}", "codigo": f"CA-{len(self.casos):05d}", "estado": "abierto"}, 201)
+        if p == "/v1/solicitudes" and m == "GET":
+            return _ok(self.solicitudes)
+        if p.startswith("/v1/solicitudes/") and p.endswith("/cancelacion"):
+            sid = p.split("/")[3]
+            s = next((x for x in self.solicitudes if x["id"] == sid), None)
+            if s is None:
+                return httpx.Response(409, json={"error": {"code": "INVALID_TRANSITION", "message": "x"}})
+            self.solicitudes.remove(s)
+            return _ok(s | {"ordenes": [o | {"estado": "cancelada"} for o in s["ordenes"]]})
         if p == "/v1/ia/interpretar":
             self.cuerpos_ia.append(json.loads(req.content))
             if self.ia is None:
@@ -202,7 +216,7 @@ def test_registro_completo_y_menu(entorno):
     assert api.registrados == {CEL: "Carmen"}
     assert "Ya quedaste registrado" in _texto(r[0])
     filas = [row["id"] for row in r[1]["interactive"]["action"]["sections"][0]["rows"]]
-    assert filas == ["M_PEDIR", "M_DUDA", "M_ESTADO", "M_PUNTOS", "M_LIGA"]
+    assert filas == ["M_PEDIR", "M_DUDA", "M_ESTADO", "M_PUNTOS", "M_LIGA", "M_QUEJA", "M_PERSONA"]
 
 
 @pytest.mark.parametrize("escrito", ["402", "Apto 402", "apartamento #402", "4-02", "apto. 402"])

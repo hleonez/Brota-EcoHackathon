@@ -142,6 +142,19 @@ class Brota:
             cuerpo["residuos"] = residuos
         return (await self._pedir("POST", "/v1/solicitudes", celular, clave=clave, json=cuerpo))["data"]
 
+    async def crear_caso(
+        self, celular: str, clave: str, tipo: str, texto: str, codigo_pasaporte: str | None = None
+    ) -> dict[str, Any]:
+        """Queja (tipo «queja») o pedido de hablar con una persona («ayuda»); lo atiende la coordinación."""
+        cuerpo: dict[str, Any] = {"tipo": tipo, "texto": texto[:1000]}
+        if codigo_pasaporte:
+            cuerpo["codigo_pasaporte"] = codigo_pasaporte
+        return (await self._pedir("POST", "/v1/casos", celular, clave=clave, json=cuerpo))["data"]
+
+    async def cancelar_solicitud(self, celular: str, clave: str, solicitud_id: str) -> dict[str, Any]:
+        return (await self._pedir("POST", f"/v1/solicitudes/{solicitud_id}/cancelacion", celular, clave=clave,
+                                  json={}))["data"]
+
     async def pedir_eliminacion(self, celular: str, clave: str) -> dict[str, Any]:
         return (await self._pedir("POST", "/v1/me/solicitudes-eliminacion", celular, clave=clave, json={}))["data"]
 

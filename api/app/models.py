@@ -49,6 +49,7 @@ PUNTOS = Numeric(12, 2)
 
 solicitud_pasaporte_seq = Sequence("solicitud_pasaporte_seq")
 pesaje_codigo_seq = Sequence("pesaje_codigo_seq")
+caso_codigo_seq = Sequence("caso_codigo_seq")
 
 
 class Base(DeclarativeBase):
@@ -436,7 +437,7 @@ class Orden(Base):
     __tablename__ = "orden"
     __table_args__ = (
         UniqueConstraint("solicitud_id", "gremio_id"),
-        CheckConstraint("estado IN ('nueva','asignada','recogida','rechazada')", name="estado"),
+        CheckConstraint("estado IN ('nueva','asignada','recogida','rechazada','cancelada')", name="estado"),
         Index("ix_orden_bandeja", "gremio_id", "estado", "created_at", "id"),
     )
     id: Mapped[uuid.UUID] = _pk()
@@ -712,6 +713,34 @@ class EventoDominio(Base):
     actor_id: Mapped[uuid.UUID | None] = mapped_column()
     datos: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), default=dict)
     ocurrido_at: Mapped[datetime] = _ts_now()
+
+
+class Caso(Base):
+    """Reporte del vecino: una queja o el pedido de hablar con una persona. Lo atiende la coordinación.
+
+    `gremio_id` vacío: lo ven todas las coordinaciones (no se sabe de qué gremio es).
+    """
+
+    __tablename__ = "caso"
+    __table_args__ = (
+        CheckConstraint("tipo IN ('queja','ayuda')", name="tipo"),
+        CheckConstraint("estado IN ('abierto','atendido')", name="estado"),
+        Index("ix_caso_bandeja", "estado", "created_at", "id"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    codigo: Mapped[str] = mapped_column(String(20), unique=True)
+    tipo: Mapped[str] = mapped_column(String(10))
+    estado: Mapped[str] = mapped_column(String(10), server_default="abierto", default="abierto")
+    texto: Mapped[str] = mapped_column(String(1000))
+    canal: Mapped[str] = mapped_column(String(20))
+    participante_id: Mapped[uuid.UUID | None] = _fk("participante.id", nullable=True)
+    solicitud_id: Mapped[uuid.UUID | None] = _fk("solicitud.id", nullable=True)
+    gremio_id: Mapped[uuid.UUID | None] = _fk("gremio.id", nullable=True)
+    respuesta: Mapped[str | None] = mapped_column(String(1000))
+    atendido_por: Mapped[uuid.UUID | None] = _fk("cuenta_operadora.id", nullable=True)
+    atendido_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    version: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    created_at: Mapped[datetime] = _ts_now()
 
 
 class EventoSalida(Base):

@@ -37,6 +37,9 @@ solicitudes, ⭐ Mis puntos, 🏆 Liga). **Pedir** es guiado (`app/pedido.py`):
 2. Brisa le enseña cómo prepararlos y hace los chequeos de cada ficha.
 3. Muestra un resumen con Enviar / Corregir / Cancelar. Nada se crea antes de «Enviar».
 
+**Soporte (`app/soporte.py`):** ⚠ Reportar un problema y 🙋 Hablar con alguien crean un caso que la
+coordinación responde desde el panel (pestaña Reportes); CANCELAR permite retirar una solicitud enviada.
+
 Si escribe un material sin estar pidiendo («¿el icopor se recicla?»), Brisa le muestra la ficha.
 También entiende CANCELAR, PUNTOS, ESTADO, LIGA y BORRAR MIS DATOS. Con la IA de la API (Gemini) entiende **texto libre, audios y fotos**: «🎤 Te escuché…», «📸 En la foto
 veo…», y propone los materiales para confirmarlos. Sin IA, sigue con sinónimos y listas. Diseño: [docs/brisa-ia.md](../docs/brisa-ia.md).

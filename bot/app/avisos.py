@@ -22,10 +22,10 @@ log = logging.getLogger("brota.bot.avisos")
 # tipo de aviso → (plantilla en WhatsApp Manager, variables en orden desde `datos`)
 PLANTILLAS: dict[str, tuple[str, list[str]]] = {
     "asignacion": ("brota_asignacion", ["recolector_nombre", "franja_texto", "codigo_pasaporte"]),
-    "recoleccion_confirmada": ("brota_recoleccion", ["puntos_otorgados", "saldo"]),
-    "entrega_directa_confirmada": ("brota_recoleccion", ["puntos_otorgados", "saldo"]),
-    "rechazo_educativo": ("brota_rechazo", ["motivo"]),
-    "nueva_orden": ("brota_nueva_orden", ["codigo_pasaporte", "ubicacion", "servicios"]),
+    "recoleccion_confirmada": ("brota_recoleccion_v2", ["codigo_pasaporte", "puntos_otorgados", "saldo"]),
+    "entrega_directa_confirmada": ("brota_recoleccion_v2", ["codigo_pasaporte", "puntos_otorgados", "saldo"]),
+    "rechazo_educativo": ("brota_rechazo_v2", ["codigo_pasaporte", "motivo"]),
+    "nueva_orden": ("brota_nueva_orden_v2", ["codigo_pasaporte", "ubicacion", "servicios"]),
 }
 
 

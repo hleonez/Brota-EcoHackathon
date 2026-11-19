@@ -1,6 +1,6 @@
 // Formas de la API de Brota que usa el panel (ver docs/contrato-api.md).
 
-export type EstadoOrden = "nueva" | "asignada" | "recogida" | "rechazada";
+export type EstadoOrden = "nueva" | "asignada" | "recogida" | "rechazada" | "cancelada";
 
 export interface Asignacion {
   recolector_id: string;
@@ -55,6 +55,23 @@ export interface Orden {
 export interface OrdenCerrada extends Orden {
   evaluacion_puntos: "acreditada" | "no_aplica" | "pendiente" | "requiere_revision";
   puntos_otorgados: string | null;
+}
+
+export interface Caso {
+  id: string;
+  codigo: string;
+  tipo: "queja" | "ayuda";
+  estado: "abierto" | "atendido";
+  texto: string;
+  canal: string;
+  codigo_pasaporte: string | null;
+  gremio_id: string | null;
+  contacto_nombre: string | null;
+  ubicacion: string | null;
+  respuesta: string | null;
+  atendido_at: string | null;
+  version: number;
+  created_at: string;
 }
 
 export interface Recolector {

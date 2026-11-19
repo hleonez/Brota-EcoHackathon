@@ -23,24 +23,27 @@ from app.config import get_settings
 # Plantillas de los avisos que pueden salir fuera de la ventana de 24 h (ver app/avisos.py:
 # el orden de las variables coincide con PLANTILLAS de ese módulo). Categoría: UTILITY.
 # Reglas de Meta: el texto no empieza ni termina en una variable; cada variable lleva ejemplo.
+# Para que Meta las deje como UTILITY: solo información de UNA transacción (código, estado, datos),
+# sin frases promocionales ni de ánimo («sigue separando…»). Un nombre borrado no se puede reusar en
+# 30 días: por eso las versiones (_v2).
 DEFINICIONES: dict[str, tuple[str, list[str]]] = {
     "brota_asignacion": (
         "🚲 {{1}} pasará por tu recolección {{2}} (solicitud {{3}}). Ten el material listo en la puerta. "
         "Brota 💚",
         ["Rosa", "hoy entre 2:00 p. m. y 4:00 p. m.", "BR-00018"],
     ),
-    "brota_recoleccion": (
-        "💚 ¡Gracias! Tu material llegó bien separado: ganaste {{1}} puntos y ahora tienes {{2}}. "
-        "Sigue separando con Brota 🌱",
-        ["10", "25"],
+    "brota_recoleccion_v2": (
+        "Recolección {{1}}: tu material fue recibido. Puntos ganados: {{2}}. Saldo actual: {{3}} puntos.",
+        ["BR-00018", "10", "25"],
     ),
-    "brota_rechazo": (
-        "😕 Esta vez no se pudo llevar tu material: {{1}}. Escríbeme y te cuento cómo prepararlo para la "
-        "próxima. Brota 🌱",
-        ["material mojado"],
+    "brota_rechazo_v2": (
+        "Recolección {{1}}: el material no se pudo recibir. Motivo: {{2}}. Responde a este mensaje si "
+        "quieres indicaciones para la próxima vez.",
+        ["BR-00018", "material mojado"],
     ),
-    "brota_nueva_orden": (
-        "🆕 Nueva solicitud {{1}} en {{2}}: {{3}}. Asígnala en el panel de coordinación de Brota.",
+    "brota_nueva_orden_v2": (
+        "Nueva solicitud de recolección {{1}}. Ubicación: {{2}}. Servicio: {{3}}. Asígnala en el panel de "
+        "coordinación.",
         ["BR-00018", "Torre 3 · Apto 402", "Reciclable"],
     ),
 }

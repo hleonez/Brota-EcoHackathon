@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ErrorApi } from "./api";
 import { DialogoAsignar, DialogoCierre } from "./Dialogos";
-import type { Catalogo, Orden, Recolector, Sesion } from "./tipos";
+import type { Caso, Catalogo, Orden, Recolector, Sesion } from "./tipos";
 import { hace } from "./util";
-import { VistaBandeja, VistaHistorial, VistaRutas } from "./Vistas";
+import { VistaBandeja, VistaHistorial, VistaReportes, VistaRutas } from "./Vistas";
 
-type Vista = "bandeja" | "rutas" | "historial";
+type Vista = "bandeja" | "rutas" | "reportes" | "historial";
 export type Accion = { tipo: "asignar" | "recogida" | "rechazada"; orden: Orden };
 
 const CADA = 15_000; // la bandeja se actualiza sola
@@ -13,6 +13,8 @@ const CADA = 15_000; // la bandeja se actualiza sola
 export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: () => void }) {
   const gremioId = sesion.cuenta.permisos.find((p) => p.rol === "coordinacion")?.gremio_id ?? null;
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
+  const [casos, setCasos] = useState<Caso[]>([]);
+  const casosConocidos = useRef<Set<string> | null>(null);
   const [recolectores, setRecolectores] = useState<Recolector[]>([]);
   const [catalogo, setCatalogo] = useState<Catalogo | null>(null);
   const [cargado, setCargado] = useState(false);
@@ -34,8 +36,14 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
 
   const cargarOrdenes = useCallback(async () => {
     try {
-      const lista = await api.ordenes();
+      const [lista, reportes] = await Promise.all([api.ordenes(), api.casos()]);
       setOrdenes(lista);
+      setCasos(reportes);
+      if (casosConocidos.current) {
+        const nuevos = reportes.filter((c) => c.estado === "abierto" && !casosConocidos.current!.has(c.id));
+        if (nuevos.length) mostrar(`⚠ Nuevo reporte: ${nuevos.map((c) => c.codigo).join(", ")}`);
+      }
+      casosConocidos.current = new Set(reportes.map((c) => c.id));
       setError(null);
       setActualizado(Date.now());
       if (conocidas.current) {
@@ -135,6 +143,10 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
         <Pestana activa={vista === "rutas"} onClick={() => setVista("rutas")} cuenta={asignadas.length}>
           Rutas de hoy
         </Pestana>
+        <Pestana activa={vista === "reportes"} onClick={() => setVista("reportes")}
+          cuenta={casos.filter((c) => c.estado === "abierto").length} alerta>
+          Reportes
+        </Pestana>
         <Pestana activa={vista === "historial"} onClick={() => setVista("historial")}>
           Historial
         </Pestana>
@@ -147,6 +159,15 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
           <VistaBandeja nuevas={nuevas} asignadas={asignadas} {...comunes} />
         ) : vista === "rutas" ? (
           <VistaRutas asignadas={asignadas} recolectores={recolectores} {...comunes} />
+        ) : vista === "reportes" ? (
+          <VistaReportes
+            casos={casos}
+            onRespondido={(c) => {
+              setCasos((l) => l.map((x) => (x.id === c.id ? c : x)));
+              mostrar(`✅ Respuesta enviada a ${c.contacto_nombre ?? "el vecino"} (${c.codigo}).`);
+            }}
+            onConflicto={conflicto}
+          />
         ) : (
           <VistaHistorial ordenes={ordenes} {...comunes} />
         )}

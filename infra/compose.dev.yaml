@@ -1,5 +1,7 @@
 services:
   db:
+    # Si Docker o WSL detienen la base (pasó dos veces: Exited 255), vuelve sola.
+    restart: unless-stopped
     ports:
       - target: 5432
         published: "${DB_LOCAL_PORT:-5432}"

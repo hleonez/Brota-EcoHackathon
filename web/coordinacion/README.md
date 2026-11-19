@@ -9,7 +9,8 @@ React 19 + Vite + TypeScript, sin librerías de componentes. Habla solo con la A
 | **Asignar** | Recolector del gremio (con su teléfono), franja de hoy o mañana (o sin hora fija) y cómo se le avisa (llamada o recado). Brisa le escribe al vecino quién pasa. |
 | **Rutas de hoy** | Paradas pendientes por recolector, ordenadas por franja, con su teléfono para llamar. Filtros: hoy, mañana, sin hora. |
 | **Cerrar** | ✅ Recogida (el vecino recibe sus puntos) o ❌ Rechazada con motivo del gremio (el vecino recibe un consejo). También se puede reasignar. |
-| **Historial** | Órdenes cerradas, con totales del día. |
+| **Reportes** | Quejas y pedidos de «hablar con alguien» de los vecinos; se responden aquí y la respuesta les llega por WhatsApp. |
+| **Historial** | Órdenes cerradas (recogidas, rechazadas y canceladas por el vecino), con totales del día. |
 
 Pendiente: pesajes (kg por material y lectura del tiquete), modo sin conexión y registro asistido.
 

@@ -122,12 +122,16 @@ IA_NO_ENTENDI_AUDIO = "No alcancé a entender el audio 🙏 ¿Me lo repites o me
 IA_MEDIA_SIN_IA = "Ahora mismo no puedo escuchar audios ni ver fotos 🙏 Escríbeme qué tienes, por ejemplo «cajas y botellas»."
 IA_DESCARGA = "No pude abrir ese archivo 🙏 ¿Me lo envías de nuevo o me escribes qué tienes?"
 IA_PESADO = "Ese archivo es muy pesado para mí 🙏 Mándame una foto o un audio más corto."
-CANCELAR_ENVIADA = (
-    "Todavía no puedo cancelar por aquí una solicitud ya enviada 🙏 Si ya no la necesitas, avísale al reciclador "
-    "cuando pase."
+# --------------------------------------------------------------------------- soporte (casos y cancelar)
+CASO_QUEJA_PIDE = (
+    "Lamento que algo haya salido mal 😔 Cuéntame qué pasó en un mensaje (puede ser nota de voz). Si es sobre una "
+    "solicitud, incluye su código, por ejemplo BR-00018."
 )
-QUEJA_PRONTO = (
-    "Lamento mucho eso 😔 Muy pronto podrás dejar tu reporte por aquí para que el equipo lo atienda. Mientras tanto, "
-    "cuéntaselo al reciclador o a la coordinación."
-)
-PERSONA_PRONTO = "Muy pronto podrás hablar por aquí con una persona del equipo 🙏 Mientras tanto, cuéntame y te ayudo."
+CASO_AYUDA_PIDE = "Claro 🙋 Escríbeme en un mensaje qué necesitas y una persona del equipo te responde por aquí."
+CASO_REGISTRADO = "✅ Listo, lo dejé registrado ({codigo}). El equipo de coordinación lo revisa y te responde por aquí."
+CANCELAR_NADA = "No tienes solicitudes pendientes por cancelar 🙂"
+CANCELAR_CONFIRMA = "¿Cancelo tu solicitud {codigo}? ({detalle})"
+CANCELAR_CUAL = "¿Cuál solicitud quieres cancelar?"
+CANCELADA = "Listo, cancelé tu solicitud {codigo} ✅ Ya le avisé a la coordinación. Cuando quieras, pides otra."
+CANCELAR_NO_SE_PUEDE = "Esa solicitud ya no se puede cancelar: ya fue atendida o cancelada 🙂"
+ESTADO_PIE = "\nPara cancelar una, escribe CANCELAR."

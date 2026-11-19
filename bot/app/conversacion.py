@@ -26,6 +26,7 @@ from app.catalogo import buscar
 from app.coordinacion import Coordinacion
 from app.ia import interpretar
 from app.pedido import Pedido
+from app.soporte import Soporte
 from app.whatsapp import Boton, Entrante, ErrorWhatsApp, Fila, WhatsApp
 
 log = logging.getLogger("brota.bot.conversacion")
@@ -36,6 +37,8 @@ FILAS_MENU = [
     Fila("M_ESTADO", "📦 Mis solicitudes", "Cómo va lo que pediste"),
     Fila("M_PUNTOS", "⭐ Mis puntos"),
     Fila("M_LIGA", "🏆 Liga de torres"),
+    Fila("M_QUEJA", "⚠ Reportar un problema", "Algo salió mal con una recolección"),
+    Fila("M_PERSONA", "🙋 Hablar con alguien", "Te responde una persona del equipo"),
 ]
 PALABRAS_MENU = {"menu", "inicio", "volver", "opciones"}
 MAX_MEDIA = 10 * 1024 * 1024
@@ -108,6 +111,7 @@ class Brisa:
         self.memoria = memoria or Memoria()
         self.coordinacion = Coordinacion(wa, api)
         self.pedido = Pedido(wa, api)
+        self.soporte = Soporte(wa, api)
         self.en_duda: dict[str, float] = {}  # celular → cuándo tocó «Tengo una duda»
 
     async def atender(self, m: Entrante) -> None:
@@ -231,6 +235,7 @@ class Brisa:
         opcion = m.respuesta_id or ""
         comando = normalizar(m.texto).strip("!¡.¿? ")
         duda = time.monotonic() - self.en_duda.pop(m.de, 0) < 1800
+        caso = self.soporte.esperando(m.de)  # tipo de reporte que espera su detalle
 
         if opcion == "M_MENU" or comando in PALABRAS_MENU or comando in SALUDOS:
             await self._menu(m.de, nombre)  # el borrador se conserva: el menú ofrece seguirlo
@@ -246,11 +251,19 @@ class Brisa:
             await self.wa.texto(m.de, T.PUNTOS.format(saldo=_numero(p["saldo"])))
         elif opcion == "M_LIGA" or comando == "liga":
             await self._liga(m.de, me)
+        elif opcion == "M_QUEJA":
+            await self.soporte.pedir_detalle(m.de, "queja")
+        elif opcion == "M_PERSONA":
+            await self.soporte.pedir_detalle(m.de, "ayuda")
+        elif opcion.startswith("S_") and await self.soporte.atender_boton(m):
+            pass
         elif comando == "cancelar":
             if self.pedido.activo(m.de):
                 await self.pedido.cancelar(m.de)
             else:
-                await self._menu(m.de, nombre)
+                await self.soporte.ofrecer_cancelar(m.de)
+        elif caso and m.tipo == "text" and m.texto:
+            await self.soporte.registrar(m.de, m.wamid, caso, m.texto)
         elif opcion == "BORRAR_SI":
             await self.api.pedir_eliminacion(m.de, m.wamid)
             await self.wa.texto(m.de, T.BORRAR_OK)
@@ -311,6 +324,10 @@ class Brisa:
         if r is None:
             await self.wa.texto(m.de, T.IA_MEDIA_SIN_IA)
             return
+        caso = self.soporte.esperando(m.de)
+        if caso and es_audio and r.get("transcripcion"):  # el detalle de un reporte, dictado
+            await self.soporte.registrar(m.de, m.wamid, caso, r["transcripcion"])
+            return
         lineas = []
         if es_audio and r.get("transcripcion"):
             lineas.append(T.IA_TE_ESCUCHE.format(texto=r["transcripcion"]))
@@ -357,11 +374,15 @@ class Brisa:
             if self.pedido.activo(m.de):
                 await self.pedido.cancelar(m.de)
             else:
-                await self.wa.texto(m.de, T.CANCELAR_ENVIADA)
+                await self.soporte.ofrecer_cancelar(m.de)
         elif intencion == "queja":
-            await self.wa.texto(m.de, T.QUEJA_PRONTO)
+            relato = m.texto or r.get("transcripcion") or ""
+            if len(relato.split()) >= 4:  # ya contó qué pasó: se registra de una vez
+                await self.soporte.registrar(m.de, m.wamid, "queja", relato)
+            else:
+                await self.soporte.pedir_detalle(m.de, "queja")
         elif intencion == "persona":
-            await self.wa.texto(m.de, T.PERSONA_PRONTO)
+            await self.soporte.pedir_detalle(m.de, "ayuda")
         elif r.get("aclaracion") and intencion != "saludo":
             await self.wa.texto(m.de, r["aclaracion"])
         else:
@@ -394,7 +415,7 @@ class Brisa:
                     if a.get("inicio"):
                         estado += f" ({_hora_local(a['inicio'])})"
                 lineas.append(f"• {s['codigo_pasaporte']} · {o['gremio_nombre']}: {estado}")
-        await self.wa.texto(celular, "📋 Tus recolecciones:\n" + "\n".join(lineas))
+        await self.wa.texto(celular, "📋 Tus recolecciones:\n" + "\n".join(lineas) + T.ESTADO_PIE)
 
     async def _liga(self, celular: str, me: dict[str, Any]) -> None:
         unidades = me.get("unidades") or []
