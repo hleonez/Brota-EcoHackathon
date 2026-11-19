@@ -20,6 +20,17 @@ export interface Resultado {
   confirmado_at: string;
 }
 
+export interface ResiduoDeclarado {
+  residuo_id: string;
+  codigo: string;
+  nombre: string;
+  emoji: string;
+  estado: "listo" | "revision";
+  cantidad: string | null;
+  fuente: "lista" | "texto" | "foto" | "audio";
+  chequeos: string[];
+}
+
 export interface Orden {
   id: string;
   created_at: string;
@@ -38,6 +49,7 @@ export interface Orden {
   torre_id: string | null;
   contacto_nombre: string | null;
   observacion: string | null;
+  residuos: ResiduoDeclarado[];
 }
 
 export interface OrdenCerrada extends Orden {

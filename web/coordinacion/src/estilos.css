@@ -123,6 +123,13 @@ input, textarea {
 .ubicacion { font-size: 19px; font-weight: 600; }
 .fila-datos { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .chip { font-size: 13px; padding: 2px 10px; border-radius: 999px; background: var(--marca-suave); }
+.residuos { list-style: none; margin: 2px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.residuos li { display: flex; flex-direction: column; padding: 6px 10px; border-radius: 8px; background: var(--marca-suave); }
+.residuos li.revisar { background: var(--fondo); outline: 1px dashed var(--asignada); }
+.residuo-nombre { font-weight: 600; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+.marca-ok { color: var(--exito); }
+.marca-revisar { color: var(--asignada); font-size: 13px; font-weight: 600; }
+.chequeos { font-size: 13px; }
 .nota { font-size: 14px; padding: 6px 10px; border-radius: 8px; background: var(--fondo); }
 .asignacion { font-size: 15px; display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
 .acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }

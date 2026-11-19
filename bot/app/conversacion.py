@@ -20,12 +20,21 @@ from typing import Any
 
 from app import textos as T
 from app.brota import Brota, ErrorBrota
+from app.catalogo import buscar
 from app.coordinacion import Coordinacion
+from app.pedido import Pedido
 from app.whatsapp import Boton, Entrante, Fila, WhatsApp
 
 log = logging.getLogger("brota.bot.conversacion")
 
-BOTONES_MENU = [Boton("RECICLABLES", "♻ Reciclable"), Boton("ORGANICOS", "🍌 Orgánico"), Boton("LOS_DOS", "🔄 Los dos")]
+FILAS_MENU = [
+    Fila("M_PEDIR", "♻ Pedir recolección", "Te ayudo a preparar tu material"),
+    Fila("M_DUDA", "❓ Tengo una duda", "¿Esto se recicla? ¿Cómo lo preparo?"),
+    Fila("M_ESTADO", "📦 Mis solicitudes", "Cómo va lo que pediste"),
+    Fila("M_PUNTOS", "⭐ Mis puntos"),
+    Fila("M_LIGA", "🏆 Liga de torres"),
+]
+PALABRAS_MENU = {"menu", "inicio", "volver", "opciones"}
 BOTONES_CONSENTIMIENTO = [Boton("ACEPTO", "Sí, acepto"), Boton("VER_MAS", "Ver más"), Boton("NO_ACEPTO", "No")]
 BOTONES_BORRAR = [Boton("BORRAR_SI", "Sí, borrar"), Boton("BORRAR_NO", "No")]
 SALUDOS = {"hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "hi", "hello", "ola", "holi"}
@@ -88,6 +97,8 @@ class Brisa:
         self.api = api
         self.memoria = memoria or Memoria()
         self.coordinacion = Coordinacion(wa, api)
+        self.pedido = Pedido(wa, api)
+        self.en_duda: dict[str, float] = {}  # celular → cuándo tocó «Tengo una duda»
 
     async def atender(self, m: Entrante) -> None:
         await self.wa.marcar_leido(m.wamid)
@@ -167,7 +178,7 @@ class Brisa:
             nombre = e.nombre
             self.memoria.borrar(m.de)
             await self.wa.texto(m.de, T.REGISTRADO.format(nombre=nombre))
-            await self.wa.botones(m.de, T.MENU.format(nombre=nombre), BOTONES_MENU, T.MENU_PIE)
+            await self._menu(m.de, nombre)
             return
 
         # Paso desconocido: reiniciar.
@@ -207,44 +218,55 @@ class Brisa:
 
     async def _registrado(self, m: Entrante, me: dict[str, Any]) -> None:
         nombre = me.get("nombre") or "vecino"
-        opcion = m.respuesta_id
-        comando = normalizar(m.texto)
+        opcion = m.respuesta_id or ""
+        comando = normalizar(m.texto).strip("!¡.¿? ")
+        duda = time.monotonic() - self.en_duda.pop(m.de, 0) < 1800
 
-        if opcion in ("RECICLABLES", "ORGANICOS", "LOS_DOS"):
-            await self._pedir_recoleccion(m, nombre, opcion)
+        if opcion == "M_MENU" or comando in PALABRAS_MENU or comando in SALUDOS:
+            await self._menu(m.de, nombre)  # el borrador se conserva: el menú ofrece seguirlo
+        elif opcion in ("M_PEDIR", "RECICLABLES", "ORGANICOS", "LOS_DOS"):  # los tres últimos: menú anterior
+            await self.pedido.empezar(m.de)
+        elif opcion == "M_DUDA":
+            self.en_duda[m.de] = time.monotonic()
+            await self.wa.texto(m.de, T.DUDA_PREGUNTA)
+        elif opcion == "M_ESTADO" or comando in ("estado", "mis solicitudes"):
+            await self._estado(m.de)
+        elif opcion == "M_PUNTOS" or comando in ("puntos", "mis puntos"):
+            p = await self.api.puntos(m.de)
+            await self.wa.texto(m.de, T.PUNTOS.format(saldo=_numero(p["saldo"])))
+        elif opcion == "M_LIGA" or comando == "liga":
+            await self._liga(m.de, me)
+        elif comando == "cancelar":
+            if self.pedido.activo(m.de):
+                await self.pedido.cancelar(m.de)
+            else:
+                await self._menu(m.de, nombre)
         elif opcion == "BORRAR_SI":
             await self.api.pedir_eliminacion(m.de, m.wamid)
             await self.wa.texto(m.de, T.BORRAR_OK)
         elif opcion == "BORRAR_NO":
             await self.wa.texto(m.de, T.BORRAR_CANCELADO)
-        elif comando in ("puntos", "mis puntos"):
-            p = await self.api.puntos(m.de)
-            await self.wa.texto(m.de, T.PUNTOS.format(saldo=_numero(p["saldo"])))
-        elif comando in ("estado", "mis solicitudes"):
-            await self._estado(m.de)
-        elif comando == "liga":
-            await self._liga(m.de, me)
         elif comando in ("borrar mis datos", "borrar datos"):
             await self.wa.botones(m.de, T.BORRAR_CONFIRMA, BOTONES_BORRAR)
+        elif duda and m.tipo == "text":
+            await self.pedido.responder_duda(m.de, buscar(m.texto, await self.api.residuos(m.de)))
+        elif await self.pedido.atender(m, me):
+            pass
+        elif m.tipo == "text" and (encontradas := buscar(m.texto, await self.api.residuos(m.de))):
+            # Mencionó materiales sin estar pidiendo: primero se le enseña (y se le ofrece pedir).
+            await self.pedido.responder_duda(m.de, encontradas)
         else:
             if m.tipo in ("audio", "image", "video", "document"):
                 await self.wa.texto(m.de, T.SOLO_BOTONES)
-            await self.wa.botones(m.de, T.MENU.format(nombre=nombre), BOTONES_MENU, T.MENU_PIE)
+            await self._menu(m.de, nombre)
 
-    async def _pedir_recoleccion(self, m: Entrante, nombre: str, opcion: str) -> None:
-        codigos = ["RECICLABLES", "ORGANICOS"] if opcion == "LOS_DOS" else [opcion]
-        ids = await self.api.servicios_por_codigo(m.de)
-        try:
-            s = await self.api.crear_solicitud(m.de, m.wamid, [ids[c] for c in codigos])
-        except ErrorBrota as err:
-            if err.codigo == "OPEN_REQUEST_EXISTS":
-                await self.wa.texto(m.de, T.SOLICITUD_ABIERTA.format(codigo=err.datos.get("codigo_pasaporte", "")))
-                return
-            raise
-        servicios = " y ".join(T.SERVICIOS[c] for c in codigos)
-        await self.wa.texto(
-            m.de, T.SOLICITUD_CREADA.format(nombre=nombre, servicios=servicios, codigo=s["codigo_pasaporte"])
-        )
+    async def _menu(self, celular: str, nombre: str) -> None:
+        filas = list(FILAS_MENU)
+        b = self.pedido.activo(celular)
+        if b and b.items:
+            n = len(b.items)
+            filas.insert(0, Fila("P_SEGUIR", "📝 Seguir mi pedido", f"{n} material{'es' if n != 1 else ''} sin enviar"))
+        await self.wa.lista(celular, T.MENU_LISTA.format(nombre=nombre), "Ver opciones", "Brisa", filas)
 
     async def _estado(self, celular: str) -> None:
         abiertas = await self.api.solicitudes_abiertas(celular)

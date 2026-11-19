@@ -33,6 +33,20 @@ function Tarjeta({ orden: o, servicios, recientes, onAccion, sinRecolector }: Co
           return s ? <span key={id} className="chip">{s.nombre}</span> : null;
         })}
       </div>
+      {o.residuos?.length > 0 && (
+        <ul className="residuos" aria-label="Materiales declarados">
+          {o.residuos.map((r) => (
+            <li key={r.residuo_id} className={r.estado === "revision" ? "revisar" : ""}>
+              <span className="residuo-nombre">
+                {r.emoji} {r.nombre}
+                {r.cantidad && <span className="tenue"> · {r.cantidad}</span>}
+                {r.estado === "revision" ? <span className="marca-revisar">🔎 revisar al recoger</span> : <span className="marca-ok">✔</span>}
+              </span>
+              {r.chequeos.length > 0 && <span className="tenue chequeos">{r.chequeos.join(" · ")}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
       {o.observacion && <div className="nota">📝 {o.observacion}</div>}
       {a && o.estado === "asignada" && (
         <div className="asignacion">

@@ -36,6 +36,7 @@ from app.models import (
     PermisoOperador,
     PuntoRecepcion,
     Recolector,
+    Residuo,
     TipoServicio,
     Torre,
     Unidad,
@@ -43,6 +44,7 @@ from app.models import (
     VersionPrecioMaterial,
     VersionReglaIncentivo,
 )
+from app.seed_residuos import RESIDUOS
 
 INICIO = datetime(2026, 11, 1, 5, 0, tzinfo=timezone.utc)  # 1-nov-2026 00:00 en Bogotá
 
@@ -97,6 +99,13 @@ def sembrar(db: Session) -> dict[str, str]:
     for cod, nom, gc in SERVICIOS:
         if not _uno(db, TipoServicio, codigo=cod):
             db.add(TipoServicio(codigo=cod, nombre=nom, gremio_id=g[gc].id))
+    # Fichas de residuos: el contenido de ejemplo se actualiza en cada corrida (aún no hay edición en el panel).
+    for i, (cod, nom, emoji, cat, acepta, gc, menu, sin, prep, evitar, alt, verif) in enumerate(RESIDUOS):
+        r = _uno(db, Residuo, codigo=cod) or Residuo(codigo=cod)
+        r.nombre, r.emoji, r.categoria, r.acepta, r.en_menu, r.orden = nom, emoji, cat, acepta, menu, (i + 1) * 10
+        r.gremio_id = g[gc].id if gc else None
+        r.sinonimos, r.preparacion, r.evitar, r.alternativa, r.verificaciones = sin, prep, evitar, alt, verif
+        db.add(r)
     mat = {}
     for cod, nom, gc, precio in MATERIALES:
         m = _uno(db, Material, codigo=cod)

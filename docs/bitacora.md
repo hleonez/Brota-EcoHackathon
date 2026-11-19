@@ -9,15 +9,15 @@ Se actualiza en cada paso de trabajo.
 | Pieza | Estado | Dónde |
 | --- | --- | --- |
 | PostgreSQL 18 (Docker) | Funcionando | `infra/` |
-| API central (FastAPI) | Núcleo + coordinación por WhatsApp, 21 pruebas en verde | `api/` |
+| API central (FastAPI) | Núcleo, coordinación y fichas de residuos (migración 0003); 23 pruebas | `api/` |
 | Integración con el bot | Probada con WhatsApp real (vecino) | [integracion-bot.md](integracion-bot.md) |
-| Bot de WhatsApp (Meta) | Vecinos; a la coordinación solo alerta; 25 pruebas; webhook real conectado | `bot/` |
+| Bot de WhatsApp (Meta) | Menú nuevo, dudas y pedido guiado con resumen; 32 pruebas; webhook real conectado | `bot/` |
 | Laboratorio de pruebas | `http://localhost:8090/lab`: celulares simulados + tablero de órdenes y rutas | `bot/app/laboratorio.py` |
 | App de Meta | BrotaBrisa conectada al número de prueba (webhook + suscripción de la cuenta) | [guia-bot-meta.md](guia-bot-meta.md) |
 | Panel de coordinación (tablet) | Bandeja, asignar, rutas, cerrar e historial; probado de punta a punta | `web/coordinacion/` |
 | Coordinación por WhatsApp | Respaldo opcional (`COORDINACION_POR_WHATSAPP=true`); por defecto solo alerta | [integracion-bot.md](integracion-bot.md) §4 |
 | Pesajes en el panel, panel de la Fundación | Pendiente | `web/` |
-| IA con Gemini (tiquete, audios) | Decidido, por construir en la API | — |
+| Brisa IA | Fase 1 (fichas, chequeos, resumen) construida; fases 2–5 (Gemini, audio, fotos, casos) por construir | [brisa-ia.md](brisa-ia.md) |
 | Canjes, certificado, exportaciones | Pendiente | — |
 
 Ramas en GitHub, cada una sobre la anterior: `feat/api-nucleo` → `feat/bot-whatsapp` →
@@ -309,6 +309,90 @@ Revisado en tamaño tablet (768 × 1024) sin errores en la consola.
 
 ---
 
+## 10 · 19-nov-2026 · Prueba real completa y diseño de Brisa IA
+
+**Prueba con WhatsApp real:** el túnel de cloudflared se había cerrado; se abrió uno nuevo y se
+actualizó el webhook en Meta. Recorrido completo:
+1. Jeremy pide desde su celular (BR-00006).
+2. La coordinación la asigna en el panel y Jeremy recibe el aviso.
+3. Se cierra como recogida y Jeremy recibe sus puntos.
+
+**Pedido del equipo:** un bot de reciclaje más potente. Que **enseñe antes de pedir**: qué
+materiales, cómo prepararlos y chequeos como «¿el cartón está seco?». Que entienda fotos y audios
+con IA y muestre un resumen con Enviar/Corregir/Cancelar. Que tenga un menú amigable (duda,
+solicitud, queja, hablar con alguien) y responda cualquier pregunta. Se recibió un prompt maestro
+completo para Brisa.
+
+**Decisión:** «la IA entiende, el catálogo decide, la persona confirma y la API registra». Gemini
+interpreta y redacta, pero si un material se recibe lo dice el catálogo de la API; nada se crea sin
+«Enviar solicitud»; sin IA el bot sigue funcionando con listas y sinónimos.
+
+**Documentos nuevos:**
+- [brisa-ia.md](brisa-ia.md): conversación nueva, fichas de materiales, cambios en API, bot y panel,
+  y 5 fases.
+- [prompt-maestro-brisa.md](prompt-maestro-brisa.md): el prompt del equipo, con el menú ampliado.
+
+**Pendiente del equipo:** criterios reales de Asorescatar y Ecorazón, a dónde llevar lo que no se
+recibe, clave de Gemini y si se activa facturación (el plan gratuito puede usar los datos enviados).
+
+---
+
+## 11 · 19-nov-2026 · Brisa IA, fase 1: enseñar antes de pedir
+
+**API (migración `0003`):**
+- **`residuo`:** ficha de lo que declara el vecino. Dice si se recibe (`si`/`no`/`revision`) y qué
+  gremio lo recoge, e incluye sinónimos, preparación, qué evitar, alternativa (a dónde llevar lo que
+  no se recibe) y `verificaciones`: preguntas con opciones de botón y su resultado (listo, por
+  preparar, no, revisión), con consejo.
+  - Es una tabla aparte de `material` porque el material del pesaje lleva precio por kg y otra
+    granularidad.
+- **`solicitud_residuo`:** lo que el vecino declaró y lo que respondió.
+- **`GET /v1/residuos`:** devuelve las fichas.
+- **`POST /v1/solicitudes`:** acepta `residuos`. Los servicios (una orden por gremio) se deducen de
+  ellos. Lo que no se recibe da 422, y una respuesta que la ficha no tiene, también.
+- Cada orden trae sus residuos con `chequeos` legibles, y la alerta a la coordinación los nombra.
+- **Seed:** 19 fichas de **ejemplo, por validar con Asorescatar y Ecorazón** (`api/app/seed_residuos.py`).
+  - 10 reciclables u orgánicos que se reciben.
+  - 1 en revisión (Tetra Pak).
+  - 8 que no van en la ruta (comida cocinada, aceite, pilas, medicamentos, bombillos, químicos,
+    electrónicos, icopor y sanitarios), cada uno con su alternativa.
+
+**Bot:**
+- **Menú en lista:** ♻ Pedir recolección · ❓ Tengo una duda · 📦 Mis solicitudes · ⭐ Mis puntos ·
+  🏆 Liga. Si hay un pedido sin enviar, aparece «📝 Seguir mi pedido».
+- **Pedido guiado (`pedido.py`):**
+  1. Materiales por lista o por texto libre («cajas de pizza, botellas de vidrio y cáscaras»), con
+     `catalogo.py`: sinónimos, plurales y la frase más larga primero.
+  2. Brisa confirma lo que entendió.
+  3. Por cada ficha muestra la preparación y hace 1 o 2 chequeos con botones.
+  4. Pregunta «¿algo más?».
+  5. Muestra un **resumen** con lo incluido, la ubicación y lo que queda por fuera, con
+     **Enviar / Corregir / Cancelar**. Corregir permite quitar, agregar o volver a revisar lo que ya
+     se preparó.
+  6. Solo «Enviar» crea la solicitud, con el `wamid` como clave de idempotencia.
+- **Dudas:** «¿el icopor se recicla?» muestra la ficha (✅ se recibe / 🔎 en revisión / 🚫 no va, con
+  la alternativa) y ofrece pedirlo. Si un vecino menciona materiales sin estar pidiendo, primero se
+  le enseña.
+- **Ajuste tras probar:** si *algunas* botellas o latas tienen un problema, el material sigue en el
+  pedido y Brisa solo pide separar lo malo («Saca los rotos; los enteros sí»).
+
+**Panel:** cada tarjeta muestra los materiales con ✔ o «🔎 revisar al recoger» y lo que respondió el vecino.
+
+**Verificación:** API 23 pruebas (catálogo de fichas, solicitud con residuos, rechazos, vista de
+coordinación y alerta). Bot 32 pruebas (buscador de materiales, pedido completo, lo que no se recibe,
+corregir y volver a revisar, dudas, menú que conserva el pedido, solicitud abierta, listo con
+consejo). Recorrido real en el laboratorio:
+1. Carlos escribe «tengo unas cajas de pizza, 4 botellas de vidrio y cáscaras de mango».
+2. Brisa entiende cartón, vidrio y frutas.
+3. Respuestas: cartón «no estoy seguro» (revisión), vidrio con rotos, frutas separadas.
+4. Resumen y envío: **BR-00007**.
+5. En el panel aparece «📦 Cartón 🔎 revisar al recoger · ¿Tu cartón está limpio y seco? No estoy seguro».
+
+**Siguiente:** fase 2 con Gemini (texto libre e intención, respuestas a dudas fuera del catálogo).
+Hace falta la clave en `api/.env`.
+
+---
+
 ## Próximos pasos
 
 - [ ] Revisar las ramas y fusionar `feat/coordinacion-whatsapp` a `main`.
@@ -319,7 +403,10 @@ Revisado en tamaño tablet (768 × 1024) sin errores en la consola.
 - [ ] Coordinación: probar con el celular de un compañero (asignar → aviso al vecino → cerrar).
 - [x] Panel de coordinación para tablet (bandeja, asignar, rutas, cerrar, historial).
 - [ ] Panel: pesajes (kg por material, tiquete con Gemini) y modo sin conexión.
-- [ ] Bot con número propio, token permanente y Gemini (guía por escribir).
+- [x] Brisa IA fase 1: catálogo con fichas, flujo guiado y resumen (sin IA).
+- [ ] Validar las fichas con Asorescatar y la Huerta Ecorazón.
+- [ ] Brisa IA fases 2–4: IA de texto, audio y fotos; casos (quejas, hablar con una persona).
+- [ ] Bot con número propio y token permanente (guía por escribir).
 - [ ] Plantillas de WhatsApp enviadas a aprobación.
 - [ ] API: CI en GitHub Actions y configuración de ruff.
 - [ ] API: módulo M06 con Gemini (interpretar audio/texto y leer el tiquete de pesaje).

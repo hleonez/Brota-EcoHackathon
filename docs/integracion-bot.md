@@ -61,7 +61,20 @@ Content-Type: application/json
 `201` → registrado. `409 CONTACT_ALREADY_REGISTERED` → ya existía. `422 CONSENT_REQUIRED` si
 `decision` no es `aceptado` (si dice «No», simplemente no llames a la API).
 
-### B · Menú y pedir en dos toques (MENÚ)
+### B · Menú, dudas y pedido guiado (MENÚ)
+
+> Desde la fase 1 de [Brisa IA](brisa-ia.md) el pedido es guiado: `GET /v1/residuos` da las fichas;
+> Brisa pregunta qué tiene la persona (lista o texto con sinónimos), hace los chequeos de cada ficha,
+> muestra un resumen y solo con «Enviar solicitud» llama a `POST /v1/solicitudes` con `residuos`:
+>
+> ```http
+> POST /v1/solicitudes
+> {"residuos": [{"residuo_id": "<CARTON>", "estado": "revision", "respuestas": {"seco": "nose"}, "fuente": "texto"},
+>               {"residuo_id": "<FRUVER>", "estado": "listo", "respuestas": {"separados": "si"}, "fuente": "lista"}]}
+> ```
+>
+> Lo que queda «por preparar» o «no se recibe» no se envía. La forma con `tipo_servicio_ids` (abajo)
+> sigue funcionando para otros canales.
 
 Al arrancar, cachea `GET /v1/catalogos` → `tipos_servicio` por `codigo`:
 `RECICLABLES` (♻) y `ORGANICOS` (🍌). «Los dos» = enviar ambos IDs.

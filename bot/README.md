@@ -10,6 +10,8 @@ app/
 ├─ whatsapp.py      Cliente de la Graph API: texto, botones, listas, plantillas, firma, lectura del webhook
 ├─ brota.py         Cliente de la API de Brota (X-Canal-Celular + Idempotency-Key = wamid)
 ├─ conversacion.py  Máquina de estados de Brisa: registro → consentimiento → menú
+├─ pedido.py        Pedido guiado: materiales, chequeos de cada ficha, resumen y envío
+├─ catalogo.py      Reconoce materiales en texto libre con los sinónimos de las fichas
 ├─ coordinacion.py  Modo coordinación: bandeja, asignar recolector y franja, cerrar
 ├─ meta.py          Utilidades de Meta: estado y suscripción de la cuenta de WhatsApp
 ├─ laboratorio.py   Laboratorio local (/lab): celulares simulados + tablero de órdenes y rutas
@@ -28,8 +30,15 @@ Detalle en [docs/integracion-bot.md](../docs/integracion-bot.md) §4.
 **Si el webhook está verificado pero no llega ningún mensaje:** conecta la app a la cuenta de WhatsApp:
 `uv run python -m app.meta suscribir --waba <WhatsApp Business Account ID>`.
 
-Lo que ya entiende un vecino: «hola» (menú o registro), botones ♻ Reciclable / 🍌 Orgánico / 🔄 Los dos,
-PUNTOS, ESTADO, LIGA y BORRAR MIS DATOS. Audios y fotos responden «pronto» (llegarán con Gemini).
+Lo que ya entiende un vecino: «hola» abre el menú (♻ Pedir recolección, ❓ Tengo una duda, 📦 Mis
+solicitudes, ⭐ Mis puntos, 🏆 Liga). **Pedir** es guiado (`app/pedido.py`):
+1. Elige materiales de la lista o los escribe («cajas y botellas», con `app/catalogo.py`).
+2. Brisa le enseña cómo prepararlos y hace los chequeos de cada ficha.
+3. Muestra un resumen con Enviar / Corregir / Cancelar. Nada se crea antes de «Enviar».
+
+Si escribe un material sin estar pidiendo («¿el icopor se recicla?»), Brisa le muestra la ficha.
+También entiende CANCELAR, PUNTOS, ESTADO, LIGA y BORRAR MIS DATOS. Audios y fotos responden «pronto»
+(llegarán con Gemini en la fase 3). Diseño: [docs/brisa-ia.md](../docs/brisa-ia.md).
 
 ## Laboratorio: ver el flujo completo en el navegador
 

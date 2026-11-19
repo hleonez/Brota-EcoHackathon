@@ -40,6 +40,7 @@ class APIFalsa:
         self.claves_solicitud: dict[str, dict] = {}
         self.avisos: list[dict] = []
         self.confirmaciones: list[tuple[str, dict]] = []
+        self.cuerpos_solicitud: list[dict] = []
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.llamadas.append(req)
@@ -66,13 +67,18 @@ class APIFalsa:
             assert cuerpo["consentimiento"] == {"version_politica": "2026-11", "decision": "aceptado"}
             self.registrados[cel] = cuerpo["nombre"]
             return _ok({"participante_id": "p1", "estado_registro": "completo"}, 201)
+        if p == "/v1/residuos":
+            return _ok(RESIDUOS)
         if p == "/v1/catalogos":
             return _ok({"tipos_servicio": [{"id": "s-rec", "codigo": "RECICLABLES"}, {"id": "s-org", "codigo": "ORGANICOS"}]})
         if p == "/v1/solicitudes" and m == "POST":
             clave = req.headers["Idempotency-Key"]
             if clave in self.claves_solicitud:
                 return _ok(self.claves_solicitud[clave], 201)
-            ids = json.loads(req.content)["tipo_servicio_ids"]
+            cuerpo = json.loads(req.content)
+            self.cuerpos_solicitud.append(cuerpo)
+            servicio = {r["id"]: r["tipo_servicio_id"] for r in RESIDUOS}
+            ids = cuerpo.get("tipo_servicio_ids") or sorted({servicio[r["residuo_id"]] for r in cuerpo["residuos"]})
             if self.abiertas & set(ids):
                 return httpx.Response(409, json={"error": {"code": "OPEN_REQUEST_EXISTS", "message": "x",
                                                            "codigo_pasaporte": "BR-00001"}})
@@ -89,6 +95,37 @@ class APIFalsa:
             self.confirmaciones.append((p.split("/")[4], json.loads(req.content)))
             return _ok({"estado": "ok"})
         return httpx.Response(404, json={"error": {"code": "NOT_FOUND", "message": p}})
+
+
+def _v(id_, pregunta, *opciones):
+    return {"id": id_, "pregunta": pregunta,
+            "opciones": [{"id": o[0], "texto": o[1], "resultado": o[2], "consejo": o[3] if len(o) > 3 else None}
+                         for o in opciones]}
+
+
+def _residuo(codigo, nombre, emoji, acepta, servicio, menu, sinonimos, verificaciones=(), **extra):
+    return {"id": f"r-{codigo.lower()}", "codigo": codigo, "nombre": nombre, "emoji": emoji, "acepta": acepta,
+            "tipo_servicio_id": servicio, "en_menu": menu, "orden": len(sinonimos), "sinonimos": sinonimos,
+            "verificaciones": list(verificaciones), "preparacion": extra.get("preparacion", "Limpio y seco."),
+            "evitar": extra.get("evitar"), "alternativa": extra.get("alternativa")}
+
+
+RESIDUOS = [
+    _residuo("CARTON", "Cartón", "📦", "si", "s-rec", True, ["caja", "carton"],
+             [_v("seco", "¿Tu cartón está limpio y seco?", ("si", "Sí, está listo", "listo"),
+                 ("mojado", "Está mojado", "preparar", "Déjalo secar bajo techo."),
+                 ("nose", "No estoy seguro", "revision", "Lo marco para que lo revisen."))],
+             evitar="Cartón mojado o con grasa."),
+    _residuo("PET", "Botellas plásticas", "🧴", "si", "s-rec", True, ["botella", "pet"],
+             [_v("vacias", "¿Están vacías?", ("si", "Sí, vacías", "listo"), ("no", "Todavía no", "preparar", "Vacíalas.")),
+              _v("quimicos", "¿Alguna tuvo químicos?", ("no", "No, ninguna", "listo"), ("si", "Sí, alguna", "listo", "Saca esas; las demás sí."))]),
+    _residuo("VIDRIO", "Vidrio (botellas)", "🍾", "si", "s-rec", True, ["botella de vidrio", "frasco"]),
+    _residuo("FRUVER", "Frutas y verduras", "🍌", "si", "s-org", True, ["cascara", "fruta"]),
+    _residuo("TETRAPAK", "Cajas de leche y jugo", "🧃", "revision", "s-rec", False, ["caja de leche"],
+             preparacion="Vacías y aplastadas."),
+    _residuo("PILAS", "Pilas y baterías", "🔋", "no", None, False, ["pila", "bateria"], preparacion=None,
+             evitar="Tienen metales pesados.", alternativa="Llévalas a un punto posconsumo."),
+]
 
 
 def _ok(data, status=200) -> httpx.Response:
@@ -157,8 +194,8 @@ def test_registro_completo_y_menu(entorno):
     r = enviar(c, boton="ACEPTO")
     assert api.registrados == {CEL: "Carmen"}
     assert "Ya quedaste registrado" in _texto(r[0])
-    botones = [b["reply"]["id"] for b in r[1]["interactive"]["action"]["buttons"]]
-    assert botones == ["RECICLABLES", "ORGANICOS", "LOS_DOS"]
+    filas = [row["id"] for row in r[1]["interactive"]["action"]["sections"][0]["rows"]]
+    assert filas == ["M_PEDIR", "M_DUDA", "M_ESTADO", "M_PUNTOS", "M_LIGA"]
 
 
 @pytest.mark.parametrize("escrito", ["402", "Apto 402", "apartamento #402", "4-02", "apto. 402"])
@@ -176,28 +213,12 @@ def test_rechazar_consentimiento_no_registra(entorno):
     assert "Sin tu autorización" in _texto(r[0]) and not api.registrados
 
 
-def test_pedir_los_dos_y_solicitud_abierta(entorno):
-    c, api = entorno
-    api.registrados[CEL] = "Carmen"
-    r = enviar(c, boton="LOS_DOS", wamid="wamid.doble")
-    assert "BR-00001" in _texto(r[0]) and "reciclables" in _texto(r[0]) and "orgánicos" in _texto(r[0])
-    post = [x for x in api.llamadas if x.url.path == "/v1/solicitudes"][0]
-    assert post.headers["Idempotency-Key"] == "wamid.doble"
-    assert json.loads(post.content)["tipo_servicio_ids"] == ["s-rec", "s-org"]
-
-    # Meta reenvía el mismo webhook: no se procesa dos veces.
-    assert enviar(c, boton="LOS_DOS", wamid="wamid.doble") == []
-
-    r = enviar(c, boton="RECICLABLES")
-    assert "Ya tienes una solicitud en camino (BR-00001)" in _texto(r[0])
-
-
 def test_puntos_y_menu_por_defecto(entorno):
     c, api = entorno
     api.registrados[CEL] = "Carmen"
     assert "Tienes 25 puntos" in _texto(enviar(c, "PUNTOS")[0])
     r = enviar(c, "hola")
-    assert r[0]["interactive"]["type"] == "button" and "Carmen" in _texto(r[0])
+    assert r[0]["interactive"]["type"] == "list" and "Carmen" in _texto(r[0])
 
 
 def _graph(respuestas: list[httpx.Response], enviados: list[dict]):

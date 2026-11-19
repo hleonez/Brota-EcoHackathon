@@ -80,10 +80,14 @@ bandeja ni datos personales de residentes.
 ### M03 · Solicitudes y Pasaporte Circular
 | | Ruta | Notas |
 | --- | --- | --- |
-| ● | `POST /v1/solicitudes` | Residente. Una orden por gremio, atómico. `unidad_id` opcional con una sola unidad |
+| ● | `GET /v1/residuos` | Fichas: si se recibe (`acepta`: si/no/revision), gremio, sinónimos, preparación, qué evitar, alternativa y `verificaciones` (preguntas con opciones y resultado) |
+| ● | `POST /v1/solicitudes` | Residente. Una orden por gremio, atómico. `unidad_id` opcional con una sola unidad. Con `residuos` (lo declarado y sus respuestas) los servicios se deducen; un residuo con `acepta: no` → 422 |
 | ● | `GET /v1/solicitudes` | `unidad_id?`, `abiertas?`. Residente: sus unidades; coordinación: su gremio |
 | ● | `GET /v1/solicitudes/{id}` | `avance` con `estado_general`: `pendiente`, `en_curso`, `parcial`, `atendida` |
 | ● | `GET /v1/solicitudes/{id}/pasaporte` | Eventos, pesajes de procedencia (sin reparto de kg) y puntos |
+
+Cada orden trae `residuos` (los de su gremio) con `estado` (`listo`/`revision`) y `chequeos` legibles, para la
+bandeja de coordinación.
 
 Regla de solicitud abierta (configurable, `REGLA_SOLICITUD_ABIERTA`): un servicio con orden
 `nueva`/`asignada` en la misma unidad → `409 OPEN_REQUEST_EXISTS` con `codigo_pasaporte`.

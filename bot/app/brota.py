@@ -6,6 +6,7 @@ del mensaje como `Idempotency-Key`, así un reintento de Meta o un doble toque n
 
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -30,6 +31,7 @@ class Brota:
     settings: Settings
     cliente: httpx.AsyncClient
     _catalogo: dict[str, Any] | None = field(default=None, repr=False)
+    _residuos: tuple[float, list[dict[str, Any]]] | None = field(default=None, repr=False)
 
     def _url(self, ruta: str) -> str:
         return f"{self.settings.brota_api_url.rstrip('/')}{ruta}"
@@ -108,8 +110,22 @@ class Brota:
                   "consentimiento": {"version_politica": politica, "decision": "aceptado"}}
         return (await self._pedir("POST", "/v1/registros", celular, clave=clave, json=cuerpo))["data"]
 
-    async def crear_solicitud(self, celular: str, clave: str, tipo_servicio_ids: list[str]) -> dict[str, Any]:
-        cuerpo = {"tipo_servicio_ids": tipo_servicio_ids}
+    async def residuos(self, celular: str) -> list[dict[str, Any]]:
+        """Fichas de residuos (catálogo de la API), en caché 5 minutos."""
+        ahora = time.monotonic()
+        if self._residuos is None or ahora - self._residuos[0] > 300:
+            self._residuos = (ahora, (await self._pedir("GET", "/v1/residuos", celular))["data"])
+        return self._residuos[1]
+
+    async def crear_solicitud(
+        self, celular: str, clave: str, tipo_servicio_ids: list[str] | None = None,
+        residuos: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        cuerpo: dict[str, Any] = {}
+        if tipo_servicio_ids:
+            cuerpo["tipo_servicio_ids"] = tipo_servicio_ids
+        if residuos:
+            cuerpo["residuos"] = residuos
         return (await self._pedir("POST", "/v1/solicitudes", celular, clave=clave, json=cuerpo))["data"]
 
     async def pedir_eliminacion(self, celular: str, clave: str) -> dict[str, Any]:

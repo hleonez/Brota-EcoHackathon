@@ -362,8 +362,64 @@ class Solicitud(Base):
 
     ordenes: Mapped[list[Orden]] = relationship(back_populates="solicitud", order_by="Orden.created_at")
     servicios: Mapped[list[SolicitudServicio]] = relationship()
+    residuos: Mapped[list[SolicitudResiduo]] = relationship()
     unidad: Mapped[Unidad] = relationship()
     participante: Mapped[Participante | None] = relationship()
+
+
+class Residuo(Base):
+    """Ficha de lo que un vecino declara (cartón, botellas, cáscaras, pilas…).
+
+    Dice si se recibe en la ruta, quién lo recibe, cómo prepararlo, qué evitar y qué preguntar
+    antes de pedir (`verificaciones`). No es el `material` del pesaje, que lleva precio por kg.
+    `verificaciones`: [{id, pregunta, opciones: [{id, texto, resultado: listo|preparar|no|revision, consejo?}]}]
+    """
+
+    __tablename__ = "residuo"
+    __table_args__ = (
+        CheckConstraint("acepta IN ('si','no','revision')", name="acepta"),
+        CheckConstraint("categoria IN ('reciclable','organico','peligroso','no_aprovechable')", name="categoria"),
+        CheckConstraint("acepta = 'no' OR gremio_id IS NOT NULL", name="gremio_si_se_recibe"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    codigo: Mapped[str] = mapped_column(String(40), unique=True)
+    nombre: Mapped[str] = mapped_column(String(80))
+    emoji: Mapped[str] = mapped_column(String(16), server_default="♻", default="♻")
+    categoria: Mapped[str] = mapped_column(String(20))
+    acepta: Mapped[str] = mapped_column(String(10))
+    gremio_id: Mapped[uuid.UUID | None] = _fk("gremio.id", nullable=True)
+    sinonimos: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"), default=list)
+    preparacion: Mapped[str | None] = mapped_column(Text)
+    evitar: Mapped[str | None] = mapped_column(Text)
+    alternativa: Mapped[str | None] = mapped_column(Text)
+    verificaciones: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, server_default=text("'[]'::jsonb"), default=list
+    )
+    en_menu: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), default=False)
+    orden: Mapped[int] = mapped_column(Integer, server_default="100", default=100)
+    activo: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), default=True)
+    version: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    created_at: Mapped[datetime] = _ts_now()
+
+
+class SolicitudResiduo(Base):
+    """Lo que el vecino declaró en la solicitud y cómo respondió los chequeos de cada ficha."""
+
+    __tablename__ = "solicitud_residuo"
+    __table_args__ = (
+        PrimaryKeyConstraint("solicitud_id", "residuo_id"),
+        CheckConstraint("estado IN ('listo','revision')", name="estado"),
+        CheckConstraint("fuente IN ('lista','texto','foto','audio')", name="fuente"),
+    )
+    solicitud_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("solicitud.id"))
+    residuo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("residuo.id"))
+    orden_id: Mapped[uuid.UUID] = _fk("orden.id")
+    estado: Mapped[str] = mapped_column(String(10))
+    cantidad: Mapped[str | None] = mapped_column(String(80))
+    respuestas: Mapped[dict[str, str]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), default=dict)
+    fuente: Mapped[str] = mapped_column(String(10), server_default="lista", default="lista")
+
+    residuo: Mapped[Residuo] = relationship()
 
 
 class SolicitudServicio(Base):

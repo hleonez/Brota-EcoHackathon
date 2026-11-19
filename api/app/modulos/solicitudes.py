@@ -9,7 +9,7 @@ import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
-from pydantic import Field
+from pydantic import Field, model_validator
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -30,8 +30,10 @@ from app.models import (
     Participante,
     Pesaje,
     PesajeOrden,
+    Residuo,
     ResultadoOrden,
     Solicitud,
+    SolicitudResiduo,
     SolicitudServicio,
     TipoServicio,
     Unidad,
@@ -43,6 +45,12 @@ from app.modulos.comun import (
     exigir_consentimiento,
     registrar_evento,
     unidades_vigentes,
+)
+from app.modulos.residuos import (
+    ResiduoDeclaradoIn,
+    ResiduoSolicitudOut,
+    residuo_solicitud_out,
+    servicio_por_gremio,
 )
 
 router = APIRouter(tags=["solicitudes"])
@@ -57,8 +65,19 @@ class SolicitudIn(Entrada):
     unidad_id: uuid.UUID | None = Field(
         default=None, description="Opcional si el participante tiene exactamente una unidad vinculada"
     )
-    tipo_servicio_ids: list[uuid.UUID] = Field(min_length=1, max_length=5)
+    tipo_servicio_ids: list[uuid.UUID] = Field(
+        default_factory=list, max_length=5, description="Opcional si se envían `residuos`: se deducen de sus gremios"
+    )
+    residuos: list[ResiduoDeclaradoIn] = Field(
+        default_factory=list, max_length=20, description="Lo que el vecino declaró y cómo respondió los chequeos"
+    )
     observacion: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _algo_que_recoger(self) -> SolicitudIn:
+        if not self.tipo_servicio_ids and not self.residuos:
+            raise ValueError("Envía tipo_servicio_ids o residuos")
+        return self
 
 
 class AsignacionOut(Salida):
@@ -92,6 +111,7 @@ class OrdenOut(Salida):
     asignacion: AsignacionOut | None = None
     reasignaciones: int = 0
     resultado: ResultadoOut | None = None
+    residuos: list[ResiduoSolicitudOut] = []
 
 
 class OrdenBandejaOut(OrdenOut):
@@ -201,6 +221,7 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
         asignacion=asign,
         reasignaciones=max(len(o.asignaciones) - 1, 0),
         resultado=res,
+        residuos=[residuo_solicitud_out(sr) for sr in o.solicitud.residuos if sr.orden_id == o.id],
     )
     if not bandeja:
         return OrdenOut(**base)
@@ -260,6 +281,7 @@ def _opciones_carga():
         selectinload(Solicitud.ordenes).selectinload(Orden.asignaciones).selectinload(Asignacion.recolector),
         selectinload(Solicitud.ordenes).selectinload(Orden.resultado),
         selectinload(Solicitud.servicios),
+        selectinload(Solicitud.residuos).selectinload(SolicitudResiduo.residuo),
     )
 
 
@@ -286,9 +308,17 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
     if not unidad.activo:
         raise invalido({"unidad_id": "Unidad inactiva"})
 
-    ids = datos.tipo_servicio_ids
+    ids = list(datos.tipo_servicio_ids)
     if len(set(ids)) != len(ids):
         raise invalido({"tipo_servicio_ids": "Servicios repetidos"})
+    declarados = _validar_residuos(db, datos.residuos)
+    por_gremio = servicio_por_gremio(db)
+    for r, _ in declarados:
+        tid = por_gremio.get(r.gremio_id)  # type: ignore[arg-type]
+        if tid is None:
+            raise invalido({"residuos": f"{r.nombre}: su gremio no tiene servicio activo"})
+        if tid not in ids:
+            ids.append(tid)
     servicios = db.execute(select(TipoServicio).where(TipoServicio.id.in_(ids))).scalars().all()
     por_id = {t.id: t for t in servicios}
     faltan = [str(i) for i in ids if i not in por_id or not por_id[i].activo]
@@ -335,13 +365,22 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
     db.flush()
     for tid in ids:
         db.add(SolicitudServicio(solicitud_id=s.id, tipo_servicio_id=tid, orden_id=ordenes[por_id[tid].gremio_id].id))
+    for r, d in declarados:
+        db.add(
+            SolicitudResiduo(
+                solicitud_id=s.id, residuo_id=r.id, orden_id=ordenes[r.gremio_id].id,  # type: ignore[index]
+                estado=d.estado, respuestas=d.respuestas, cantidad=d.cantidad, fuente=d.fuente,
+            )
+        )
     registrar_evento(
         db, "solicitud_creada", actor, solicitud_id=s.id, datos={"ordenes": len(ordenes), "canal": actor.canal}
     )
     for gremio_id, o in ordenes.items():
         registrar_evento(db, "orden_creada", actor, solicitud_id=s.id, orden_id=o.id)
         servicios = [por_id[t].nombre for t in ids if por_id[t].gremio_id == gremio_id]
-        lineas = [f"🆕 Nueva solicitud {s.codigo_pasaporte}", f"📍 {s.ubicacion_operativa}", " · ".join(servicios)]
+        suyos = [(r, d) for r, d in declarados if r.gremio_id == gremio_id]
+        detalle = " · ".join(f"{r.emoji} {r.nombre}" + (" (revisar)" if d.estado == "revision" else "") for r, d in suyos)
+        lineas = [f"🆕 Nueva solicitud {s.codigo_pasaporte}", f"📍 {s.ubicacion_operativa}", detalle or " · ".join(servicios)]
         if actor.nombre:
             lineas.append(f"👤 {actor.nombre}")
         if datos.observacion:
@@ -356,6 +395,7 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
                 "codigo_pasaporte": s.codigo_pasaporte,
                 "ubicacion": s.ubicacion_operativa,
                 "servicios": servicios,
+                "residuos": [r.nombre for r, _ in suyos],
                 "contacto_nombre": actor.nombre,
                 "observacion": datos.observacion,
                 "texto_sugerido": "\n".join(lineas),
@@ -366,6 +406,29 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
     db.flush()
     db.expire(s)
     return solicitud_out(db, cargar_solicitud(db, s.id), actor)
+
+
+def _validar_residuos(db: Session, lista: list[ResiduoDeclaradoIn]) -> list[tuple[Residuo, ResiduoDeclaradoIn]]:
+    """Solo entra a la ruta lo que el catálogo recibe; lo demás se le explica al vecino antes."""
+    if not lista:
+        return []
+    ids = [d.residuo_id for d in lista]
+    if len(set(ids)) != len(ids):
+        raise invalido({"residuos": "Residuos repetidos"})
+    filas = {r.id: r for r in db.execute(select(Residuo).where(Residuo.id.in_(ids))).scalars()}
+    salida = []
+    for d in lista:
+        r = filas.get(d.residuo_id)
+        if r is None or not r.activo:
+            raise invalido({"residuos": f"Residuo inexistente o inactivo: {d.residuo_id}"})
+        if r.acepta == "no":
+            raise invalido({"residuos": f"{r.nombre} no se recibe en la ruta"})
+        validas = {v["id"]: {o["id"] for o in v["opciones"]} for v in (r.verificaciones or [])}
+        for pregunta, opcion in d.respuestas.items():
+            if opcion not in validas.get(pregunta, set()):
+                raise invalido({"residuos": f"{r.nombre}: respuesta desconocida {pregunta}={opcion}"})
+        salida.append((r, d))
+    return salida
 
 
 def cargar_solicitud(db: Session, solicitud_id: uuid.UUID) -> Solicitud:

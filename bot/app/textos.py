@@ -18,7 +18,7 @@ POLITICA = (
     "(Ley 1581 de 2012, política {version})"
 )
 SIN_CONSENTIMIENTO = "Entiendo 💚 Sin tu autorización no podemos registrarte. Si cambias de opinión, escribe «hola»."
-REGISTRADO = "¡Listo, {nombre}! 💚 Ya quedaste registrado. Para pedir una recolección, solo escribe «hola»."
+REGISTRADO = "¡Listo, {nombre}! 💚 Ya quedaste registrado. Cuando quieras, escribe «hola» y te ayudo."
 YA_REGISTRADO = "Ya tenías tu registro hecho 💚"
 
 MENU = "¡Hola, {nombre}! ¿Qué quieres que recojamos?"
@@ -32,10 +32,51 @@ LIGA_NO_DISPONIBLE = "🏆 La Liga de Torres todavía no está disponible. ¡Pro
 BORRAR_CONFIRMA = "¿Quieres que borremos tus datos de Brota? Esto cancela tu registro."
 BORRAR_OK = "Listo, recibimos tu solicitud para borrar tus datos. La coordinación la atenderá pronto 💚"
 BORRAR_CANCELADO = "Perfecto, no borramos nada 💚"
-SOLO_BOTONES = "Por ahora entiendo botones y mensajes de texto 🙂 Pronto también audios y fotos."
+SOLO_BOTONES = "Por ahora entiendo texto y botones 🙂 Muy pronto también audios y fotos. Mientras tanto, escríbeme qué tienes."
 ERROR = "Uy, tuve un problema para procesar eso 🙏 Intenta de nuevo en un momento."
 
 SERVICIOS = {"RECICLABLES": "reciclables ♻", "ORGANICOS": "orgánicos 🍌"}
+
+# --------------------------------------------------------------------------- menú y pedido guiado
+MENU_LISTA = "¡Hola, {nombre}! 🌱 ¿En qué te ayudo hoy?"
+MENU_LISTA_PIE = "Puedes escribirme lo que necesites."
+P_QUE_TIENES = (
+    "♻ ¿Qué vas a entregar? Elige de la lista o escríbelo, por ejemplo: «cajas y botellas».\n"
+    "Te digo cómo prepararlo para que el reciclador sí lo pueda llevar."
+)
+P_OTRO = "Escríbeme qué tienes, por ejemplo «cajas de cartón y cáscaras» 🙂"
+P_NO_ENTENDI = "No reconocí ese material 🤔 Elige de la lista o escríbelo de otra forma."
+P_ENTENDI = "Entendí: {lista}. ¿Es correcto?"
+P_YA_ESTA = "{emoji} {nombre} ya está en tu pedido."
+P_LISTO = "✅ {emoji} {nombre}: listo."
+P_REVISION = "🔎 {consejo}"
+P_PREPARAR = "💡 {consejo}\nPor ahora lo dejo por fuera; cuando esté listo, lo pides."
+P_NO_SE_RECIBE = "🚫 {emoji} *{nombre}* no va en la ruta de recolección. {evitar}\n👉 {alternativa}"
+P_SIN_CHEQUEO_REVISION = "Lo incluyo para que el equipo confirme si lo recibe."
+P_TOCA_OPCION = "Toca una de las opciones de arriba 🙂 o escribe CANCELAR."
+P_ALGO_MAS = "¿Tienes algo más para entregar?"
+P_RESUMEN = "🌱 Esto vamos a pedir:\n{incluidos}\n📍 {ubicacion}{fuera}\n\n¿La envío?"
+P_RESUMEN_FUERA = "\n\nQueda por fuera: {lista}. Cuando lo tengas listo, lo pides."
+P_NADA_LISTO = "Por ahora no quedó ningún material listo para recoger 🌱{fuera}\nCuando lo prepares, escríbeme y lo pedimos."
+P_ENVIADA = "¡Listo, {nombre}! 💚 Tu solicitud {codigo} quedó registrada. Te aviso cuando el equipo confirme quién pasa y cuándo."
+P_CANCELADA = "Listo, no envié nada 🌱 Cuando quieras, escribe «hola»."
+P_SIN_BORRADOR = "No tengo un pedido pendiente 🙂 Empecemos de nuevo."
+P_CORREGIR = "¿Qué quieres cambiar?"
+P_INVALIDO = "No pude enviar la solicitud: {mensaje} 🙏"
+
+DUDA_PREGUNTA = (
+    "❓ Cuéntame qué material tienes y te digo si se recibe y cómo prepararlo.\n"
+    "Por ejemplo: «icopor», «aceite usado» o «cajas de pizza»."
+)
+DUDA_NO_SE = (
+    "Ese material no está en mi lista todavía 🌱 Podría aprovecharse, pero necesito verificar si nuestro "
+    "equipo lo recibe. Escríbelo de otra forma o pregúntale al reciclador cuando pase."
+)
+DUDA_SIGUE = "¿Te ayudo con algo más?"
+FICHA_SI = "{emoji} *{nombre}*: ✅ se recibe en la ruta.\n👉 {preparacion}"
+FICHA_REVISION = "{emoji} *{nombre}*: 🔎 podría recibirse; el equipo lo confirma al recoger.\n👉 {preparacion}"
+FICHA_NO = "{emoji} *{nombre}*: 🚫 no va en la ruta. {evitar}\n👉 {alternativa}"
+FICHA_EVITAR = "\n⚠ Evita: {evitar}"
 
 # --------------------------------------------------------------------------- modo coordinación
 C_SOLO_PANEL = (
