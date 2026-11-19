@@ -176,6 +176,7 @@ de cambiar una instalación con datos.
 
 ## Guías y estructura
 
+- [Bitácora de cambios](docs/bitacora.md): qué se ha hecho paso a paso, estado y próximos pasos.
 - [Backend](api/README.md): ejecución, pruebas, migraciones y Docker de la API.
 - [Contrato de API](docs/contrato-api.md) e [integración del bot de WhatsApp](docs/integracion-bot.md).
 - [Paneles](web/README.md): espacios provisionales de coordinación y Fundación,
