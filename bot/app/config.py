@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     coordinacion_por_whatsapp: bool = False
     panel_coordinacion_url: str = ""
 
+    # Autoconexión (Docker): URL de métricas del túnel de Cloudflare (p. ej. http://tunel:2000).
+    # Si está definida, el bot registra solo su webhook en Meta con la URL pública del túnel.
+    tunel_metricas_url: str = ""
+    whatsapp_app_id: str = ""  # opcional: si falta, se obtiene del token
+
     # Laboratorio (solo desarrollo): http://localhost:8090/lab con celulares simulados.
     # Lo que Brisa envíe a un celular simulado se queda en el laboratorio; nunca sale a Meta.
     lab_activo: bool = False

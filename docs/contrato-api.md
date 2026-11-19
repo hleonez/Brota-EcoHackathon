@@ -111,6 +111,11 @@ Regla de solicitud abierta (configurable, `REGLA_SOLICITUD_ABIERTA`): un servici
 | ● | `POST /v1/entregas-directas` | `{punto_recepcion_id, unidad_id?, participante_id?, pesaje}`; puntos al confirmar |
 | ○ | `POST /v1/pesajes/desde-foto` | Papel Inteligente (M06) |
 
+### M06 · IA (Gemini)
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `POST /v1/ia/interpretar` | `{texto?, media?: {mime_type: image/*\|audio/*, datos_base64}, contexto: general\|pedido}` → `intencion` (pedir, duda, estado, puntos, liga, cancelar, queja, persona, saludo, otro), `residuos` (solo códigos del catálogo, con `confianza`), `transcripcion`, `observado`, `peligros`, `respuesta` (solo para dudas), `aclaracion`. Sin efectos ni almacenamiento. `503 IA_NO_DISPONIBLE` sin clave o con el modelo saturado |
+
 ### M07 · Puntos
 | | Ruta | Notas |
 | --- | --- | --- |

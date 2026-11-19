@@ -41,6 +41,8 @@ class Entrante:
     respuesta_titulo: str | None = None
     nombre_perfil: str | None = None
     media_id: str | None = None
+    media_mime: str | None = None
+    media_datos: bytes | None = None  # ya descargado (laboratorio); si no, se baja de Meta con media_id
 
 
 def leer_webhook(payload: dict[str, Any]) -> list[Entrante]:
@@ -62,7 +64,9 @@ def leer_webhook(payload: dict[str, Any]) -> list[Entrante]:
                     e.respuesta_id = m.get("button", {}).get("payload")
                     e.respuesta_titulo = m.get("button", {}).get("text")
                 elif e.tipo in ("audio", "image", "video", "document", "sticker"):
-                    e.media_id = m.get(e.tipo, {}).get("id")
+                    media = m.get(e.tipo, {})
+                    e.media_id, e.media_mime = media.get("id"), media.get("mime_type")
+                    e.texto = media.get("caption")  # pie de foto, si lo escribió
                 salida.append(e)
     return salida
 
@@ -189,6 +193,24 @@ class WhatsApp:
                 "template": {"name": nombre, "language": {"code": idioma}, "components": componentes},
             }
         )
+
+    async def descargar_media(self, media_id: str, max_bytes: int = 10 * 1024 * 1024) -> tuple[bytes, str]:
+        """Baja un audio o foto de Meta: GET /{media_id} da una URL temporal que también pide el token."""
+        if self.dry_run:
+            raise ErrorWhatsApp(None, "En modo dry-run no hay media que descargar")
+        s = self.settings
+        h = {"Authorization": f"Bearer {s.whatsapp_token}"}
+        r = await self.cliente.get(f"{s.graph_base()}/{media_id}", headers=h, timeout=15)
+        info = r.json() if r.content else {}
+        if r.status_code >= 400 or "url" not in info:
+            err = info.get("error", {})
+            raise ErrorWhatsApp(err.get("code"), err.get("message", f"HTTP {r.status_code} al pedir la media"))
+        if int(info.get("file_size") or 0) > max_bytes:
+            raise ErrorWhatsApp(None, "Archivo demasiado grande")
+        r = await self.cliente.get(info["url"], headers=h, timeout=30)
+        if r.status_code >= 400:
+            raise ErrorWhatsApp(None, f"HTTP {r.status_code} al descargar la media")
+        return r.content[: max_bytes + 1], info.get("mime_type") or r.headers.get("content-type", "")
 
     async def marcar_leido(self, wamid: str) -> None:
         if self.dry_run or wamid.startswith("wamid.lab."):

@@ -221,7 +221,11 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
         asignacion=asign,
         reasignaciones=max(len(o.asignaciones) - 1, 0),
         resultado=res,
-        residuos=[residuo_solicitud_out(sr) for sr in o.solicitud.residuos if sr.orden_id == o.id],
+        residuos=[
+            residuo_solicitud_out(sr)
+            for sr in sorted(o.solicitud.residuos, key=lambda x: (x.residuo.orden, x.residuo.nombre))
+            if sr.orden_id == o.id
+        ],
     )
     if not bandeja:
         return OrdenOut(**base)

@@ -6,6 +6,7 @@ del mensaje como `Idempotency-Key`, así un reintento de Meta o un doble toque n
 
 from __future__ import annotations
 
+import base64
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -53,9 +54,10 @@ class Brota:
         clave: str | None = None,
         json: Any = None,
         params: dict[str, Any] | None = None,
+        timeout: float = 15,
     ) -> Any:
         r = await self.cliente.request(
-            metodo, self._url(ruta), headers=self._cabeceras(celular, clave), json=json, params=params, timeout=15
+            metodo, self._url(ruta), headers=self._cabeceras(celular, clave), json=json, params=params, timeout=timeout
         )
         cuerpo = r.json() if r.content else {}
         if r.status_code >= 400:
@@ -116,6 +118,18 @@ class Brota:
         if self._residuos is None or ahora - self._residuos[0] > 300:
             self._residuos = (ahora, (await self._pedir("GET", "/v1/residuos", celular))["data"])
         return self._residuos[1]
+
+    async def interpretar(
+        self, celular: str, texto: str | None = None, media: tuple[bytes, str] | None = None,
+        contexto: str = "general",
+    ) -> dict[str, Any]:
+        """IA de la API (Gemini): intención, residuos del catálogo, transcripción u observación de la foto."""
+        cuerpo: dict[str, Any] = {"contexto": contexto}
+        if texto:
+            cuerpo["texto"] = texto[:2000]
+        if media:
+            cuerpo["media"] = {"mime_type": media[1], "datos_base64": base64.b64encode(media[0]).decode()}
+        return (await self._pedir("POST", "/v1/ia/interpretar", celular, json=cuerpo, timeout=60))["data"]
 
     async def crear_solicitud(
         self, celular: str, clave: str, tipo_servicio_ids: list[str] | None = None,

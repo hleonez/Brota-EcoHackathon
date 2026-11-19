@@ -1,6 +1,7 @@
 # Brisa IA · diseño del bot de reciclaje
 
-> Estado: **fase 1 construida** (19-nov-2026); fases 2–5 por construir. Recoge lo que pidió el equipo y el
+> Estado: **fases 1, 2 y 3 construidas** (19-nov-2026): fichas y pedido guiado, IA de texto, audios y fotos.
+> Pendientes: fase 4 (casos) y fase 5. Recoge lo que pidió el equipo y el
 > [prompt maestro de Brisa](prompt-maestro-brisa.md). Se construye por fases; cada fase se puede
 > probar en el laboratorio (`/lab`) y con WhatsApp real.
 
@@ -170,7 +171,10 @@ así se sabe qué llevar. Pestaña de **Casos**. Más adelante, edición del cat
 ## 6. IA con Gemini
 
 - **Dónde vive:** solo en la API (`GEMINI_API_KEY` en `api/.env`). El bot nunca ve la clave.
-- **Modelo:** Gemini Flash, multimodal. Una sola llamada entiende texto, audio o imagen y devuelve
+- **Modelo:** `gemini-3.5-flash-lite` (rápido, multimodal), con `gemini-flash-lite-latest` de respaldo
+  si el principal está saturado. `gemini-2.5-flash` ya no se ofrece a cuentas nuevas. Configurable con
+  `GEMINI_MODELO` y `GEMINI_MODELO_RESPALDO`.
+- **Formato:** Una sola llamada entiende texto, audio o imagen y devuelve
   **JSON con esquema** (intención, materiales con código del catálogo, condiciones mencionadas,
   dudas, peligros, confianza).
 - **Instrucción de sistema:** el prompt maestro, dividido en dos:
@@ -194,8 +198,8 @@ así se sabe qué llevar. Pestaña de **Casos**. Más adelante, edición del cat
 | Fase | Entrega | Cómo se prueba |
 | --- | --- | --- |
 | **1. Catálogo y flujo guiado** (sin IA) ✅ | Fichas y chequeos, nuevo menú, materiales por lista o texto con sinónimos, resumen con Enviar/Corregir/Cancelar, materiales en la solicitud y en el panel | Laboratorio + WhatsApp real |
-| **2. IA de texto** | Intención y materiales desde texto libre; respuestas a dudas con el catálogo | «tengo unas cajas y botellas», «¿el icopor se recicla?» |
-| **3. Audio y fotos** | Descarga desde Meta → Gemini → «Entendí: … ¿Es correcto?» | Audio y foto desde el celular |
+| **2. IA de texto** ✅ | Intención y materiales desde texto libre; respuestas a dudas con el catálogo | «tengo unas cajas y botellas», «¿el icopor se recicla?» |
+| **3. Audio y fotos** ✅ | Descarga desde Meta → Gemini → «Entendí: … ¿Es correcto?» | Audio y foto desde el celular |
 | **4. Casos** | Reportar problema y hablar con una persona; bandeja de casos en el panel | Queja desde WhatsApp → aparece en el panel |
 | **5. Afinar** | Estado en Redis, plantillas de Meta, métricas (rechazos evitados, materiales más comunes) | Panel de la Fundación |
 

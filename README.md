@@ -15,6 +15,30 @@ impone otro.
 Comprueba `docker version` y `docker compose version`. Ejecuta los comandos desde
 la raíz de este repositorio, después de clonarlo y entrar en su carpeta.
 
+## Todo con un comando (Brisa conectada a WhatsApp)
+
+Con Docker Desktop abierto y `infra/env/dev.env`, `api/.env` y `bot/.env` listos:
+
+```powershell
+.\brota.ps1
+```
+
+Levanta la base de datos, la API (con Gemini), el bot, un túnel de Cloudflare y el panel. **El bot
+registra solo su webhook en Meta** con la URL del túnel; si el túnel se reinicia y cambia de URL, lo
+vuelve a registrar en menos de un minuto. Panel: `http://localhost:3000`.
+
+| Comando | Qué hace |
+| --- | --- |
+| `.\brota.ps1` | Levanta o actualiza todo y muestra la URL pública de Brisa |
+| `.\brota.ps1 estado` | Contenedores y URL pública |
+| `.\brota.ps1 logs bot` | Registros de un servicio (`db`, `api`, `bot`, `tunel`, `panel`) |
+| `.\brota.ps1 bajar` | Detiene todo (los datos se conservan) |
+
+Brisa responde mientras este equipo esté encendido y con Docker abierto (activa «Start Docker
+Desktop when you sign in» y evita que el PC se suspenda). Para publicarla 24/7, el mismo Docker va
+en un servidor (ver [docs/bitacora.md](docs/bitacora.md), próximos pasos). El laboratorio (`/lab`)
+solo existe en desarrollo con `uvicorn`, no en Docker.
+
 ## Cómo levantar el proyecto en Windows
 
 Estos pasos levantan PostgreSQL. La API (FastAPI) ya existe en `api/`: después del

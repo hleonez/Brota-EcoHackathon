@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections import OrderedDict
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -13,7 +14,7 @@ import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from app import avisos, laboratorio
+from app import avisos, enlace, laboratorio
 from app.brota import Brota
 from app.config import Settings, get_settings
 from app.conversacion import Brisa
@@ -31,10 +32,18 @@ TOKEN_VENCIDO = (
 
 
 class SinSondeoDelLab(logging.Filter):
-    """La página del laboratorio consulta cada segundo; no llenar la consola con eso."""
+    """No llena la consola con el sondeo del laboratorio ni con los /health, y oculta el token de
+    verificación que Meta manda en la URL al registrar el webhook."""
+
+    _TOKEN = re.compile(r"(verify_token=)[^&\s]+")
 
     def filter(self, record: logging.LogRecord) -> bool:
-        return "/lab/" not in record.getMessage()
+        mensaje = record.getMessage()
+        if "/lab/" in mensaje or '"GET /health' in mensaje:
+            return False
+        if "verify_token=" in mensaje and isinstance(record.args, tuple):
+            record.args = tuple(self._TOKEN.sub(r"\1***", a) if isinstance(a, str) else a for a in record.args)
+        return True
 
 
 logging.getLogger("uvicorn.access").addFilter(SinSondeoDelLab())
@@ -76,10 +85,15 @@ def crear_app(settings: Settings | None = None, cliente: httpx.AsyncClient | Non
         tarea_avisos = None
         if s.avisos_activos:
             tarea_avisos = asyncio.create_task(avisos.bucle(app.state.wa, app.state.api, s))
+        app.state.publico = {"url": None}
+        tarea_enlace = None
+        if s.tunel_metricas_url:
+            tarea_enlace = asyncio.create_task(enlace.bucle(http, s, app.state.publico))
         _advertencias(s)
         yield
-        if tarea_avisos:
-            tarea_avisos.cancel()
+        for tarea in (tarea_avisos, tarea_enlace):
+            if tarea:
+                tarea.cancel()
         if propio:
             await http.aclose()
 
@@ -101,8 +115,8 @@ def crear_app(settings: Settings | None = None, cliente: httpx.AsyncClient | Non
                 log.exception("Error atendiendo %s", m.wamid)
 
     @app.get("/health")
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
+    async def health() -> dict[str, str | None]:
+        return {"status": "ok", "url_publica": app.state.publico["url"]}
 
     @app.get("/webhook")
     async def verificar(

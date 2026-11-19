@@ -52,6 +52,7 @@ def capacidades() -> dict:
                 "puntos": True,
                 "canjes": False,
                 "archivos_ia": False,
+                "ia_mensajes": bool(s.gemini_api_key),  # texto, audio y fotos del vecino (M06)
                 "educacion_avisos": True,
                 "liga": True,
                 "reportes": True,

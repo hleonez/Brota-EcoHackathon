@@ -12,6 +12,7 @@ app/
 ├─ conversacion.py  Máquina de estados de Brisa: registro → consentimiento → menú
 ├─ pedido.py        Pedido guiado: materiales, chequeos de cada ficha, resumen y envío
 ├─ catalogo.py      Reconoce materiales en texto libre con los sinónimos de las fichas
+├─ ia.py            Llama a la IA de la API (Gemini); si no está, devuelve None y Brisa sigue sin ella
 ├─ coordinacion.py  Modo coordinación: bandeja, asignar recolector y franja, cerrar
 ├─ meta.py          Utilidades de Meta: estado y suscripción de la cuenta de WhatsApp
 ├─ laboratorio.py   Laboratorio local (/lab): celulares simulados + tablero de órdenes y rutas
@@ -37,8 +38,8 @@ solicitudes, ⭐ Mis puntos, 🏆 Liga). **Pedir** es guiado (`app/pedido.py`):
 3. Muestra un resumen con Enviar / Corregir / Cancelar. Nada se crea antes de «Enviar».
 
 Si escribe un material sin estar pidiendo («¿el icopor se recicla?»), Brisa le muestra la ficha.
-También entiende CANCELAR, PUNTOS, ESTADO, LIGA y BORRAR MIS DATOS. Audios y fotos responden «pronto»
-(llegarán con Gemini en la fase 3). Diseño: [docs/brisa-ia.md](../docs/brisa-ia.md).
+También entiende CANCELAR, PUNTOS, ESTADO, LIGA y BORRAR MIS DATOS. Con la IA de la API (Gemini) entiende **texto libre, audios y fotos**: «🎤 Te escuché…», «📸 En la foto
+veo…», y propone los materiales para confirmarlos. Sin IA, sigue con sinónimos y listas. Diseño: [docs/brisa-ia.md](../docs/brisa-ia.md).
 
 ## Laboratorio: ver el flujo completo en el navegador
 
@@ -114,6 +115,12 @@ La URL de `cloudflared` cambia cada vez que lo reinicias: actualízala en Meta. 
 vence en ~24 h (error 190 en los logs): genera uno nuevo o usa el permanente (guía, fase 5).
 
 ## 3 · Docker
+
+**Todo con un comando** (con autoconexión a Meta): `.\brota.ps1` desde la raíz del repositorio
+(ver el README principal). El bot lee la URL del túnel (`TUNEL_METRICAS_URL`) y registra solo su
+webhook en Meta con `WHATSAPP_APP_SECRET` y `WHATSAPP_VERIFY_TOKEN` (`app/enlace.py`).
+
+Solo el bot, sin túnel:
 
 Desde la raíz del repositorio, con `api/.env` y `bot/.env` listos:
 

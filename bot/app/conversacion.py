@@ -18,12 +18,15 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import httpx
+
 from app import textos as T
 from app.brota import Brota, ErrorBrota
 from app.catalogo import buscar
 from app.coordinacion import Coordinacion
+from app.ia import interpretar
 from app.pedido import Pedido
-from app.whatsapp import Boton, Entrante, Fila, WhatsApp
+from app.whatsapp import Boton, Entrante, ErrorWhatsApp, Fila, WhatsApp
 
 log = logging.getLogger("brota.bot.conversacion")
 
@@ -35,6 +38,13 @@ FILAS_MENU = [
     Fila("M_LIGA", "🏆 Liga de torres"),
 ]
 PALABRAS_MENU = {"menu", "inicio", "volver", "opciones"}
+MAX_MEDIA = 10 * 1024 * 1024
+
+
+def _fichas_de(r: dict[str, Any] | None, fichas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fichas del catálogo para los residuos que propuso la IA (en su orden)."""
+    por_codigo = {f["codigo"]: f for f in fichas}
+    return [por_codigo[x["codigo"]] for x in (r or {}).get("residuos", []) if x["codigo"] in por_codigo]
 BOTONES_CONSENTIMIENTO = [Boton("ACEPTO", "Sí, acepto"), Boton("VER_MAS", "Ver más"), Boton("NO_ACEPTO", "No")]
 BOTONES_BORRAR = [Boton("BORRAR_SI", "Sí, borrar"), Boton("BORRAR_NO", "No")]
 SALUDOS = {"hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "hi", "hello", "ola", "holi"}
@@ -249,16 +259,117 @@ class Brisa:
         elif comando in ("borrar mis datos", "borrar datos"):
             await self.wa.botones(m.de, T.BORRAR_CONFIRMA, BOTONES_BORRAR)
         elif duda and m.tipo == "text":
-            await self.pedido.responder_duda(m.de, buscar(m.texto, await self.api.residuos(m.de)))
+            await self._duda(m)
+        elif m.tipo in ("audio", "image"):
+            await self._media(m, me, nombre)
         elif await self.pedido.atender(m, me):
             pass
-        elif m.tipo == "text" and (encontradas := buscar(m.texto, await self.api.residuos(m.de))):
-            # Mencionó materiales sin estar pidiendo: primero se le enseña (y se le ofrece pedir).
-            await self.pedido.responder_duda(m.de, encontradas)
+        elif m.tipo == "text" and m.texto:
+            await self._texto_libre(m, me, nombre)
         else:
             if m.tipo in ("audio", "image", "video", "document"):
                 await self.wa.texto(m.de, T.SOLO_BOTONES)
             await self._menu(m.de, nombre)
+
+    # ------------------------------------------------------------------ IA: dudas, texto libre, audios y fotos
+
+    async def _duda(self, m: Entrante) -> None:
+        fichas = await self.api.residuos(m.de)
+        r = await interpretar(self.api, m.de, texto=m.texto)
+        encontradas = _fichas_de(r, fichas) if r else buscar(m.texto, fichas)
+        await self.pedido.responder_duda(m.de, encontradas, respuesta=(r or {}).get("respuesta"))
+
+    async def _texto_libre(self, m: Entrante, me: dict[str, Any], nombre: str) -> None:
+        r = await interpretar(self.api, m.de, texto=m.texto)
+        if r is None:  # sin IA: si menciona materiales, primero se le enseña; si no, el menú
+            encontradas = buscar(m.texto, await self.api.residuos(m.de))
+            if encontradas:
+                await self.pedido.responder_duda(m.de, encontradas)
+            else:
+                await self._menu(m.de, nombre)
+            return
+        await self._rutear(m, me, nombre, r, "texto")
+
+    async def _media(self, m: Entrante, me: dict[str, Any], nombre: str) -> None:
+        es_audio = m.tipo == "audio"
+        datos, mime = m.media_datos, m.media_mime
+        if datos is None:
+            try:
+                datos, mime = await self.wa.descargar_media(m.media_id or "")
+            except (ErrorWhatsApp, httpx.HTTPError) as e:
+                log.warning("No se pudo descargar la media de %s: %s", m.wamid, e)
+                await self.wa.texto(m.de, T.IA_DESCARGA)
+                return
+        if len(datos) > MAX_MEDIA:
+            await self.wa.texto(m.de, T.IA_PESADO)
+            return
+        en_pedido = self.pedido.activo(m.de) is not None
+        r = await interpretar(
+            self.api, m.de, texto=m.texto, media=(datos, mime or ("audio/ogg" if es_audio else "image/jpeg")),
+            contexto="pedido" if en_pedido else "general",
+        )
+        if r is None:
+            await self.wa.texto(m.de, T.IA_MEDIA_SIN_IA)
+            return
+        lineas = []
+        if es_audio and r.get("transcripcion"):
+            lineas.append(T.IA_TE_ESCUCHE.format(texto=r["transcripcion"]))
+        if not es_audio and r.get("observado"):
+            lineas.append(T.IA_VI.format(texto=r["observado"]))
+        lineas += [T.IA_PELIGRO.format(texto=p) for p in r.get("peligros") or []]
+        encabezado = "\n".join(lineas) or None
+        fuente = "audio" if es_audio else "foto"
+        if r["residuos"] and (en_pedido or r["intencion"] in ("pedir", "otro", "saludo")):
+            await self.pedido.proponer(m.de, [x["codigo"] for x in r["residuos"]], fuente, encabezado)
+        elif not r["residuos"] and r["intencion"] in ("pedir", "otro"):
+            no_entendi = r.get("aclaracion") or (T.IA_NO_ENTENDI_AUDIO if es_audio else T.IA_NO_ENTENDI_FOTO)
+            await self.wa.texto(m.de, f"{encabezado}\n\n{no_entendi}" if encabezado else no_entendi)
+        else:
+            await self._rutear(m, me, nombre, r, fuente, encabezado)
+
+    async def _rutear(
+        self, m: Entrante, me: dict[str, Any], nombre: str, r: dict[str, Any], fuente: str,
+        encabezado: str | None = None,
+    ) -> None:
+        """Lleva la intención que entendió la IA a la acción que corresponde. La IA no crea nada."""
+        codigos = [x["codigo"] for x in r["residuos"]]
+        intencion = r["intencion"]
+        if intencion == "pedir":
+            if codigos:
+                await self.pedido.proponer(m.de, codigos, fuente, encabezado)
+            else:
+                await self._decir(m.de, encabezado)
+                await self.pedido.empezar(m.de)
+            return
+        if intencion in ("duda", "otro") and (codigos or r.get("respuesta")):
+            encontradas = _fichas_de(r, await self.api.residuos(m.de))
+            await self.pedido.responder_duda(m.de, encontradas, r.get("respuesta"), encabezado)
+            return
+        await self._decir(m.de, encabezado)
+        if intencion == "estado":
+            await self._estado(m.de)
+        elif intencion == "puntos":
+            p = await self.api.puntos(m.de)
+            await self.wa.texto(m.de, T.PUNTOS.format(saldo=_numero(p["saldo"])))
+        elif intencion == "liga":
+            await self._liga(m.de, me)
+        elif intencion == "cancelar":
+            if self.pedido.activo(m.de):
+                await self.pedido.cancelar(m.de)
+            else:
+                await self.wa.texto(m.de, T.CANCELAR_ENVIADA)
+        elif intencion == "queja":
+            await self.wa.texto(m.de, T.QUEJA_PRONTO)
+        elif intencion == "persona":
+            await self.wa.texto(m.de, T.PERSONA_PRONTO)
+        elif r.get("aclaracion") and intencion != "saludo":
+            await self.wa.texto(m.de, r["aclaracion"])
+        else:
+            await self._menu(m.de, nombre)
+
+    async def _decir(self, celular: str, texto: str | None) -> None:
+        if texto:
+            await self.wa.texto(celular, texto)
 
     async def _menu(self, celular: str, nombre: str) -> None:
         filas = list(FILAS_MENU)

@@ -14,6 +14,8 @@ CONSENTIMIENTO = (
 POLITICA = (
     "📄 Solo guardamos tu nombre, tu número de WhatsApp y tu torre y apartamento. No pedimos cédula. "
     "Los usamos para coordinar la recolección, darte puntos y medir el impacto del barrio. "
+    "Si nos mandas fotos o audios, una IA (Google Gemini) los revisa para entender qué materiales tienes; "
+    "no los guardamos. "
     "Puedes pedir que borremos tus datos cuando quieras escribiendo BORRAR MIS DATOS. "
     "(Ley 1581 de 2012, política {version})"
 )
@@ -57,6 +59,7 @@ P_TOCA_OPCION = "Toca una de las opciones de arriba 🙂 o escribe CANCELAR."
 P_ALGO_MAS = "¿Tienes algo más para entregar?"
 P_RESUMEN = "🌱 Esto vamos a pedir:\n{incluidos}\n📍 {ubicacion}{fuera}\n\n¿La envío?"
 P_RESUMEN_FUERA = "\n\nQueda por fuera: {lista}. Cuando lo tengas listo, lo pides."
+P_RESUMEN_NO_VA = "\n🚫 No va en la ruta: {lista}."
 P_NADA_LISTO = "Por ahora no quedó ningún material listo para recoger 🌱{fuera}\nCuando lo prepares, escríbeme y lo pedimos."
 P_ENVIADA = "¡Listo, {nombre}! 💚 Tu solicitud {codigo} quedó registrada. Te aviso cuando el equipo confirme quién pasa y cuándo."
 P_CANCELADA = "Listo, no envié nada 🌱 Cuando quieras, escribe «hola»."
@@ -109,3 +112,22 @@ ESTADO_ORDEN = {
     "recogida": "recogida ✅",
     "rechazada": "no se pudo recoger",
 }
+
+# --------------------------------------------------------------------------- IA (audios, fotos, texto libre)
+IA_TE_ESCUCHE = "🎤 Te escuché: «{texto}»"
+IA_VI = "📸 En la foto veo: {texto}"
+IA_PELIGRO = "⚠ {texto}"
+IA_NO_ENTENDI_FOTO = "No alcanzo a identificar bien el material 🤔 ¿Me mandas otra foto más de cerca o me escribes qué es?"
+IA_NO_ENTENDI_AUDIO = "No alcancé a entender el audio 🙏 ¿Me lo repites o me lo escribes?"
+IA_MEDIA_SIN_IA = "Ahora mismo no puedo escuchar audios ni ver fotos 🙏 Escríbeme qué tienes, por ejemplo «cajas y botellas»."
+IA_DESCARGA = "No pude abrir ese archivo 🙏 ¿Me lo envías de nuevo o me escribes qué tienes?"
+IA_PESADO = "Ese archivo es muy pesado para mí 🙏 Mándame una foto o un audio más corto."
+CANCELAR_ENVIADA = (
+    "Todavía no puedo cancelar por aquí una solicitud ya enviada 🙏 Si ya no la necesitas, avísale al reciclador "
+    "cuando pase."
+)
+QUEJA_PRONTO = (
+    "Lamento mucho eso 😔 Muy pronto podrás dejar tu reporte por aquí para que el equipo lo atienda. Mientras tanto, "
+    "cuéntaselo al reciclador o a la coordinación."
+)
+PERSONA_PRONTO = "Muy pronto podrás hablar por aquí con una persona del equipo 🙏 Mientras tanto, cuéntame y te ayudo."

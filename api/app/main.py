@@ -17,6 +17,7 @@ from app.modulos import (
     avisos,
     configuracion,
     coordinacion,
+    ia,
     identidad,
     pesajes,
     puntos,
@@ -91,6 +92,7 @@ def crear_app(iniciar_despachador: bool = True) -> FastAPI:
         reportes,
         configuracion,
         sincronizacion,
+        ia,
     ):
         app.include_router(m.router, prefix="/v1")
     app.include_router(avisos.canal, prefix="/v1")

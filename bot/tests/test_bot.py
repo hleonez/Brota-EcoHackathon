@@ -41,6 +41,8 @@ class APIFalsa:
         self.avisos: list[dict] = []
         self.confirmaciones: list[tuple[str, dict]] = []
         self.cuerpos_solicitud: list[dict] = []
+        self.ia: dict | None = None  # respuesta de /v1/ia/interpretar; None = IA no disponible (503)
+        self.cuerpos_ia: list[dict] = []
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.llamadas.append(req)
@@ -67,6 +69,11 @@ class APIFalsa:
             assert cuerpo["consentimiento"] == {"version_politica": "2026-11", "decision": "aceptado"}
             self.registrados[cel] = cuerpo["nombre"]
             return _ok({"participante_id": "p1", "estado_registro": "completo"}, 201)
+        if p == "/v1/ia/interpretar":
+            self.cuerpos_ia.append(json.loads(req.content))
+            if self.ia is None:
+                return httpx.Response(503, json={"error": {"code": "IA_NO_DISPONIBLE", "message": "sin clave"}})
+            return _ok({"residuos": [], "peligros": [], "no_reconocidos": [], "modelo": "falso"} | self.ia)
         if p == "/v1/residuos":
             return _ok(RESIDUOS)
         if p == "/v1/catalogos":

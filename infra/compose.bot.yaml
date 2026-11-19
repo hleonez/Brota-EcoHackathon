@@ -15,6 +15,7 @@ services:
     environment:
       BROTA_API_URL: http://api:8000
       PORT: "8090"
+      LAB_ACTIVO: "false"  # el laboratorio es solo para desarrollo con uvicorn
     depends_on:
       api:
         condition: service_healthy

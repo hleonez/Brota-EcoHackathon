@@ -11,6 +11,7 @@ por el túnel de cloudflared (o cualquier proxy) devuelve 404.
 
 from __future__ import annotations
 
+import base64
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
@@ -82,6 +83,9 @@ class Laboratorio:
     def entrante(self, m: Entrante) -> None:
         if m.tipo == "text":
             contenido = {"texto": m.texto or ""}
+        elif m.tipo in ("audio", "image"):
+            icono = "🎤 Audio" if m.tipo == "audio" else "📸 Foto"
+            contenido = {"texto": f"{icono}{': ' + m.texto if m.texto else ''}"}
         elif m.respuesta_id:
             contenido = {"texto": m.respuesta_titulo or m.respuesta_id, "respuesta_id": m.respuesta_id}
         else:
@@ -114,9 +118,15 @@ def _solo_local(request: Request) -> None:
         raise HTTPException(status_code=404)
 
 
+class MediaLab(BaseModel):
+    mime_type: str = Field(pattern=r"^(image|audio)/[\w.+-]+(;.*)?$", max_length=80)
+    datos_base64: str = Field(max_length=14 * 1024 * 1024)
+
+
 class MensajeIn(BaseModel):
     de: str
     texto: str | None = Field(None, max_length=4096)
+    media: MediaLab | None = None
     respuesta_id: str | None = Field(None, max_length=256)
     respuesta_titulo: str | None = Field(None, max_length=72)
 
@@ -144,7 +154,11 @@ def montar(app: FastAPI, atender: Callable[[Entrante], Awaitable[None]]) -> None
         if not lab.simulado(datos.de):
             raise HTTPException(status_code=400, detail="Solo se escribe desde celulares simulados.")
         wamid = f"wamid.lab.in.{uuid.uuid4().hex}"
-        if datos.respuesta_id:
+        if datos.media:
+            tipo = "audio" if datos.media.mime_type.startswith("audio/") else "image"
+            m = Entrante(wamid=wamid, de=datos.de, tipo=tipo, texto=(datos.texto or "").strip() or None,
+                         media_mime=datos.media.mime_type, media_datos=base64.b64decode(datos.media.datos_base64))
+        elif datos.respuesta_id:
             m = Entrante(wamid=wamid, de=datos.de, tipo="interactive", respuesta_id=datos.respuesta_id,
                          respuesta_titulo=datos.respuesta_titulo)
         elif datos.texto and datos.texto.strip():

@@ -18,6 +18,7 @@ from typing import Any
 from app import textos as T
 from app.brota import Brota, ErrorBrota
 from app.catalogo import buscar, normalizar
+from app.ia import interpretar
 from app.whatsapp import Boton, Entrante, Fila, WhatsApp
 
 INCLUIDOS = ("listo", "revision")
@@ -38,6 +39,7 @@ class Borrador:
     paso: str = "ELIGE"  # ELIGE | CONFIRMA | CHEQUEO | MAS | RESUMEN
     items: list[Item] = field(default_factory=list)
     propuestos: list[str] = field(default_factory=list)
+    fuente_propuesta: str = "texto"  # texto | foto | audio
     actualizado: float = field(default_factory=time.monotonic)
 
     def item(self, codigo: str) -> Item | None:
@@ -127,7 +129,7 @@ class Pedido:
             await self.wa.texto(cel, T.P_SIN_BORRADOR)
             await self.empezar(cel)
         elif accion == "P_SI_TEXTO":
-            await self._agregar(cel, b, fichas, b.propuestos, "texto")
+            await self._agregar(cel, b, fichas, b.propuestos, b.fuente_propuesta)
         elif accion == "P_NO_TEXTO":
             b.propuestos = []
             await self._elegir(cel, b, fichas)
@@ -159,11 +161,29 @@ class Pedido:
             await self._seguir(cel, b, fichas, me)
         return True
 
-    async def responder_duda(self, celular: str, encontradas: list[dict[str, Any]]) -> None:
-        if encontradas:
-            await self.wa.texto(celular, "\n\n".join(_ficha(f) for f in encontradas[:3]))
+    async def proponer(self, celular: str, codigos: list[str], fuente: str, encabezado: str | None = None) -> None:
+        """Materiales detectados por texto, foto o audio: se confirman antes de revisarlos."""
+        b = self.borradores.obtener(celular) or self.borradores.nuevo(celular)
+        fichas = await self.fichas(celular)
+        b.propuestos = [c for c in dict.fromkeys(codigos) if c in fichas]
+        b.fuente_propuesta = fuente
+        if not b.propuestos:
+            await self._elegir(celular, b, fichas)
+            return
+        b.paso = "CONFIRMA"
+        await self._confirmar_texto(celular, b, fichas, encabezado)
+
+    async def responder_duda(
+        self, celular: str, encontradas: list[dict[str, Any]], respuesta: str | None = None,
+        encabezado: str | None = None,
+    ) -> None:
+        if respuesta:  # redactada por la IA con base en las fichas
+            texto = respuesta
+        elif encontradas:
+            texto = "\n\n".join(_ficha(f) for f in encontradas[:3])
         else:
-            await self.wa.texto(celular, T.DUDA_NO_SE)
+            texto = T.DUDA_NO_SE
+        await self.wa.texto(celular, f"{encabezado}\n\n{texto}" if encabezado else texto)
         aceptadas = [f["codigo"] for f in encontradas if f["acepta"] != "no"]
         pedir = Boton(f"P_ADDS:{','.join(aceptadas)}", "♻ Pedir recolección") if aceptadas else Boton(
             "M_PEDIR", "♻ Pedir recolección"
@@ -181,19 +201,30 @@ class Pedido:
             await self._siguiente(m.de, b, fichas)
             return
         encontradas = buscar(m.texto, list(fichas.values()))
-        if not encontradas:
+        if encontradas:
+            await self.proponer(m.de, [f["codigo"] for f in encontradas], "texto")
+            return
+        # Los sinónimos no alcanzaron: que la IA lo intente (si está disponible).
+        r = await interpretar(self.api, m.de, texto=m.texto, contexto="pedido")
+        if r and r["residuos"]:
+            await self.proponer(m.de, [x["codigo"] for x in r["residuos"]], "texto")
+        elif r and r.get("intencion") == "cancelar":
+            await self.cancelar(m.de)
+        elif r and (r.get("respuesta") or r.get("aclaracion")):
+            await self.wa.texto(m.de, r.get("respuesta") or r["aclaracion"])
+            await self._elegir(m.de, b, fichas)
+        else:
             await self.wa.texto(m.de, T.P_NO_ENTENDI)
             await self._elegir(m.de, b, fichas)
-            return
-        b.propuestos = [f["codigo"] for f in encontradas]
-        b.paso = "CONFIRMA"
-        await self._confirmar_texto(m.de, b, fichas)
 
-    async def _confirmar_texto(self, celular: str, b: Borrador, fichas: dict[str, dict[str, Any]]) -> None:
+    async def _confirmar_texto(
+        self, celular: str, b: Borrador, fichas: dict[str, dict[str, Any]], encabezado: str | None = None
+    ) -> None:
         nombres = [_nombre(fichas[c]) for c in b.propuestos if c in fichas]
         lista = ", ".join(nombres[:-1]) + f" y {nombres[-1]}" if len(nombres) > 1 else nombres[0]
+        cuerpo = T.P_ENTENDI.format(lista=lista)
         await self.wa.botones(
-            celular, T.P_ENTENDI.format(lista=lista),
+            celular, f"{encabezado}\n\n{cuerpo}" if encabezado else cuerpo,
             [Boton("P_SI_TEXTO", "Sí, correcto"), Boton("P_NO_TEXTO", "Corregir")],
         )
 
@@ -285,6 +316,8 @@ class Pedido:
             return
         incluidos = [i for i in b.items if i.estado in INCLUIDOS and i.codigo in fichas]
         fuera = [_nombre(fichas[i.codigo]) for i in b.items if i.estado in ("preparar", "no") and i.codigo in fichas]
+        por_preparar = [_nombre(fichas[i.codigo]) for i in b.items if i.estado == "preparar" and i.codigo in fichas]
+        no_va = [_nombre(fichas[i.codigo]) for i in b.items if i.estado == "no" and i.codigo in fichas]
         if not incluidos:
             b.paso = "MAS"
             texto = T.P_NADA_LISTO.format(fuera=f"\nQueda por fuera: {', '.join(fuera)}." if fuera else "")
@@ -300,7 +333,8 @@ class Pedido:
             T.P_RESUMEN.format(
                 incluidos="\n".join(lineas),
                 ubicacion=unidad.get("etiqueta") or "tu apartamento",
-                fuera=T.P_RESUMEN_FUERA.format(lista=", ".join(fuera)) if fuera else "",
+                fuera=(T.P_RESUMEN_FUERA.format(lista=", ".join(por_preparar)) if por_preparar else "")
+                + (T.P_RESUMEN_NO_VA.format(lista=", ".join(no_va)) if no_va else ""),
             ),
             [Boton("P_ENVIAR", "✅ Enviar solicitud"), Boton("P_CORREGIR", "✏ Corregir"), Boton("P_CANCELAR", "❌ Cancelar")],
         )

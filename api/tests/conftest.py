@@ -23,6 +23,7 @@ os.environ.update(
     BOT_WEBHOOK_URL="",
     BOT_WEBHOOK_SECRET="secreto-webhook-pruebas",
     SEED_PIN="2468",
+    GEMINI_API_KEY="",  # las pruebas nunca llaman a Gemini de verdad
 )
 
 import psycopg  # noqa: E402

@@ -67,6 +67,8 @@
                    background: var(--panel); color: var(--ink); }
   .compose button { border: 0; border-radius: 999px; width: 40px; background: var(--brand); color: var(--brand-ink); font-size: 16px; cursor: pointer; }
   .compose input:disabled, .compose button:disabled { opacity: .5; }
+  .adjuntar { display: grid; place-items: center; width: 40px; border-radius: 999px; background: var(--chip); cursor: pointer; font-size: 18px; }
+  .adjuntar.apagado { opacity: .4; cursor: default; }
 
   /* ---------- tablero */
   .tablero { background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); border: 1px solid var(--line);
@@ -180,7 +182,7 @@ function pintarTelefono(slot) {
     <div class="phone-top"><select aria-label="Quién escribe">${opciones}</select><small>${esc(p.detalle)} · +${esc(p.simulado ? cel : cel.slice(0, 4) + "•••" + cel.slice(-4))}</small></div>
     <div class="chat"></div>
     <div class="chips">${(CHIPS[p.rol] || []).map((c) => `<button type="button" data-texto="${esc(c)}">${esc(c)}</button>`).join("")}</div>
-    <form class="compose"><input placeholder="${p.simulado ? "Escribe como " + esc(p.nombre) + "…" : "Celular real: escribe desde WhatsApp"}" ${p.simulado ? "" : "disabled"} aria-label="Mensaje"><button ${p.simulado ? "" : "disabled"} aria-label="Enviar">➤</button></form>`;
+    <form class="compose"><label class="adjuntar ${p.simulado ? "" : "apagado"}" title="Enviar foto o audio">📎<input type="file" accept="image/*,audio/*" hidden ${p.simulado ? "" : "disabled"}></label><input class="texto" placeholder="${p.simulado ? "Escribe como " + esc(p.nombre) + "…" : "Celular real: escribe desde WhatsApp"}" ${p.simulado ? "" : "disabled"} aria-label="Mensaje"><button ${p.simulado ? "" : "disabled"} aria-label="Enviar">➤</button></form>`;
   $("select", el).onchange = (e) => {
     slots[slot] = e.target.value;
     try { localStorage.setItem("lab.slots", JSON.stringify(slots)); } catch (err) {}
@@ -189,10 +191,26 @@ function pintarTelefono(slot) {
   el.querySelectorAll(".chips button").forEach((b) => (b.onclick = () => enviar(cel, { texto: b.dataset.texto })));
   $("form", el).onsubmit = (e) => {
     e.preventDefault();
-    const i = $("input", el);
+    const i = $("input.texto", el);
     if (!i.value.trim()) return;
     enviar(cel, { texto: i.value });
     i.value = "";
+  };
+  // Foto o audio (como en WhatsApp): lo escrito en la caja va como pie de foto.
+  $("input[type=file]", el).onchange = (e) => {
+    const archivo = e.target.files[0];
+    if (!archivo) return;
+    if (archivo.size > 10 * 1024 * 1024) { alert("Máximo 10 MB"); return; }
+    const lector = new FileReader();
+    lector.onload = () => {
+      const [cabeza, datos] = String(lector.result).split(",");
+      const mime = archivo.type || cabeza.slice(5).split(";")[0];
+      const pie = $("input.texto", el);
+      enviar(cel, { texto: pie.value || null, media: { mime_type: mime, datos_base64: datos } });
+      pie.value = "";
+    };
+    lector.readAsDataURL(archivo);
+    e.target.value = "";
   };
   pintarChat(slot);
 }

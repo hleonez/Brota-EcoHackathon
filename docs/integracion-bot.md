@@ -122,10 +122,12 @@ Fechas en query: ISO 8601 con zona. Usa `Z` (o codifica `+` como `%2B`).
 
 ### D · Audio, texto libre y foto
 
-La API todavía no expone IA (`/v1/capacidades` → `archivos_ia: false`). Si el bot interpreta
-un audio o texto con un modelo, **pide confirmación al residente** («¿Pido la recolección de
-cartón y botellas? Sí / No») y solo entonces llama `POST /v1/solicitudes` con los IDs del catálogo.
-Nunca crees una solicitud solo con la interpretación.
+`POST /v1/ia/interpretar` (Gemini, solo en la API) entiende texto libre, audios y fotos. El bot baja
+la media de Meta (`GET /{media_id}` → URL temporal con el mismo token) y la envía en base64. La IA
+**propone**; el bot **muestra lo que entendió** («🎤 Te escuché…», «📸 En la foto veo…», «Entendí:
+📦 Cartón. ¿Es correcto?») y sigue el pedido guiado. Solo «Enviar solicitud» crea algo. Si la API
+responde `503 IA_NO_DISPONIBLE` o no responde, el bot sigue con sinónimos y listas
+(`/v1/capacidades` → `ia_mensajes`).
 
 ## 3. Avisos de la API al residente (sincronización)
 

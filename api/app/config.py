@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     zona_horaria: str = "America/Bogota"
     politica_datos_version: str = "2026-11"
 
+    # IA (Gemini · Google AI Studio). Sin clave, Brisa sigue con listas y sinónimos del catálogo.
+    gemini_api_key: str = ""
+    # Rápido y multimodal (texto, audio, foto). Si está saturado o falla, se prueba el de respaldo.
+    gemini_modelo: str = "gemini-3.5-flash-lite"
+    gemini_modelo_respaldo: str = "gemini-flash-lite-latest"
+    gemini_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    ia_timeout_segundos: float = 25
+    ia_media_max_mb: int = 10
+
     # Offline / idempotencia.
     idempotencia_retencion_horas: int = 72
     sync_max_operaciones: int = 100
