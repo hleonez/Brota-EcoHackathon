@@ -9,6 +9,7 @@ import "./estilo/acceso.css";
 import "./estilo/marco.css";
 import "./estilo/inicio.css";
 import "./estilo/pendientes.css";
+import "./estilo/impacto.css";
 import "./motion/animaciones.css";
 
 createRoot(document.getElementById("root")!).render(

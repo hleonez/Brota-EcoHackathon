@@ -1,0 +1,100 @@
+/* Impact view (Fundación and colectivo indicators): tinted figure cards, order bars
+   and the accepted-kilos chart. Single series: one hue, no legend, values labelled. */
+
+/* ---------- impact figures (Fundación and colectivo indicators) */
+.impacto-cifra {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "icono texto" "icono valor";
+  align-items: center;
+  gap: 2px 16px;
+  margin: 0;
+  border-color: transparent;
+  background: var(--eco-green-50);
+  container-type: inline-size;
+}
+.impacto-cifra.tono-turquesa { background: var(--eco-teal-50); }
+.impacto-cifra.tono-amarillo { background: var(--eco-yellow-100); }
+.impacto-icono {
+  grid-area: icono;
+  display: grid;
+  place-items: center;
+  width: clamp(48px, 18cqi, 72px);
+  aspect-ratio: 1;
+  border-radius: 20px;
+  background: var(--eco-white);
+  color: var(--eco-green);
+}
+.tono-turquesa .impacto-icono { color: var(--eco-teal-ink); }
+.tono-amarillo .impacto-icono { color: var(--eco-yellow-ink); }
+.impacto-icono .icono { width: 55%; height: 55%; }
+.impacto-cifra > .impacto-texto { grid-area: texto; font-weight: 600; color: var(--eco-charcoal); }
+/* Figures never break inside a number; they shrink a little instead. */
+.impacto-cifra > .cifra { grid-area: valor; font-size: clamp(22px, 8.5cqi, 34px); white-space: nowrap; overflow-wrap: normal; }
+.resumen-impacto { grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.filtros-impacto { min-inline-size: 0; }
+.filtros-impacto legend { float: left; width: 100%; margin-bottom: 12px; font: 600 18px/1.3 var(--font-heading); color: var(--eco-forest); }
+.filtros-impacto .campos { clear: both; }
+.filtros-impacto .campos > label { min-width: 0; }
+.filtros-impacto .campos > .btn { flex: 0 0 auto; min-height: 50px; }
+.medida { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; margin: 14px 0; }
+.medida b { color: var(--eco-forest); font-variant-numeric: tabular-nums; }
+.medida progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 14px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  appearance: none;
+  background: var(--eco-green-50);
+  accent-color: var(--eco-green);
+}
+.medida progress::-webkit-progress-bar { background: var(--eco-green-50); border-radius: 999px; }
+.medida progress::-webkit-progress-value { background: var(--eco-green); border-radius: 999px; }
+.medida progress::-moz-progress-bar { background: var(--eco-green); border-radius: 999px; }
+
+/* ---------- accepted kilos per period (single series: one hue, no legend, values labelled) */
+.serie { margin: 0; }
+.serie-barras {
+  --alto: clamp(160px, 26vw, 240px);
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(6px, 2vw, 18px);
+  height: calc(var(--alto) + 52px);
+  margin: 8px 0 0;
+  padding: 0 0 0;
+  list-style: none;
+  border-bottom: 1px solid var(--eco-line-strong);
+  overflow-x: auto;
+}
+.serie-barra {
+  flex: 1 0 44px;
+  max-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  height: 100%;
+}
+.serie-valor { color: var(--eco-charcoal); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.serie-relleno {
+  width: 100%;
+  min-height: 2px;
+  height: calc(var(--alto) * var(--proporcion));
+  border-radius: 4px 4px 0 0;
+  background: var(--eco-green);
+}
+.serie-etiquetas {
+  display: flex;
+  gap: clamp(6px, 2vw, 18px);
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--eco-muted);
+  font-size: 13px;
+}
+.serie-etiquetas li { flex: 1 0 44px; max-width: 120px; text-align: center; }
+.serie figcaption { margin-top: 10px; color: var(--eco-muted); font-size: 14px; }
+
