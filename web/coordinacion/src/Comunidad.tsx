@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Aliados, Espera, Marca, useDatos } from "./portal";
+import { Aliados, Espera, Estado, Marca, useDatos } from "./portal";
 import { temasEducativos, type TemaEducativo } from "./temasEducativos";
 
 type Contenido = { id: string; titulo: string; texto: string | null };
@@ -16,9 +16,12 @@ export default function Comunidad({ volver }: { volver: () => void }) {
           Acceso del equipo
         </button>
       </header>
-      <main className="container-xl">
-        <p className="chip">Piloto en Brisas de San Pablo</p>
-        <h1>Prepara tu entrega</h1>
+      <main className="container-xl comunidad">
+        <div className="comunidad-intro">
+          <p>Piloto en Brisas de San Pablo</p>
+          <h1>Prepara tu entrega</h1>
+          <p>Consulta qué materiales recibe tu colectivo y cómo prepararlos para la recolección.</p>
+        </div>
         <div className="row g-3">
           <div className="col-12 col-lg-7">
             <section className="eco-tarjeta">
@@ -38,10 +41,10 @@ export default function Comunidad({ volver }: { volver: () => void }) {
               {!contenidos.datos ? (
                 <Espera error={contenidos.error} reintentar={contenidos.recargar} />
               ) : contenidos.datos.length === 0 ? (
-                <p>Aún no hay contenidos publicados para este tema.</p>
+                <Estado tipo="vacio">Aún no hay contenidos publicados para este tema.</Estado>
               ) : (
                 contenidos.datos.map(({ id, titulo, texto }) => (
-                  <article key={id}>
+                  <article className="guia-articulo" key={id}>
                     <h3>{titulo}</h3>
                     {texto && <p style={{ whiteSpace: "pre-line" }}>{texto}</p>}
                   </article>
@@ -50,8 +53,8 @@ export default function Comunidad({ volver }: { volver: () => void }) {
             </section>
           </div>
           <div className="col-12 col-lg-5">
-            <section className="eco-tarjeta">
-              <h2>Pide una recolección</h2>
+            <section className="eco-tarjeta comunidad-brisa">
+              <h2>Pide una recolección con Brisa</h2>
               <p>
                 Las solicitudes del piloto se reciben por WhatsApp. El colectivo
                 te confirmará la programación.

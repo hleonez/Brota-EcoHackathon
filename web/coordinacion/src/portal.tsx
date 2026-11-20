@@ -19,36 +19,6 @@ export function Aliados() {
     </footer>
   );
 }
-export function Marco({
-  titulo,
-  nombre,
-  salir,
-  children,
-}: {
-  titulo: string;
-  nombre: string;
-  salir: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className="portal">
-      <header className="encabezado">
-        <Marca />
-        <div>
-          {nombre}{" "}
-          <button className="btn" onClick={salir}>
-            Salir
-          </button>
-        </div>
-      </header>
-      <main className="container-xl">
-        <h1>{titulo}</h1>
-        {children}
-      </main>
-      <Aliados />
-    </div>
-  );
-}
 export function useDatos<T>(ruta: string) {
   const [revision, setRevision] = useState(0);
   const [estado, setEstado] = useState<{
@@ -77,23 +47,23 @@ export function useDatos<T>(ruta: string) {
     recargar: () => setRevision((r) => r + 1),
   };
 }
-export function Espera({
-  error,
-  reintentar,
-}: {
-  error?: string;
-  reintentar: () => void;
-}) {
-  return error ? (
-    <p role="alert">
-      {error}{" "}
-      <button type="button" className="btn" onClick={reintentar}>
-        Reintentar
-      </button>
-    </p>
-  ) : (
-    <p role="status">Consultando…</p>
+export function Estado({ tipo, children }: { tipo: "error" | "carga" | "vacio" | "exito"; children: ReactNode }) {
+  if (tipo === "vacio") return <div className="vacio">{children}</div>;
+  return (
+    <div className={`aviso aviso-${tipo}`} data-motion="notice" data-state="visible"
+      role={tipo === "error" ? "alert" : "status"}>
+      {children}
+    </div>
   );
+}
+
+export function Espera({ error, reintentar }: { error?: string; reintentar: () => void }) {
+  return error ? (
+    <Estado tipo="error">
+      <span>{error}</span>
+      <button type="button" className="btn" onClick={reintentar}>Reintentar</button>
+    </Estado>
+  ) : <Estado tipo="carga">Consultando…</Estado>;
 }
 export const numero = (n: number | string) =>
   Number(n).toLocaleString("es-CO", { maximumFractionDigits: 3 });

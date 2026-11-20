@@ -25,7 +25,9 @@ app/
 **Coordinación:** la coordinadora trabaja en el panel ([web/coordinacion](../web/coordinacion/README.md)).
 Si su número está en su cuenta (campo `celular` en la API), Brisa le manda una alerta por cada
 solicitud nueva con el enlace al panel (`PANEL_COORDINACION_URL`). Con `COORDINACION_POR_WHATSAPP=true`
-también puede asignar y cerrar desde el chat (BANDEJA, ASIGNADAS), como respaldo si no hay tablet.
+también puede usar BANDEJA para asignar, ASIGNADAS para programar y PROGRAMADAS para cerrar.
+Al programar, confirma cómo acordó el horario con el vecino. Al registrar una recogida, sigue
+el comando que muestra el bot y envía los códigos de los materiales recogidos, separados por comas.
 Detalle en [docs/integracion-bot.md](../docs/integracion-bot.md) §4.
 
 **Si el webhook está verificado pero no llega ningún mensaje:** conecta la app a la cuenta de WhatsApp:
