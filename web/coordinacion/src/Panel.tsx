@@ -5,7 +5,7 @@ import type { Caso, Catalogo, Orden, Recolector, Sesion } from "./tipos";
 import Indicadores from "./Indicadores";
 import { Pesajes } from "./Operacion";
 import { Estado, fechaBogota } from "./portal";
-import { MarcoPanel, enlaceCuenta, nombresPerfil, type CuentaPanel, type GrupoPanel } from "./MarcoPanel";
+import { MarcoPanel, Portada, TarjetaAccion, TareaPrincipal, enlaceCuenta, nombresPerfil, type CuentaPanel, type GrupoPanel } from "./MarcoPanel";
 import { hace } from "./util";
 import { DetalleSolicitud, VistaBandeja, VistaHistorial, VistaMisOrdenes, VistaReportes, VistaRutas } from "./Vistas";
 
@@ -105,11 +105,13 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
     [catalogo, gremioId],
   );
   const nombreGremio = catalogo?.gremios.find((g) => g.id === gremioId)?.nombre ?? "";
-  const imagenColectivo=/huert|orgán/i.test(nombreGremio)?"huerta":"reciclaje";
+  const organico = /huert|orgán/i.test(nombreGremio);
+  const imagenColectivo = organico ? "huerta" : "reciclaje";
   const nuevas = ordenes.filter((o) => o.estado === "nueva");
   const asignadas = ordenes.filter((o) => o.estado === "asignada");
   const programadas = ordenes.filter((o) => o.estado === "programada");
   const abiertas = [...asignadas, ...programadas];
+  const primerNombre = sesion.cuenta.nombre.trim().split(/\s+/)[0] || sesion.cuenta.nombre;
 
   function listo(o: Orden, texto: string) {
     setOrdenes((l) => l.map((x) => (x.id === o.id ? o : x)));
@@ -163,7 +165,7 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
 
   return (
     <>
-      <MarcoPanel grupos={grupos} activo={vista} titulo={titulo} cuenta={cuenta}
+      <MarcoPanel grupos={grupos} activo={vista} titulo={titulo} cuenta={cuenta} portada={vista === "inicio"}
         contexto={nombreGremio || nombresPerfil[rol]} navegar={(id) => setVista(id as Vista)}
         acciones={vista !== enlaceCuenta.id && (
           <div className="panel-actualizar">
@@ -176,13 +178,29 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
           <Estado tipo="carga">Cargando solicitudes…</Estado>
         ) : vista === "inicio" ? (
           <>
-            <section className="inicio-colectivo">
-              <div>
-                <h2>{nombreGremio || nombresPerfil[rol]}</h2>
-                <p>Hola, {sesion.cuenta.nombre}.</p>
-              </div>
-              <img alt="" src={`/marca/${imagenColectivo}.png`} />
-            </section>
+            <Portada saludo={`¡Hola, ${primerNombre}!`} imagen={`/marca/${imagenColectivo}.png`}
+              texto={campo
+                ? `Tus recolecciones con ${nombreGremio || "el colectivo"}, en un solo lugar.`
+                : organico
+                  ? `Gestión de orgánicos – ${nombreGremio || "Huerta"}`
+                  : `Gestiona las recolecciones de ${nombreGremio || "tu colectivo"} de forma fácil y rápida.`}>
+              {campo ? <>
+                <TarjetaAccion icono="bandeja" titulo="Ver mis órdenes" onClick={() => setVista("bandeja")} />
+                <TarjetaAccion icono="historial" titulo="Ver historial" tono="turquesa"
+                  onClick={() => setVista("historial")} />
+              </> : organico ? <>
+                <TareaPrincipal icono="pesajes" titulo="Registrar la entrega de baldes orgánicos"
+                  texto="Lleva el control de los residuos orgánicos que recibe la huerta." />
+                <TarjetaAccion icono="pesajes" titulo="Registrar baldes" tono="solido"
+                  onClick={() => setVista("pesajes")} />
+                <TarjetaAccion icono="entregas" titulo="Ver entregas" tono="turquesa"
+                  onClick={() => setVista("historial")} />
+              </> : <>
+                <TarjetaAccion icono="bandeja" titulo="Ver solicitudes" onClick={() => setVista("bandeja")} />
+                <TarjetaAccion icono="pesajes" titulo="Registrar pesaje" tono="amarillo"
+                  onClick={() => setVista("pesajes")} />
+              </>}
+            </Portada>
             <div className="resumen-operativo">
               <button type="button" onClick={() => setVista("bandeja")} className="resumen-tarea">
                 <strong>{campo ? programadas.length : nuevas.length}</strong>
