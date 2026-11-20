@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.core.errores import no_encontrado, transicion_invalida
 from app.core.paginacion import Paginacion, paginacion, paginar
-from app.core.seguridad import Actor, actor_bot, actor_operador, get_actor_opcional
+from app.core.seguridad import Actor, actor_admin, actor_bot, actor_operador, get_actor_opcional
 from app.core.tipos import Entrada, Instante, Salida, ahora
 from app.db import get_db
 from app.models import (
@@ -37,6 +37,7 @@ from app.models import (
     EventoSalida,
     Participante,
 )
+from app.modulos.configuracion import ContenidoOut as ContenidoGestionOut
 from app.modulos.coordinacion import orden_de_coordinacion
 
 router = APIRouter(tags=["educación y avisos"])
@@ -240,6 +241,21 @@ def get_avisos_orden(
         .order_by(EventoSalida.created_at.desc(), EventoSalida.id.desc())
     )
     return paginar(db, stmt, pag, lambda e: AvisoEstadoOut.model_validate(e).model_dump(mode="json"))
+
+
+@router.get("/contenidos-educativos/gestion")
+def get_contenidos_gestion(
+    tema: Literal["separacion", "huerta", "horarios_rutas", "servicio"] | None = Query(None),
+    _actor: Actor = Depends(actor_admin),
+    pag: Paginacion = Depends(paginacion),
+    db: Session = Depends(get_db),
+):
+    """Lectura de administración: incluye borradores, retirados y contenidos fuera de vigencia."""
+    stmt = select(ContenidoEducativo)
+    if tema:
+        stmt = stmt.where(ContenidoEducativo.tema == tema)
+    stmt = stmt.order_by(ContenidoEducativo.created_at.desc(), ContenidoEducativo.id)
+    return paginar(db, stmt, pag, lambda c: ContenidoGestionOut.model_validate(c).model_dump(mode="json"))
 
 
 @router.get("/contenidos-educativos")
