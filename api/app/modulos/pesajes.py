@@ -6,13 +6,14 @@ borrador → confirmado → anulado (por corrección)
 - Vincular órdenes a un lote NO reparte kilos por hogar.
 - `torre_origen_id` y `unidad_medida_id` exigen procedencia coherente con las órdenes enlazadas.
 - Baldes: se conserva la cantidad original y la equivalencia aplicada; los kg se marcan como estimación.
+- Papel Inteligente (`POST /pesajes/desde-foto`): la foto propone un borrador `foto_ia`. No se confirma sola ni se guarda la imagen.
 """
 
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Annotated, Literal, Union
 
@@ -21,7 +22,9 @@ from pydantic import Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.config import get_settings
 from app.core.errores import (
+    AppError,
     invalido,
     no_encontrado,
     prohibido,
@@ -40,6 +43,7 @@ from app.core.tipos import (
     Salida,
     ahora,
     redondear_kg,
+    zona,
 )
 from app.db import get_db
 from app.models import (
@@ -70,6 +74,7 @@ from app.modulos.comun import (
     registrar_evento,
     verificar_version,
 )
+from app.modulos.ia import extraer_tiquete
 
 router = APIRouter(tags=["pesajes"])
 
@@ -199,6 +204,37 @@ class PesajeOut(Salida):
     totales: TotalesOut
     advertencias: list[str] = []
     evaluacion_puntos: str | None = None
+
+
+class ImagenTiqueteIn(Entrada):
+    """Foto del tiquete. No se guarda: solo viaja al extractor en esta petición."""
+
+    mime_type: str = Field(pattern=r"^image/[\w.+-]+$", max_length=40)
+    datos_base64: str = Field(min_length=4, max_length=20 * 1024 * 1024)
+
+
+class PesajeDesdeFotoIn(Entrada):
+    """Lo que el papel no trae (gremio, recolector) más la imagen. La IA no confirma."""
+
+    gremio_id: uuid.UUID
+    imagen: ImagenTiqueteIn
+    recolector_id: uuid.UUID | None = None
+    fecha_medicion: InstanteEntrada | None = None
+    orden_ids: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+    torre_origen_id: uuid.UUID | None = None
+    unidad_medida_id: uuid.UUID | None = None
+    emisor_tiquete: str | None = Field(default=None, max_length=120)
+
+
+class DudosoOut(Salida):
+    campo: str
+    confianza: float | None = None
+    detalle: str
+
+
+class PesajeDesdeFotoOut(PesajeOut):
+    dudosos: list[DudosoOut]
+    materiales_descartados: list[str]
 
 
 # --------------------------------------------------------------------------- validación
@@ -686,6 +722,165 @@ def corregir(db: Session, actor: Actor, pesaje_id: uuid.UUID, datos: CorreccionI
     return pesaje_out(db, cargar(db, nuevo.id), adv)
 
 
+def _inicio_dia(d: date) -> datetime:
+    """El tiquete trae fecha, no hora: medianoche en la zona del piloto, nunca un instante futuro inventado."""
+    return datetime.combine(d, time(0, 0), tzinfo=zona(get_settings().zona_horaria))
+
+
+def _confianza_json(valor: Decimal | None) -> float | None:
+    return None if valor is None else float(valor)
+
+
+def _detalle_linea(codigo: str, confianza: Decimal | None, *, en_borrador: bool) -> str:
+    cuanto = "no leída" if confianza is None else f"{confianza:.2f}"
+    if en_borrador:
+        return f"Línea {codigo}: confianza {cuanto}, por debajo de 0.6. Revísala antes de confirmar."
+    return f"Línea {codigo}: confianza {cuanto}. No se leyeron los kilos y la línea no quedó en el borrador."
+
+
+def _tiquete_ilegible(descartados: list[str]) -> AppError:
+    fields = {"imagen": "Sin líneas utilizables del catálogo"}
+    if descartados:
+        fields["materiales"] = ", ".join(descartados)
+    return AppError(
+        422,
+        "TIQUETE_ILEGIBLE",
+        "No se leyó ninguna línea usable en el tiquete. Registra el pesaje a mano.",
+        fields,
+    )
+
+
+def crear_desde_foto(db: Session, actor: Actor, datos: PesajeDesdeFotoIn) -> PesajeDesdeFotoOut:
+    """Propone un borrador a partir de la foto. No lo confirma y no guarda la imagen."""
+    referencia_activa(db, Gremio, datos.gremio_id, "gremio_id", "Gremio")
+    actor.exigir_coordinacion(datos.gremio_id)
+    materiales = list(
+        db.execute(
+            select(Material)
+            .where(Material.gremio_id == datos.gremio_id, Material.activo.is_(True))
+            .order_by(Material.codigo)
+        ).scalars()
+    )
+    extraccion = extraer_tiquete(
+        [(m.codigo, m.nombre) for m in materiales],
+        datos.imagen.mime_type,
+        datos.imagen.datos_base64,
+    )
+    if not extraccion.lineas:
+        raise _tiquete_ilegible(extraccion.descartados)
+
+    por_codigo = {m.codigo: m for m in materiales}
+    propuestas: list[LineaBascula] = []
+    dudosos: list[DudosoOut] = []
+    for linea in extraccion.lineas:
+        material = por_codigo.get(linea.codigo)
+        if material is None:
+            if linea.codigo not in extraccion.descartados:
+                extraccion.descartados.append(linea.codigo)
+            continue
+        propuestas.append(
+            LineaBascula.model_validate(
+                {
+                    "material_id": material.id,
+                    "metodo_medicion": "bascula",
+                    "kg_aceptados": f"{linea.kg:.3f}",
+                    "kg_rechazados": "0",
+                }
+            )
+        )
+        if linea.dudosa:
+            dudosos.append(
+                DudosoOut(
+                    campo=f"lineas.{linea.codigo}",
+                    confianza=_confianza_json(linea.confianza),
+                    detalle=_detalle_linea(linea.codigo, linea.confianza, en_borrador=True),
+                )
+            )
+    if not propuestas:
+        raise _tiquete_ilegible(extraccion.descartados)
+
+    for codigo, confianza in extraccion.omitidas:
+        if codigo is None:
+            dudosos.append(
+                DudosoOut(
+                    campo="lineas",
+                    confianza=_confianza_json(confianza),
+                    detalle="Hay una línea ilegible sin material del catálogo; no se incluyó en el borrador.",
+                )
+            )
+            continue
+        dudosos.append(
+            DudosoOut(
+                campo=f"lineas.{codigo}",
+                confianza=_confianza_json(confianza),
+                detalle=_detalle_linea(codigo, confianza, en_borrador=False),
+            )
+        )
+    if extraccion.numero_tiquete is None:
+        dudosos.append(
+            DudosoOut(campo="numero_tiquete", detalle="numero_tiquete: no se leyó en el tiquete.")
+        )
+    elif "numero_tiquete" in extraccion.recortes:
+        dudosos.append(
+            DudosoOut(
+                campo="numero_tiquete",
+                detalle="numero_tiquete: el valor se recortó; revísalo antes de confirmar.",
+            )
+        )
+    if extraccion.proveedor is None:
+        dudosos.append(DudosoOut(campo="proveedor", detalle="proveedor: no se leyó en el tiquete."))
+    elif "proveedor" in extraccion.recortes:
+        dudosos.append(
+            DudosoOut(campo="proveedor", detalle="proveedor: el valor se recortó; revísalo antes de confirmar.")
+        )
+    if extraccion.fecha is not None:
+        fecha_medicion = _inicio_dia(extraccion.fecha)
+    elif datos.fecha_medicion is not None:
+        fecha_medicion = datos.fecha_medicion
+        dudosos.append(
+            DudosoOut(
+                campo="fecha",
+                detalle="fecha: no se leyó en el tiquete; se usó la fecha indicada.",
+            )
+        )
+    else:
+        raise invalido(
+            {"fecha_medicion": "La foto no trae una fecha legible. Indica fecha_medicion o registra el pesaje a mano."}
+        )
+
+    d = DatosPesaje(
+        gremio_id=datos.gremio_id,
+        fecha_medicion=fecha_medicion,
+        origen_captura="foto_ia",
+        recolector_id=datos.recolector_id,
+        lineas=propuestas,
+        orden_ids=list(datos.orden_ids),
+        torre_origen_id=datos.torre_origen_id,
+        unidad_medida_id=datos.unidad_medida_id,
+        proveedor_referencia=extraccion.proveedor,
+        numero_tiquete=extraccion.numero_tiquete,
+        emisor_tiquete=datos.emisor_tiquete,
+        observacion=extraccion.observaciones,
+    )
+    calculadas, de_validar, d = validar(db, actor, d, recolector_obligatorio=False)
+    advertencias = [item.detalle for item in dudosos]
+    for codigo in extraccion.descartados:
+        advertencias.append(f"Material descartado {codigo}: no está en el catálogo del gremio.")
+    if "observaciones" in extraccion.recortes:
+        advertencias.append("observaciones: se recortó el texto del tiquete.")
+    if datos.recolector_id is None:
+        advertencias.append("Falta el recolector: indícalo en el borrador antes de confirmar.")
+    advertencias.extend(de_validar)
+    p = _nuevo_pesaje(db, actor, d, calculadas)
+    registrar_evento(db, "pesaje_borrador_creado", actor, pesaje_id=p.id, datos={"origen": "foto_ia"})
+    base = pesaje_out(db, cargar(db, p.id), advertencias)
+    return PesajeDesdeFotoOut(
+        **{nombre: getattr(base, nombre) for nombre in PesajeOut.model_fields},
+        dudosos=dudosos,
+        materiales_descartados=list(extraccion.descartados),
+    )
+
+
 def registrar_entrega_directa(db: Session, actor: Actor, datos: EntregaDirectaIn) -> PesajeOut:
     punto = referencia_activa(db, PuntoRecepcion, datos.punto_recepcion_id, "punto_recepcion_id", "Punto de recepción")
     if punto.gremio_id != datos.pesaje.gremio_id:
@@ -732,6 +927,17 @@ def registrar_entrega_directa(db: Session, actor: Actor, datos: EntregaDirectaIn
 @router.post("/pesajes", status_code=201)
 def post_pesaje(datos: PesajeIn, request: Request, actor: Actor = Depends(actor_operador), db: Session = Depends(get_db)):
     return escritura(request, db, actor, datos, lambda: crear_pesaje(db, actor, datos), status=201)
+
+
+@router.post("/pesajes/desde-foto", status_code=201)
+def post_pesaje_desde_foto(
+    datos: PesajeDesdeFotoIn,
+    request: Request,
+    actor: Actor = Depends(actor_operador),
+    db: Session = Depends(get_db),
+):
+    """La coordinadora fotografía el tiquete. La IA propone un borrador; ella lo confirma aparte."""
+    return escritura(request, db, actor, datos, lambda: crear_desde_foto(db, actor, datos), status=201)
 
 
 @router.get("/pesajes")

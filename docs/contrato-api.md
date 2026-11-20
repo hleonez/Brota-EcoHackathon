@@ -30,7 +30,8 @@ Códigos: `200`, `201`, `202`, `400`, `401`, `403`, `404` (inexistente o fuera d
 `422`, `503`. Códigos de error de dominio: `VALIDATION_ERROR`, `VERSION_CONFLICT`,
 `INVALID_TRANSITION`, `OPEN_REQUEST_EXISTS`, `IDEMPOTENCY_CONFLICT`, `CONSENT_REQUIRED`,
 `NOT_REGISTERED`, `CONTACT_ALREADY_REGISTERED`, `LIGA_NOT_CONFIGURED`, `VIGENCIA_SOLAPADA`,
-`DEPENDENCY_PENDING`, `OPERATION_TOO_OLD`, `DUPLICATE`, `INVALID_CREDENTIALS`, `PILOT_NOT_ENABLED`.
+`DEPENDENCY_PENDING`, `OPERATION_TOO_OLD`, `DUPLICATE`, `INVALID_CREDENTIALS`, `PILOT_NOT_ENABLED`,
+`TIQUETE_ILEGIBLE`.
 
 ## 2. Actores y autenticación
 
@@ -124,7 +125,7 @@ Regla de solicitud abierta (configurable, `REGLA_SOLICITUD_ABIERTA`): un servici
 | ● | `POST /v1/pesajes/{id}/confirmacion` | Revalida y aplica precios vigentes; solo confirmados cuentan |
 | ● | `POST /v1/pesajes/{id}/correcciones` | Anula y crea reemplazo confirmado (`sustituye_pesaje_id`) |
 | ● | `POST /v1/entregas-directas` | `{punto_recepcion_id, unidad_id?, participante_id?, pesaje}`; puntos al confirmar |
-| ○ | `POST /v1/pesajes/desde-foto` | Papel Inteligente (M06) |
+| ● | `POST /v1/pesajes/desde-foto` | Papel Inteligente. Coordinación del gremio e `Idempotency-Key`. `{gremio_id, imagen: {mime_type: image/*, datos_base64}, recolector_id?, fecha_medicion?, orden_ids?, torre_origen_id?, unidad_medida_id?, emisor_tiquete?}`. Crea borrador `origen_captura=foto_ia`; no lo confirma ni guarda la imagen. La respuesta añade `dudosos` (`campo`, `confianza?`, `detalle`) y `materiales_descartados`. Umbral 0,6: la línea entra al borrador y queda marcada si hay kilos; sin kilos no entra. Un `GET` posterior no repite `dudosos`. Códigos fuera del catálogo del gremio se descartan. `422 TIQUETE_ILEGIBLE` si no hay ninguna línea usable. `503 IA_NO_DISPONIBLE` si la IA está apagada: no se guarda nada y el pesaje se registra a mano. La confirmación sigue en `POST /v1/pesajes/{id}/confirmacion` |
 
 ### M06 · IA (Gemini)
 | | Ruta | Notas |
@@ -154,7 +155,8 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 | ● | `GET /v1/liga` | `conjunto_id, desde, hasta`. % hogares con entrega válida / viviendas vigentes; desempate por kg atribuidos |
 | ● | `GET /v1/reportes/resumen` | Órdenes por estado, resultados, kg por material (báscula/estimado), valor estimado, hogares, tasas, cobertura |
 | ● | `GET /v1/reportes/serie` | kg por `dia`/`semana`/`mes` local, para gráficas |
-| ○ | Exportaciones, Certificado Verde, hoja de ruta, `/trabajos/{id}` | Pendiente |
+| ● | `GET /v1/reportes/certificado` | Fundación o administración. `conjunto_id` y `mes=AAAA-MM`. Responde `application/pdf` (`certificado-verde-{conjunto}-{mes}.pdf`), generado al vuelo y sin persistir la emisión. Kilos aprovechados (reciclables), compostados (orgánicos), tasa de rechazo, hogares y torres. Solo pesajes `confirmado` del mes en `America/Bogota` con torre del conjunto. Un mes sin datos devuelve PDF en ceros. Coordinación: `403`. Mes inválido: `422`. Conjunto inexistente: `404`. Apoyo documental: no determina la tarifa ni sustituye el aforo |
+| ○ | Exportaciones Excel, hoja de ruta, `/trabajos/{id}` | Pendiente |
 
 ### M10 · Configuración (admin)
 ● `GET /v1/materiales` (admin; incluye inactivos y `version`), `POST /v1/materiales`, `PATCH /v1/materiales/{id}` (nombre y activo), `POST /v1/motivos-rechazo`,
@@ -183,7 +185,7 @@ envío de WhatsApp.
   del gremio; los avisos indican `destino.tipo` (`participante` u `operador`).
 - La Liga usa una fórmula fija identificada (`participacion_hogares_v1`) y el número de viviendas
   vigente al cierre del periodo; `version_regla_liga` queda para cuando se apruebe otra fórmula.
-- No implementados todavía: archivos, canjes, exportaciones, certificados y hojas de ruta.
+- No implementados todavía: archivos, canjes, exportaciones Excel y hojas de ruta. El Certificado Verde sí se emite en `GET /v1/reportes/certificado` y no se persiste.
 - `POST /v1/ia/interpretar` responde `503` y no llama a Gemini. `GET /v1/capacidades` informa `ia_disponible: false` y `piloto: restringido`.
 
 ## 5. Cambios incompatibles de `0.3-ecoconecta.2`
