@@ -27,6 +27,9 @@ type Fila = {
   tema?: TemaEducativo;
   publicado?: boolean;
   trabajador_id?: string | null;
+  tipo?: string;
+  etiqueta?: string;
+  telefono_contacto?: string | null;
 };
 type ParticipantePiloto = {
   id: string;
@@ -46,6 +49,31 @@ function estadoPiloto(fila: Fila, vinculoVigente: boolean | undefined) {
   if (vinculoVigente === undefined) return "Vínculo sin verificar";
   return vinculoVigente ? "Vigente" : "Sin vínculo vigente";
 }
+
+function estadoContenido(fila: Fila) {
+  if (fila.activo === false) return "Retirado";
+  const ahora = Date.now();
+  const fuera =
+    (fila.vigente_hasta && Date.parse(fila.vigente_hasta) <= ahora) ||
+    (fila.vigente_desde && Date.parse(fila.vigente_desde) > ahora);
+  if (fuera) return "Fuera de vigencia";
+  if (fila.publicado === false) return "Borrador";
+  return "Publicado";
+}
+
+function accionesContenido(fila: Fila): [string, string][] {
+  if (fila.activo === false) {
+    return [
+      ["guardar", "Guardar cambios"],
+      ["reactivar", "Reactivar contenido"],
+    ];
+  }
+  return [
+    ["guardar", "Guardar cambios"],
+    ["publicar", "Publicar en la guía"],
+    ["retirar", "Retirar de la guía"],
+  ];
+}
 const gruposAdministracion = [
   { enlaces: ["Inicio"] },
   { titulo: "Personas y acceso", enlaces: ["Cuentas", "Registro asistido", "Piloto"] },
@@ -60,10 +88,11 @@ const secciones = gruposAdministracion.map((grupo) => ({
 const rutas: Partial<Record<Seccion, string>> = {
   Cuentas: "cuentas-operadoras?limit=100",
   Recolectores: "recolectores?limit=100",
-  Unidades: "unidades?limit=100",
+  Unidades: "unidades/gestion?limit=100",
   Piloto: "piloto/habilitaciones",
   Puntos: "configuracion?tipo=reglas_incentivo",
-  Educación: "contenidos-educativos?limit=100",
+  Educación: "contenidos-educativos/gestion?limit=100",
+  Materiales: "materiales?limit=100",
   Equivalencias: "configuracion?tipo=equivalencias",
 };
 interface Capacidades {
@@ -103,7 +132,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
     (trabajador) => !vinculados.has(trabajador.id),
   );
   const unidades = useDatos<Fila[]>(
-    vista === "Registro asistido" ? "/v1/unidades?limit=100" : "",
+    vista === "Registro asistido" ? "/v1/unidades/gestion?limit=100" : "",
   );
   const opciones = (items: ItemCatalogo[] = []): [string, string][] =>
     items.map((i) => [i.id, i.nombre]);
@@ -161,6 +190,18 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
         };
       }
       case "Recolectores":
+        if (seleccion) {
+          return {
+            metodo: "PATCH",
+            ruta: (seleccion.tipo === "huertero" ? "huerteros/" : "recicladores/") + seleccion.id,
+            cuerpo: {
+              version_esperada: seleccion.version,
+              nombre: v.nombre,
+              telefono_contacto: v.telefono_contacto || null,
+              activo: v.activo === "true",
+            },
+          };
+        }
         return {
           ruta: "recolectores",
           cuerpo: { ...v, telefono_contacto: v.telefono_contacto || null },
@@ -227,11 +268,25 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
           },
         };
       case "Educación":
-        if (seleccion) return {
-          metodo: "PATCH",
-          ruta: "contenidos-educativos/" + seleccion.id + "/publicacion",
-          cuerpo: { version_esperada: seleccion.version, publicado: false },
-        };
+        if (seleccion) {
+          if (v.accion_contenido === "publicar" && seleccion.activo === false)
+            throw Error("Reactiva el contenido antes de publicarlo.");
+          if (!["guardar", "publicar", "retirar", "reactivar"].includes(v.accion_contenido))
+            throw Error("Selecciona una acción.");
+          return {
+            metodo: "PATCH",
+            ruta: "contenidos-educativos/" + seleccion.id,
+            cuerpo: {
+              version_esperada: seleccion.version,
+              titulo: v.titulo,
+              texto: v.texto,
+              tema: v.tema,
+              ...(v.accion_contenido === "publicar" ? { publicado: true } : {}),
+              ...(v.accion_contenido === "retirar" ? { activo: false } : {}),
+              ...(v.accion_contenido === "reactivar" ? { activo: true } : {}),
+            },
+          };
+        }
         return {
           ruta: "contenidos-educativos",
           cuerpo: {
@@ -244,6 +299,17 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
           },
         };
       case "Materiales":
+        if (seleccion) {
+          return {
+            metodo: "PATCH",
+            ruta: "materiales/" + seleccion.id,
+            cuerpo: {
+              version_esperada: seleccion.version,
+              nombre: v.nombre,
+              activo: v.activo === "true",
+            },
+          };
+        }
         return { ruta: "materiales", cuerpo: v };
       case "Motivos":
         return { ruta: "motivos-rechazo", cuerpo: v };
@@ -254,11 +320,9 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
     }
   }
   const filas: Fila[] | undefined =
-    vista === "Materiales"
-      ? cat.datos?.materiales.map((m) => ({ ...m, version: 0 }))
-      : vista === "Motivos"
-        ? cat.datos?.motivos_rechazo.map((m) => ({ ...m, version: 0 }))
-        : lista.datos;
+    vista === "Motivos"
+      ? cat.datos?.motivos_rechazo.map((m) => ({ ...m, version: 0 }))
+      : lista.datos;
   function navegar(id: string) {
     setCuentaActiva(id === enlaceCuenta.id);
     if (id === enlaceCuenta.id || !gruposAdministracion.some((grupo) => grupo.enlaces.some((item) => item === id))) return;
@@ -340,7 +404,8 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                     return (
                     <li key={f.id}>
                       <strong>
-                        {persona?.nombre || f.nombre ||
+                        {(vista === "Unidades" && (f.etiqueta || f.referencia_local)) ||
+                          persona?.nombre || f.nombre ||
                           f.titulo ||
                           f.referencia_local ||
                           f.codigo ||
@@ -352,11 +417,16 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                         {[
                           vista === "Piloto" && participantes.datos &&
                             (unidad?.etiqueta || "Unidad sin vínculo vigente"),
+                          vista === "Unidades" && (f.tipo === "negocio" ? "Negocio" : f.tipo === "hogar" ? "Hogar" : ""),
+                          f.tipo === "huertero" ? "Huertero" : f.tipo === "reciclador" ? "Reciclador" : "",
+                          f.telefono_contacto,
+                          f.codigo && f.nombre ? f.codigo : "",
                           f.tema && temasEducativos[f.tema],
-                          f.publicado === true && "Publicado",
                           f.usuario,
                           f.permisos?.map((p) => p.rol).join(", "),
-                          vista === "Piloto"
+                          vista === "Educación"
+                            ? estadoContenido(f)
+                            : vista === "Piloto"
                             ? estadoPiloto(f, participantes.datos ? Boolean(unidad) : undefined)
                             : f.activo === undefined
                             ? ""
@@ -374,9 +444,9 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                           .filter(Boolean)
                           .join(" · ")}
                       </small>
-                      {(vista === "Piloto" || vista === "Educación") && (
+                      {(vista === "Piloto" || vista === "Educación" || vista === "Recolectores" || vista === "Materiales") && (
                         <button className="btn" onClick={() => { setConflicto(false); setSeleccion(f); }}>
-                          {vista === "Piloto" ? "Cambiar habilitación" : "Ver contenido"}
+                          {vista === "Piloto" ? "Cambiar habilitación" : "Editar"}
                         </button>
                       )}
                       {vista === "Cuentas" && (
@@ -400,12 +470,16 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                 setSeleccion(null);
                 lista.recargar();
               }}
-              accion={vista === "Educación" && seleccion ? "Retirar de la guía" : "Guardar"}
+              accion="Guardar"
               titulo={
                 seleccion && vista === "Educación"
                   ? seleccion.titulo || "Contenido educativo"
                   : seleccion && vista === "Piloto"
                   ? "Cambiar habilitación"
+                  : seleccion && vista === "Recolectores"
+                  ? "Editar " + (seleccion.nombre || "recolector")
+                  : seleccion && vista === "Materiales"
+                  ? "Editar " + (seleccion.nombre || "material")
                   : cuenta && vista === "Cuentas"
                   ? "Acceso de " + cuenta.nombre
                   : {
@@ -506,16 +580,37 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                   </>
                 ))}
               {vista === "Recolectores" && (
-                <>
-                  {nombre}
-                  {gremio}
-                  <Campo
-                    nombre="telefono_contacto"
-                    titulo="Teléfono de contacto (opcional)"
-                    tipo="tel"
-                    opcional
-                  />
-                </>
+                seleccion ? (
+                  <>
+                    <Campo nombre="nombre" titulo="Nombre" maxLength={120} valorInicial={seleccion.nombre} />
+                    <Campo
+                      nombre="telefono_contacto"
+                      titulo="Teléfono de contacto (opcional)"
+                      tipo="tel"
+                      opcional
+                      valorInicial={seleccion.telefono_contacto ?? ""}
+                    />
+                    <label>
+                      Estado
+                      <select name="activo" defaultValue={String(seleccion.activo)}>
+                        <option value="true">Activo</option>
+                        <option value="false">Inactivo</option>
+                      </select>
+                    </label>
+                    <button type="button" className="btn" onClick={() => setSeleccion(null)}>Volver</button>
+                  </>
+                ) : (
+                  <>
+                    {nombre}
+                    {gremio}
+                    <Campo
+                      nombre="telefono_contacto"
+                      titulo="Teléfono de contacto (opcional)"
+                      tipo="tel"
+                      opcional
+                    />
+                  </>
+                )
               )}
               {vista === "Unidades" && (
                 <>
@@ -540,7 +635,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                     opciones={
                       unidades.datos?.map((u) => [
                         u.id,
-                        u.referencia_local || u.id,
+                        u.etiqueta || u.referencia_local || u.id,
                       ]) || []
                     }
                   />
@@ -612,8 +707,28 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
               {vista === "Educación" && (
                 seleccion ? (
                   <>
-                    <p>{seleccion.texto}</p>
-                    <button type="button" className="btn" onClick={() => setSeleccion(null)}>Volver al editor</button>
+                    <p>{estadoContenido(seleccion)}</p>
+                    <Campo nombre="titulo" titulo="Título" maxLength={160} valorInicial={seleccion.titulo} />
+                    <Campo
+                      nombre="tema"
+                      titulo="Tema"
+                      valorInicial={seleccion.tema}
+                      opciones={Object.entries(temasEducativos)}
+                    />
+                    <Campo
+                      nombre="texto"
+                      titulo="Contenido educativo"
+                      tipo="textarea"
+                      maxLength={2000}
+                      valorInicial={seleccion.texto ?? ""}
+                    />
+                    <Campo
+                      nombre="accion_contenido"
+                      titulo="Acción"
+                      valorInicial="guardar"
+                      opciones={accionesContenido(seleccion)}
+                    />
+                    <button type="button" className="btn" onClick={() => setSeleccion(null)}>Volver</button>
                   </>
                 ) : <>
                   <Campo nombre="titulo" titulo="Título" maxLength={160} />
@@ -630,10 +745,31 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                     ["true", "Publicar en la guía"],
                     ["false", "Guardar como borrador"],
                   ]} />
-                  <p>Este listado solo muestra publicaciones vigentes. Los borradores y los contenidos retirados quedan guardados, pero aún no se pueden recuperar desde aquí.</p>
                 </>
               )}
-              {(vista === "Materiales" || vista === "Motivos") && (
+              {vista === "Materiales" && (
+                seleccion ? (
+                  <>
+                    <p>Código: {seleccion.codigo}. El código y el colectivo no cambian.</p>
+                    <Campo nombre="nombre" titulo="Nombre" maxLength={120} valorInicial={seleccion.nombre} />
+                    <label>
+                      Estado
+                      <select name="activo" defaultValue={String(seleccion.activo)}>
+                        <option value="true">Activo</option>
+                        <option value="false">Inactivo</option>
+                      </select>
+                    </label>
+                    <button type="button" className="btn" onClick={() => setSeleccion(null)}>Volver</button>
+                  </>
+                ) : (
+                  <>
+                    {nombre}
+                    {codigo}
+                    {gremio}
+                  </>
+                )
+              )}
+              {vista === "Motivos" && (
                 <>
                   {nombre}
                   {codigo}

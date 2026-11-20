@@ -168,9 +168,19 @@ export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asigna
   // Recolectores del gremio, más cualquiera que tenga paradas y ya no esté activo.
   const lista = [...recolectores];
   for (const o of visibles) {
+
     const a = o.asignacion;
     if (a && !lista.some((r) => r.id === a.recolector_id)) {
-      lista.push({ id: a.recolector_id, nombre: a.recolector_nombre, telefono_contacto: null, gremio_id: o.gremio_id, activo: false });
+      lista.push({
+        id: a.recolector_id,
+        nombre: a.recolector_nombre,
+        telefono_contacto: null,
+        gremio_id: o.gremio_id,
+        activo: false,
+        tipo: "reciclador",
+        version: 0,
+      });
+
     }
   }
   const conParadas = lista

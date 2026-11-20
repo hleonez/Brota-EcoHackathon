@@ -30,7 +30,8 @@ Códigos: `200`, `201`, `202`, `400`, `401`, `403`, `404` (inexistente o fuera d
 `422`, `503`. Códigos de error de dominio: `VALIDATION_ERROR`, `VERSION_CONFLICT`,
 `INVALID_TRANSITION`, `OPEN_REQUEST_EXISTS`, `IDEMPOTENCY_CONFLICT`, `CONSENT_REQUIRED`,
 `NOT_REGISTERED`, `CONTACT_ALREADY_REGISTERED`, `LIGA_NOT_CONFIGURED`, `VIGENCIA_SOLAPADA`,
-`DEPENDENCY_PENDING`, `OPERATION_TOO_OLD`, `DUPLICATE`, `INVALID_CREDENTIALS`, `PILOT_NOT_ENABLED`.
+`DEPENDENCY_PENDING`, `OPERATION_TOO_OLD`, `DUPLICATE`, `INVALID_CREDENTIALS`, `PILOT_NOT_ENABLED`,
+`TIQUETE_ILEGIBLE`.
 
 ## 2. Actores y autenticación
 
@@ -76,6 +77,7 @@ directorio de unidades ni datos personales. Fundación ve reportes agregados, si
 | --- | --- | --- |
 | ● | `GET /v1/conjuntos`, `GET /v1/conjuntos/{id}/torres` | Torres con `numero_viviendas` vigente |
 | ● | `GET /v1/unidades` | Canal: coincidencia exacta `torre_id` + `referencia`. Directorio filtrado: solo coordinación de su gremio. Admin, fundación y trabajador reciben `403` |
+| ● | `GET /v1/unidades/gestion` | Solo admin. Unidades activas con `id`, `tipo`, `referencia_local`, `etiqueta` y torre. Filtro opcional `tipo`. Coordinación, fundación y trabajador reciben `403`. No abre el directorio de coordinación |
 | ● | `POST /v1/unidades` | Admin |
 | ● | `GET /v1/catalogos` | Gremios, tipos de servicio, materiales, motivos, puntos de recepción, equivalencias vigentes |
 | ● | `GET`, `POST /v1/recolectores`, `PATCH /v1/recolectores/{id}` | Coordinación del gremio o admin |
@@ -123,7 +125,7 @@ Regla de solicitud abierta (configurable, `REGLA_SOLICITUD_ABIERTA`): un servici
 | ● | `POST /v1/pesajes/{id}/confirmacion` | Revalida y aplica precios vigentes; solo confirmados cuentan |
 | ● | `POST /v1/pesajes/{id}/correcciones` | Anula y crea reemplazo confirmado (`sustituye_pesaje_id`) |
 | ● | `POST /v1/entregas-directas` | `{punto_recepcion_id, unidad_id?, participante_id?, pesaje}`; puntos al confirmar |
-| ○ | `POST /v1/pesajes/desde-foto` | Papel Inteligente (M06) |
+| ● | `POST /v1/pesajes/desde-foto` | Papel Inteligente. Coordinación del gremio e `Idempotency-Key`. `{gremio_id, imagen: {mime_type: image/*, datos_base64}, recolector_id?, fecha_medicion?, orden_ids?, torre_origen_id?, unidad_medida_id?, emisor_tiquete?}`. Crea borrador `origen_captura=foto_ia`; no lo confirma ni guarda la imagen. La respuesta añade `dudosos` (`campo`, `confianza?`, `detalle`) y `materiales_descartados`. Umbral 0,6: la línea entra al borrador y queda marcada si hay kilos; sin kilos no entra. Un `GET` posterior no repite `dudosos`. Códigos fuera del catálogo del gremio se descartan. `422 TIQUETE_ILEGIBLE` si no hay ninguna línea usable. `503 IA_NO_DISPONIBLE` si la IA está apagada: no se guarda nada y el pesaje se registra a mano. La confirmación sigue en `POST /v1/pesajes/{id}/confirmacion` |
 
 ### M06 · IA (Gemini)
 | | Ruta | Notas |
@@ -143,6 +145,7 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 | | Ruta | Notas |
 | --- | --- | --- |
 | ● | `GET /v1/contenidos-educativos` | Se lee sin sesión. Público: `tema` (`separacion`, `huerta`, `horarios_rutas`, `servicio`), `version`, vigencia y publicación. Filtro `tema`. Borradores (`publicado` falso) y retirados (`activo` falso o fuera de vigencia) no aparecen; un Bearer inválido sigue en `401`. Admin: `PATCH /v1/contenidos-educativos/{id}` edita título, texto, tema, publicación, activo, gremio y vigencia |
+| ● | `GET /v1/contenidos-educativos/gestion` | Solo admin. El mismo contenido, incluidos borradores, retirados y fuera de vigencia. Filtro opcional `tema`. Coordinación y fundación reciben `403`. La lectura pública no cambia |
 | ● | `GET /v1/ordenes/{id}/avisos` | Estado de avisos de una orden (coordinación) |
 | ● | `POST /v1/canal/avisos/reservas`, `POST /v1/canal/avisos/{id}/resultado`, `GET /v1/canal/avisos` | Bot (modo pull). Modo webhook: ver integracion-bot.md |
 
@@ -152,10 +155,11 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 | ● | `GET /v1/liga` | `conjunto_id, desde, hasta`. % hogares con entrega válida / viviendas vigentes; desempate por kg atribuidos |
 | ● | `GET /v1/reportes/resumen` | Órdenes por estado, resultados, kg por material (báscula/estimado), valor estimado, hogares, tasas, cobertura |
 | ● | `GET /v1/reportes/serie` | kg por `dia`/`semana`/`mes` local, para gráficas |
-| ○ | Exportaciones, Certificado Verde, hoja de ruta, `/trabajos/{id}` | Pendiente |
+| ● | `GET /v1/reportes/certificado` | Fundación o administración. `conjunto_id` y `mes=AAAA-MM`. Responde `application/pdf` (`certificado-verde-{conjunto}-{mes}.pdf`), generado al vuelo y sin persistir la emisión. Kilos aprovechados (reciclables), compostados (orgánicos), tasa de rechazo, hogares y torres. Solo pesajes `confirmado` del mes en `America/Bogota` con torre del conjunto. Un mes sin datos devuelve PDF en ceros. Coordinación: `403`. Mes inválido: `422`. Conjunto inexistente: `404`. Apoyo documental: no determina la tarifa ni sustituye el aforo |
+| ○ | Exportaciones Excel, hoja de ruta, `/trabajos/{id}` | Pendiente |
 
 ### M10 · Configuración (admin)
-● `POST /v1/materiales`, `PATCH /v1/materiales/{id}`, `POST /v1/motivos-rechazo`,
+● `GET /v1/materiales` (admin; incluye inactivos y `version`), `POST /v1/materiales`, `PATCH /v1/materiales/{id}` (nombre y activo), `POST /v1/motivos-rechazo`,
 `POST /v1/contenidos-educativos`, `POST /v1/precios-material`, `POST /v1/equivalencias`,
 `POST /v1/reglas-incentivo` (parámetros v1: `{"puntos": "10"}`), `POST /v1/torres/{id}/capacidades`,
 `GET /v1/configuracion?tipo=`. Una versión nueva cierra la vigente; los solapamientos dan `409`.
@@ -181,7 +185,7 @@ envío de WhatsApp.
   del gremio; los avisos indican `destino.tipo` (`participante` u `operador`).
 - La Liga usa una fórmula fija identificada (`participacion_hogares_v1`) y el número de viviendas
   vigente al cierre del periodo; `version_regla_liga` queda para cuando se apruebe otra fórmula.
-- No implementados todavía: archivos, canjes, exportaciones, certificados y hojas de ruta.
+- No implementados todavía: archivos, canjes, exportaciones Excel y hojas de ruta. El Certificado Verde sí se emite en `GET /v1/reportes/certificado` y no se persiste.
 - `POST /v1/ia/interpretar` responde `503` y no llama a Gemini. `GET /v1/capacidades` informa `ia_disponible: false` y `piloto: restringido`.
 
 ## 5. Cambios incompatibles de `0.3-ecoconecta.2`
@@ -195,4 +199,4 @@ El bot y el panel tienen que dejar de enviar `preferencia_horaria` como campo de
 - El cierre envía `materiales_confirmados` como lista de UUID del catálogo `material`. Un UUID desconocido no se guarda ni se inventa. Los kilos siguen saliendo del pesaje.
 - Tratar `programada` como estado propio. `cancelada` y `rechazada` no son recogidas. Una recogida junto con un rechazo es `finalizada_con_novedades`, no `atendida`.
 - Mostrar `tema` en educación y las `habilitaciones` de `GET /v1/me`.
-- No usar el directorio `GET /v1/unidades` desde admin, fundación o la cuenta del trabajador.
+- No usar el directorio `GET /v1/unidades` desde admin, fundación o la cuenta del trabajador. La administración lista unidades con `GET /v1/unidades/gestion`.
