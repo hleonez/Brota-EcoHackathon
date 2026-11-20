@@ -19,3 +19,17 @@ Esta primera versión usa activación/revocación, sin fechas de caducidad. Las 
 4. Publicación de contenidos, reportes actualizados y validación completa de RN-01 a RN-08.
 
 También queda pendiente retirar Gemini de la configuración de entrega o sustituirlo por un proveedor autorizado. Los clientes web y bot deben integrar las nuevas capacidades; este trabajo corresponde al backend.
+
+
+## Fases 2 a 4: ampliaciones implementadas
+
+- `0008`: preferencia horaria textual en solicitudes y bandeja, estado `programada`, POST `/v1/ordenes/{id}/programacion` con inicio/fin obligatorios. Reprogramar conserva versiones de asignación y encola aviso. Asignar con fecha completa produce estado programada; sin fecha queda asignada. Cancelación y control de duplicados incluyen programadas.
+- `0009`: materiales confirmados al cerrar, con validación de existencia, actividad, duplicados y pertenencia al gremio; detalle histórico del cálculo de puntos disponible en movimientos. Los campos históricos permanecen nulos, sin inventar evidencias. La lista de materiales se almacena como JSONB de IDs validada por servicio, todavía sin tabla relacional de detalle.
+- `0010`: contenidos por tema (separación, huerta, horarios/rutas, servicio), publicación y versión. PATCH `/v1/contenidos-educativos/{id}/publicacion` publica o retira con control de versión. Consulta y avisos educativos excluyen no publicados.
+- Reportes incluyen programadas y canceladas.
+
+Validación local: ocho pruebas de permisos, validación de programación y OpenAPI aprobadas. Generación SQL de las migraciones nuevas comprobada. Falta ejecución integrada sobre PostgreSQL y aplicar las migraciones.
+
+### Brechas que siguen pendientes
+
+Por compatibilidad, preferencia horaria y materiales confirmados son opcionales; el cierre aún admite asignadas sin horario. Es necesario actualizar los clientes y endurecer estas condiciones para cumplir estrictamente el recorrido oficial. También faltan evidencia explícita del acuerdo horario, diferenciación del ejecutor histórico del cierre, vigencia del piloto, temas/contenidos reales de huertas de la zona, corrección del resumen general de solicitudes canceladas, integración offline de programación y reemplazo/desactivación de Gemini. Los cambios no constituyen todavía cumplimiento completo de RN-01 a RN-08.

@@ -32,6 +32,7 @@ from app.models import (
     ContenidoMotivo,
     Gremio,
     MotivoRechazo,
+    Material,
     Orden,
     Recolector,
     ResultadoOrden,
@@ -70,6 +71,7 @@ class AsignacionIn(Entrada):
 
 
 class ResultadoIn(Entrada):
+    materiales_confirmados: list[uuid.UUID] | None = Field(default=None, max_length=50)
     version_esperada: int
     resultado: Literal["recogida", "rechazada"]
     ocurrido_at: InstanteEntrada
@@ -118,7 +120,7 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
     o = orden_de_coordinacion(db, actor, orden_id, bloquear=True)
     actor.exigir_coordinacion(o.gremio_id)
     verificar_version(datos.version_esperada, o.version)
-    if o.estado not in ("nueva", "asignada"):
+    if o.estado not in ("nueva", "asignada", "programada"):
         raise transicion_invalida(f"La orden está {o.estado}; ya no se puede asignar.")
     r = referencia_activa(db, Recolector, datos.recolector_id, "recolector_id", "Recolector")
     if r.gremio_id != o.gremio_id:
@@ -139,7 +141,7 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
             vigente_desde=t,
         )
     )
-    o.estado = "asignada"
+    o.estado = "programada" if datos.inicio is not None else "asignada"
     o.version += 1
     registrar_evento(
         db,
@@ -180,14 +182,14 @@ def _contenido_para(db: Session, motivo_id: uuid.UUID) -> ContenidoEducativo | N
     c = db.execute(
         select(ContenidoEducativo)
         .join(ContenidoMotivo, ContenidoMotivo.contenido_id == ContenidoEducativo.id)
-        .where(ContenidoMotivo.motivo_rechazo_id == motivo_id, ContenidoEducativo.activo.is_(True))
+        .where(ContenidoMotivo.motivo_rechazo_id == motivo_id, ContenidoEducativo.activo.is_(True), ContenidoEducativo.publicado.is_(True))
         .order_by(ContenidoEducativo.created_at.desc())
         .limit(1)
     ).scalar_one_or_none()
     if c is None:
         c = db.execute(
             select(ContenidoEducativo)
-            .where(ContenidoEducativo.general.is_(True), ContenidoEducativo.activo.is_(True))
+            .where(ContenidoEducativo.general.is_(True), ContenidoEducativo.activo.is_(True), ContenidoEducativo.publicado.is_(True))
             .order_by(ContenidoEducativo.created_at.desc())
             .limit(1)
         ).scalar_one_or_none()
@@ -197,7 +199,7 @@ def _contenido_para(db: Session, motivo_id: uuid.UUID) -> ContenidoEducativo | N
 def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: ResultadoIn) -> OrdenResultadoOut:
     o = orden_de_coordinacion(db, actor, orden_id, bloquear=True)
     verificar_version(datos.version_esperada, o.version)
-    if o.estado != "asignada":
+    if o.estado not in ("asignada", "programada"):
         raise transicion_invalida(
             "Solo se registra el resultado de una orden asignada." if o.estado == "nueva"
             else f"La orden ya está {o.estado}."
@@ -214,7 +216,20 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
     elif datos.motivo_rechazo_id is not None:
         raise invalido({"motivo_rechazo_id": "Una recogida no lleva motivo de rechazo"})
 
+    if datos.materiales_confirmados is not None:
+        if len(set(datos.materiales_confirmados)) != len(datos.materiales_confirmados):
+            raise invalido({"materiales_confirmados": "Materiales repetidos"})
+        if datos.resultado == "recogida" and not datos.materiales_confirmados:
+            raise invalido({"materiales_confirmados": "Confirma al menos un material"})
+        if datos.resultado == "rechazada" and datos.materiales_confirmados:
+            raise invalido({"materiales_confirmados": "Un rechazo no confirma materiales aceptados"})
+        for mid in datos.materiales_confirmados:
+            material = referencia_activa(db, Material, mid, "materiales_confirmados", "Material")
+            if material.gremio_id != o.gremio_id:
+                raise invalido({"materiales_confirmados": "Material de otro gremio"})
+
     res = ResultadoOrden(
+        materiales_confirmados=[str(m) for m in datos.materiales_confirmados] if datos.materiales_confirmados is not None else None,
         orden_id=o.id,
         resultado=datos.resultado,
         motivo_rechazo_id=datos.motivo_rechazo_id,
@@ -303,7 +318,7 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
 @router.get("/ordenes")
 def get_ordenes(
     gremio_id: uuid.UUID | None = Query(None),
-    estado: Literal["nueva", "asignada", "recogida", "rechazada", "cancelada"] | None = Query(None),
+    estado: Literal["nueva", "asignada", "programada", "recogida", "rechazada", "cancelada"] | None = Query(None),
     recolector_id: uuid.UUID | None = Query(None),
     desde: InstanteEntrada | None = Query(None),
     hasta: InstanteEntrada | None = Query(None),
@@ -371,3 +386,36 @@ def post_resultado(
     return escritura(request, db, actor, datos, lambda: registrar_resultado(db, actor, orden_id, datos))
 
 
+
+
+class ProgramacionIn(Entrada):
+    version_esperada: int
+    inicio: InstanteEntrada
+    fin: InstanteEntrada
+
+    @model_validator(mode="after")
+    def validar_franja(self):
+        if self.fin <= self.inicio:
+            raise ValueError("fin debe ser posterior a inicio")
+        return self
+
+
+def programar(db, actor, orden_id, datos):
+    o = orden_de_coordinacion(db, actor, orden_id, bloquear=True)
+    actor.exigir_coordinacion(o.gremio_id)
+    verificar_version(datos.version_esperada, o.version)
+    vigente = next((a for a in o.asignaciones if a.vigente_hasta is None), None)
+    if vigente is None or o.estado not in ("asignada", "programada"):
+        raise transicion_invalida("Asigna un responsable antes de programar.")
+    resultado = asignar(db, actor, orden_id, AsignacionIn(
+        version_esperada=datos.version_esperada, recolector_id=vigente.recolector_id,
+        inicio=datos.inicio, fin=datos.fin, forma_aviso=vigente.forma_aviso))
+    registrar_evento(db, "orden_programada", actor, solicitud_id=o.solicitud_id, orden_id=o.id,
+        datos={"inicio": datos.inicio.isoformat(), "fin": datos.fin.isoformat()})
+    return resultado
+
+
+@router.post("/ordenes/{orden_id}/programacion")
+def post_programacion(orden_id: uuid.UUID, datos: ProgramacionIn, request: Request,
+    actor: Actor = Depends(actor_operador), db: Session = Depends(get_db)):
+    return escritura(request, db, actor, datos, lambda: programar(db, actor, orden_id, datos))

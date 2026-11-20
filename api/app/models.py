@@ -353,6 +353,7 @@ class Solicitud(Base):
     """Pedido del residente. Su `codigo_pasaporte` (BR-00018) es el Pasaporte Circular."""
 
     __tablename__ = "solicitud"
+    preferencia_horaria: Mapped[str | None] = mapped_column(String(300))
     __table_args__ = (Index("ix_solicitud_unidad_creacion", "unidad_id", "created_at", "id"),)
     id: Mapped[uuid.UUID] = _pk()
     codigo_pasaporte: Mapped[str] = mapped_column(String(20), unique=True)
@@ -440,7 +441,7 @@ class Orden(Base):
     __tablename__ = "orden"
     __table_args__ = (
         UniqueConstraint("solicitud_id", "gremio_id"),
-        CheckConstraint("estado IN ('nueva','asignada','recogida','rechazada','cancelada')", name="estado"),
+        CheckConstraint("estado IN ('nueva','asignada','programada','recogida','rechazada','cancelada')", name="estado"),
         Index("ix_orden_bandeja", "gremio_id", "estado", "created_at", "id"),
     )
     id: Mapped[uuid.UUID] = _pk()
@@ -481,6 +482,7 @@ class Asignacion(Base):
 
 class ResultadoOrden(Base):
     __tablename__ = "resultado_orden"
+    materiales_confirmados: Mapped[list[str] | None] = mapped_column(JSONB)
     __table_args__ = (
         CheckConstraint("resultado IN ('recogida','rechazada')", name="resultado"),
         CheckConstraint(
@@ -617,6 +619,7 @@ class MovimientoPuntos(Base):
     """Libro inmutable. El saldo es la suma de `delta`; `clave_aplicacion` evita doble abono."""
 
     __tablename__ = "movimiento_puntos"
+    detalle_calculo: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     __table_args__ = (
         CheckConstraint("tipo IN ('abono','debito_canje','reversion','reintegro')", name="tipo"),
         CheckConstraint("tipo <> 'abono' OR delta > 0", name="abono_positivo"),
@@ -643,6 +646,9 @@ class MovimientoPuntos(Base):
 
 class ContenidoEducativo(Base):
     __tablename__ = "contenido_educativo"
+    tema: Mapped[str] = mapped_column(String(30), default="separacion", server_default="separacion")
+    publicado: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     __table_args__ = (CheckConstraint("tipo IN ('video','imagen','texto')", name="tipo"),)
     id: Mapped[uuid.UUID] = _pk()
     titulo: Mapped[str] = mapped_column(String(160))

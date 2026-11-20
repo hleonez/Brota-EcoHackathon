@@ -123,6 +123,8 @@ class MotivoOut(Salida):
 
 
 class ContenidoIn(Entrada):
+    tema: Literal["separacion", "huerta", "horarios_rutas", "servicio"] = "separacion"
+    publicado: bool = True
     titulo: str = Field(min_length=1, max_length=160)
     tipo: Literal["video", "imagen", "texto"]
     recurso: str | None = Field(default=None, max_length=500, pattern=r"^https://")
@@ -133,6 +135,9 @@ class ContenidoIn(Entrada):
 
 
 class ContenidoOut(Salida):
+    tema: str
+    publicado: bool
+    version: int
     id: uuid.UUID
     titulo: str
     tipo: str
@@ -204,6 +209,7 @@ def post_contenido(datos: ContenidoIn, request: Request, actor: Actor = Depends(
         for i, mid in enumerate(datos.motivo_rechazo_ids):
             referencia_activa(db, MotivoRechazo, mid, f"motivo_rechazo_ids.{i}", "Motivo")
         c = ContenidoEducativo(
+            tema=datos.tema, publicado=datos.publicado,
             titulo=datos.titulo, tipo=datos.tipo, recurso=datos.recurso, texto=datos.texto, general=datos.general
         )
         db.add(c)
@@ -406,3 +412,21 @@ def get_configuracion(
     if fecha is not None:
         stmt = stmt.where(modelo.vigente_desde <= fecha, or_(modelo.vigente_hasta.is_(None), modelo.vigente_hasta > fecha))
     return {"data": [salida.model_validate(v).model_dump(mode="json") for v in db.execute(stmt).scalars()]}
+
+
+class PublicacionIn(Entrada):
+    version_esperada: int
+    publicado: bool
+
+
+@router.patch("/contenidos-educativos/{contenido_id}/publicacion")
+def publicar_contenido(contenido_id: uuid.UUID, datos: PublicacionIn, request: Request,
+    actor: Actor = Depends(actor_admin), db: Session = Depends(get_db)):
+    def ejecutar():
+        c = obtener(db, ContenidoEducativo, contenido_id, "contenido", bloquear=True)
+        verificar_version(datos.version_esperada, c.version)
+        c.publicado = datos.publicado
+        c.version += 1
+        db.flush()
+        return ContenidoOut.model_validate(c)
+    return escritura(request, db, actor, datos, ejecutar)

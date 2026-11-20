@@ -56,13 +56,14 @@ from app.modulos.residuos import (
 
 router = APIRouter(tags=["solicitudes"])
 
-ABIERTAS = ("nueva", "asignada")
+ABIERTAS = ("nueva", "asignada", "programada")
 FINALES = ("recogida", "rechazada", "cancelada")
 
 # --------------------------------------------------------------------------- esquemas
 
 
 class SolicitudIn(Entrada):
+    preferencia_horaria: str | None = Field(default=None, min_length=1, max_length=300)
     unidad_id: uuid.UUID | None = Field(
         default=None, description="Opcional si el participante tiene exactamente una unidad vinculada"
     )
@@ -91,6 +92,7 @@ class AsignacionOut(Salida):
 
 
 class ResultadoOut(Salida):
+    materiales_confirmados: list[str] | None = None
     resultado: str
     motivo_rechazo_id: uuid.UUID | None
     motivo_rechazo_nombre: str | None
@@ -116,6 +118,7 @@ class OrdenOut(Salida):
 
 
 class OrdenBandejaOut(OrdenOut):
+    preferencia_horaria: str | None = None
     """Vista de coordinación: datos mínimos para prestar el servicio."""
 
     unidad_id: uuid.UUID
@@ -133,6 +136,7 @@ class AvanceOut(Salida):
 
 
 class SolicitudOut(Salida):
+    preferencia_horaria: str | None = None
     id: uuid.UUID
     created_at: Instante
     version: int
@@ -202,6 +206,7 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
         motivo = db.get(MotivoRechazo, r.motivo_rechazo_id) if r.motivo_rechazo_id else None
         res = ResultadoOut(
             resultado=r.resultado,
+            materiales_confirmados=r.materiales_confirmados,
             motivo_rechazo_id=r.motivo_rechazo_id,
             motivo_rechazo_nombre=motivo.nombre if motivo else None,
             observacion=r.observacion,
@@ -239,6 +244,7 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
         torre_id=s.unidad.torre_id,
         contacto_nombre=contacto.nombre if contacto and contacto.estado != "eliminado" else None,
         observacion=s.observacion,
+        preferencia_horaria=s.preferencia_horaria,
     )
 
 
@@ -248,7 +254,7 @@ def _estado_general(ordenes: list[Orden]) -> str:
         return "atendida"
     if finales:
         return "parcial"
-    if any(o.estado == "asignada" for o in ordenes):
+    if any(o.estado in ("asignada", "programada") for o in ordenes):
         return "en_curso"
     return "pendiente"
 
@@ -270,6 +276,7 @@ def solicitud_out(db: Session, s: Solicitud, actor: Actor) -> SolicitudOut:
         ubicacion_operativa=s.ubicacion_operativa,
         canal_origen=s.canal_origen,
         observacion=s.observacion,
+        preferencia_horaria=s.preferencia_horaria,
         tipo_servicio_ids=[x.tipo_servicio_id for x in s.servicios],
         avance=AvanceOut(
             ordenes_totales=len(visibles),
@@ -365,6 +372,7 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
         participante_id=actor.participante_id,
         canal_origen=actor.canal,
         observacion=datos.observacion,
+        preferencia_horaria=datos.preferencia_horaria,
         ubicacion_operativa=etiqueta_unidad(unidad),
     )
     db.add(s)

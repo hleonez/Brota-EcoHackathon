@@ -241,13 +241,16 @@ def get_avisos_orden(
 
 @router.get("/contenidos-educativos")
 def get_contenidos(
+    tema: Literal["separacion", "huerta", "horarios_rutas", "servicio"] | None = Query(None),
     material_id: uuid.UUID | None = Query(None),
     motivo_rechazo_id: uuid.UUID | None = Query(None),
     actor: Actor = Depends(get_actor),
     pag: Paginacion = Depends(paginacion),
     db: Session = Depends(get_db),
 ):
-    stmt = select(ContenidoEducativo).where(ContenidoEducativo.activo.is_(True))
+    stmt = select(ContenidoEducativo).where(ContenidoEducativo.activo.is_(True), ContenidoEducativo.publicado.is_(True))
+    if tema:
+        stmt = stmt.where(ContenidoEducativo.tema == tema)
     if motivo_rechazo_id:
         stmt = stmt.where(
             or_(
