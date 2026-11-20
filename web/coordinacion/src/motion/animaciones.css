@@ -1,0 +1,104 @@
+/* David owns motion. Layout, visibility semantics and focus belong to React. */
+:root {
+  --eco-motion-fast: 160ms;
+  --eco-motion-dialog: 200ms;
+  --eco-motion-nav: 220ms;
+  --eco-motion-highlight: 600ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* A desktop sidebar stays stable. React supplies inert/hidden on mobile. */
+@media (max-width: 1023px) {
+  [data-motion="nav"][data-state] {
+    transition: transform var(--eco-motion-nav) var(--ease-drawer),
+      opacity var(--eco-motion-nav) var(--ease-out);
+  }
+
+  [data-motion="nav"][data-state="open"] {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  [data-motion="nav"][data-state="closed"] {
+    transform: translateX(-100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+[data-motion="dialog"][data-state] {
+  transform-origin: center;
+  transition: transform var(--eco-motion-dialog) var(--ease-out),
+    opacity var(--eco-motion-dialog) var(--ease-out);
+}
+
+[data-motion="dialog"][data-state="open"] {
+  transform: scale(1);
+  opacity: 1;
+}
+
+[data-motion="dialog"][data-state="closed"] {
+  transform: scale(0.97);
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-motion="notice"][data-state] {
+  transition: transform var(--eco-motion-fast) var(--ease-out),
+    opacity var(--eco-motion-fast) var(--ease-out);
+}
+
+[data-motion="notice"][data-state="open"] {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+[data-motion="notice"][data-state="closed"] {
+  transform: translateY(4px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Progressive enhancement. Older browsers reveal newly mounted elements instantly. */
+@starting-style {
+  @media (max-width: 1023px) {
+    [data-motion="nav"][data-state="open"] {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+  }
+
+  [data-motion="dialog"][data-state="open"] {
+    transform: scale(0.97);
+    opacity: 0;
+  }
+
+  [data-motion="notice"][data-state="open"] {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+}
+
+/* Applied once on arrival. Keep React's static "new" label throughout. */
+[data-motion="new-item"][data-state="new"] {
+  animation: eco-item-arrival var(--eco-motion-highlight) var(--ease-out) 1;
+}
+
+@keyframes eco-item-arrival {
+  from { opacity: 0.72; }
+  to { opacity: 1; }
+}
+
+/* Immediate opt-out for frequent or keyboard-triggered interactions. */
+[data-motion][data-motion-instant] {
+  transition: none;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-motion][data-state] {
+    transition: none;
+    animation: none;
+  }
+}
