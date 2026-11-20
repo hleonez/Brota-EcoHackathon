@@ -11,6 +11,7 @@ Para varias réplicas del bot, cambiar `Memoria` por Redis.
 from __future__ import annotations
 
 import logging
+import random
 import re
 import time
 import unicodedata
@@ -192,7 +193,7 @@ class Brisa:
             nombre = e.nombre
             self.memoria.borrar(m.de)
             await self.wa.texto(m.de, T.REGISTRADO.format(nombre=nombre))
-            await self._menu(m.de, nombre)
+            await self._menu(m.de, nombre, saludo=True)
             return
 
         # Paso desconocido: reiniciar.
@@ -238,7 +239,8 @@ class Brisa:
         caso = self.soporte.esperando(m.de)  # tipo de reporte que espera su detalle
 
         if opcion == "M_MENU" or comando in PALABRAS_MENU or comando in SALUDOS:
-            await self._menu(m.de, nombre)  # el borrador se conserva: el menú ofrece seguirlo
+            # El borrador se conserva: el menú ofrece seguirlo. Al saludo, Brisa se presenta.
+            await self._menu(m.de, nombre, saludo=comando in SALUDOS)
         elif opcion in ("M_PEDIR", "RECICLABLES", "ORGANICOS", "LOS_DOS"):  # los tres últimos: menú anterior
             await self.pedido.empezar(m.de)
         elif opcion == "M_DUDA":
@@ -386,19 +388,26 @@ class Brisa:
         elif r.get("aclaracion") and intencion != "saludo":
             await self.wa.texto(m.de, r["aclaracion"])
         else:
-            await self._menu(m.de, nombre)
+            await self._menu(m.de, nombre, saludo=intencion == "saludo")
 
     async def _decir(self, celular: str, texto: str | None) -> None:
         if texto:
             await self.wa.texto(celular, texto)
 
-    async def _menu(self, celular: str, nombre: str) -> None:
+    async def _menu(self, celular: str, nombre: str, saludo: bool = False) -> None:
+        """Menú en lista. Con `saludo`, Brisa saluda según la hora y se presenta; si no, pregunta corto."""
+        primer_nombre = (nombre or "vecino").split()[0]
+        if saludo:
+            cuerpo = T.MENU_SALUDO.format(hola=_saludo_del_momento(), nombre=primer_nombre,
+                                          frase=random.choice(T.FRASES_SALUDO))
+        else:
+            cuerpo = T.MENU_CORTO.format(nombre=primer_nombre)
         filas = list(FILAS_MENU)
         b = self.pedido.activo(celular)
         if b and b.items:
             n = len(b.items)
             filas.insert(0, Fila("P_SEGUIR", "📝 Seguir mi pedido", f"{n} material{'es' if n != 1 else ''} sin enviar"))
-        await self.wa.lista(celular, T.MENU_LISTA.format(nombre=nombre), "Ver opciones", "Brisa", filas)
+        await self.wa.lista(celular, cuerpo, "Ver opciones", "Brisa", filas, T.MENU_LISTA_PIE)
 
     async def _estado(self, celular: str) -> None:
         abiertas = await self.api.solicitudes_abiertas(celular)
@@ -440,6 +449,11 @@ class Brisa:
                 porcentaje=_numero(mia["porcentaje_participacion"]).replace(".", ","),
             ),
         )
+
+
+def _saludo_del_momento(ahora: datetime | None = None) -> str:
+    h = (ahora or datetime.now(timezone(timedelta(hours=-5)))).hour  # Bogotá
+    return "Buenos días" if 5 <= h < 12 else "Buenas tardes" if 12 <= h < 19 else "Buenas noches"
 
 
 def _hora_local(iso: str) -> str:

@@ -163,24 +163,23 @@ class WhatsApp:
             interactive["footer"] = {"text": pie[:60]}
         return await self._post({"to": a, "type": "interactive", "interactive": interactive})
 
-    async def lista(self, a: str, cuerpo: str, boton: str, titulo_seccion: str, filas: list[Fila]) -> str:
+    async def lista(
+        self, a: str, cuerpo: str, boton: str, titulo_seccion: str, filas: list[Fila], pie: str | None = None
+    ) -> str:
         rows = []
         for f in filas[:10]:
             row = {"id": f.id, "title": f.titulo[:24]}
             if f.descripcion:
                 row["description"] = f.descripcion[:72]
             rows.append(row)
-        return await self._post(
-            {
-                "to": a,
-                "type": "interactive",
-                "interactive": {
-                    "type": "list",
-                    "body": {"text": cuerpo[:1024]},
-                    "action": {"button": boton[:20], "sections": [{"title": titulo_seccion[:24], "rows": rows}]},
-                },
-            }
-        )
+        interactive: dict[str, Any] = {
+            "type": "list",
+            "body": {"text": cuerpo[:1024]},
+            "action": {"button": boton[:20], "sections": [{"title": titulo_seccion[:24], "rows": rows}]},
+        }
+        if pie:
+            interactive["footer"] = {"text": pie[:60]}
+        return await self._post({"to": a, "type": "interactive", "interactive": interactive})
 
     async def plantilla(self, a: str, nombre: str, parametros: list[str], idioma: str) -> str:
         componentes = []

@@ -546,6 +546,20 @@ lleguen a las coordinadoras reales, poner sus números (`PATCH /v1/cuentas-opera
 
 ---
 
+## 16 · 19-nov-2026 · Saludo más cálido
+
+El menú decía solo «¡Hola, Jeremy Fontalvo! 🌱 ¿En qué te ayudo hoy?» y se sentía seco. Ahora:
+- **Al saludar** («hola», «buenas», o un saludo que entienda la IA), Brisa responde según la hora de
+  Bogotá («Buenos días / Buenas tardes / Buenas noches»), con el primer nombre. Se presenta («Soy
+  Brisa, tu asistente de reciclaje de Brota 🌱») y suma una frase amable que cambia entre varias.
+- **Pie del menú:** «Puedes escribirme o mandarme una nota de voz 🎤».
+- **Al volver al menú en medio de una conversación,** pregunta corto: «¿En qué más te puedo ayudar,
+  Jeremy? 🌱».
+
+Bot: 55 pruebas (3 nuevas). Contenedor del bot actualizado.
+
+---
+
 ## Próximos pasos
 
 - [ ] Revisar las ramas y fusionar `feat/coordinacion-whatsapp` a `main`.

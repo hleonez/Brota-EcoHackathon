@@ -40,8 +40,15 @@ ERROR = "Uy, tuve un problema para procesar eso 🙏 Intenta de nuevo en un mome
 SERVICIOS = {"RECICLABLES": "reciclables ♻", "ORGANICOS": "orgánicos 🍌"}
 
 # --------------------------------------------------------------------------- menú y pedido guiado
-MENU_LISTA = "¡Hola, {nombre}! 🌱 ¿En qué te ayudo hoy?"
-MENU_LISTA_PIE = "Puedes escribirme lo que necesites."
+MENU_SALUDO = "¡{hola}, {nombre}! 👋 Soy Brisa, tu asistente de reciclaje de Brota 🌱\n{frase}\n\n¿En qué te puedo ayudar hoy?"
+MENU_CORTO = "¿En qué más te puedo ayudar, {nombre}? 🌱"
+MENU_LISTA_PIE = "Puedes escribirme o mandarme una nota de voz 🎤"
+FRASES_SALUDO = [
+    "Espero que estés muy bien 💚",
+    "¡Qué gusto saludarte! 💚",
+    "Gracias por ayudar a que el barrio esté más limpio 💚",
+    "Cada cosa que separas bien le sirve a los recicladores y a la huerta 💚",
+]
 P_QUE_TIENES = (
     "♻ ¿Qué vas a entregar? Elige de la lista o escríbelo, por ejemplo: «cajas y botellas».\n"
     "Te digo cómo prepararlo para que el reciclador sí lo pueda llevar."
