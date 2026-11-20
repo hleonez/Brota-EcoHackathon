@@ -1,0 +1,32 @@
+# Bot de WhatsApp (Brisa) como servicio de Compose. Requiere también compose.api.yaml.
+#
+#   docker compose --env-file infra/env/dev.env -f infra/compose.yaml -f infra/compose.dev.yaml \
+#     -f infra/compose.api.yaml -f infra/compose.bot.yaml up -d --build --wait
+#
+# Lee secretos de bot/.env (token de Meta, App Secret, BOT_SERVICE_TOKEN). Llama a la API por la
+# red interna (http://api:8000); solo su webhook debe quedar expuesto a internet (proxy HTTPS).
+services:
+  bot:
+    build:
+      context: ../bot
+    env_file:
+      - path: ../bot/.env
+        required: false
+    environment:
+      BROTA_API_URL: http://api:8000
+      PORT: "8090"
+      LAB_ACTIVO: "false"  # el laboratorio es solo para desarrollo con uvicorn
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - target: 8090
+        published: "${BOT_LOCAL_PORT:-8090}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

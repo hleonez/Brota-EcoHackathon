@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laboratorio de Brisa</title>
+<style>
+  :root {
+    --bg: #eef2ee; --panel: #ffffff; --ink: #1d2a22; --muted: #66756b; --line: #d7e0d9;
+    --brand: #1f8a4c; --brand-ink: #ffffff; --chat: #e9e2d8; --in: #d6f5c6; --out: #ffffff;
+    --chip: #f1f5f2; --warn-bg: #fff6dc; --warn-line: #f0d47a;
+    --nueva: #2f6fdd; --asignada: #c98a12; --recogida: #1f8a4c; --rechazada: #c2453d;
+    --g0: #1f8a4c; --g1: #8a5a1f; --shadow: 0 1px 2px rgba(0,0,0,.08), 0 6px 18px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101511; --panel: #19201b; --ink: #e5ece7; --muted: #9aa89f; --line: #2b352e;
+      --brand: #3fb672; --brand-ink: #08130c; --chat: #0f1a14; --in: #1f5135; --out: #222b25;
+      --chip: #232c26; --warn-bg: #2d2714; --warn-line: #6b5a1f;
+      --g0: #3fb672; --g1: #d09a5a; --shadow: 0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px;
+           background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .pill { margin-left: auto; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+  .pill.ok { color: var(--brand); }
+  main { display: grid; grid-template-columns: minmax(300px, 360px) minmax(300px, 360px) minmax(360px, 1fr);
+         gap: 16px; padding: 16px; align-items: start; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr 1fr; } .tablero { grid-column: 1 / -1; } }
+  @media (max-width: 720px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
+
+  /* ---------- teléfono */
+  .phone { background: var(--panel); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden;
+           display: flex; flex-direction: column; height: calc(100vh - 110px); min-height: 520px; border: 1px solid var(--line); }
+  .phone-top { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .phone-top select { width: 100%; font: inherit; font-weight: 600; padding: 6px 8px; border-radius: 8px;
+                      border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  .phone-top small { display: block; color: var(--muted); margin-top: 4px; }
+  .chat { flex: 1; overflow-y: auto; padding: 12px 10px; background: var(--chat); display: flex; flex-direction: column; gap: 6px; }
+  .vacio { margin: auto; text-align: center; color: var(--muted); font-size: 13px; padding: 20px; }
+  .msg { max-width: 86%; padding: 7px 9px 5px; border-radius: 10px; box-shadow: 0 1px 1px rgba(0,0,0,.08);
+         white-space: pre-wrap; word-wrap: break-word; }
+  .msg.out { align-self: flex-start; background: var(--out); border-top-left-radius: 2px; }
+  .msg.in { align-self: flex-end; background: var(--in); border-top-right-radius: 2px; }
+  .msg .hora { display: block; text-align: right; font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .msg .pie { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .msg .tpl { font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px; }
+  .acciones { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .acciones button, .fila { font: inherit; border: 0; border-top: 1px solid var(--line); background: transparent;
+           color: var(--brand); padding: 7px 4px 3px; cursor: pointer; text-align: center; }
+  .acciones button:disabled, .fila:disabled { cursor: default; opacity: .6; }
+  .filas { display: none; flex-direction: column; margin-top: 4px; }
+  .filas.abiertas { display: flex; }
+  .fila { text-align: left; color: var(--ink); }
+  .fila small { display: block; color: var(--muted); }
+  .escribiendo { align-self: flex-start; font-size: 12px; color: var(--muted); font-style: italic; padding: 2px 6px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 10px 0; }
+  .chips button { font: inherit; font-size: 12px; border: 1px solid var(--line); background: var(--chip); color: var(--ink);
+                  border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+  .compose { display: flex; gap: 6px; padding: 8px 10px 10px; }
+  .compose input { flex: 1; font: inherit; padding: 9px 12px; border-radius: 999px; border: 1px solid var(--line);
+                   background: var(--panel); color: var(--ink); }
+  .compose button { border: 0; border-radius: 999px; width: 40px; background: var(--brand); color: var(--brand-ink); font-size: 16px; cursor: pointer; }
+  .compose input:disabled, .compose button:disabled { opacity: .5; }
+  .adjuntar { display: grid; place-items: center; width: 40px; border-radius: 999px; background: var(--chip); cursor: pointer; font-size: 18px; }
+  .adjuntar.apagado { opacity: .4; cursor: default; }
+
+  /* ---------- tablero */
+  .tablero { background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); border: 1px solid var(--line);
+             min-height: 520px; display: flex; flex-direction: column; }
+  .tabs { display: flex; gap: 4px; padding: 8px 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .tabs button { font: inherit; border: 0; background: transparent; color: var(--muted); padding: 8px 12px; cursor: pointer;
+                 border-bottom: 2px solid transparent; }
+  .tabs button.activa { color: var(--ink); border-bottom-color: var(--brand); font-weight: 600; }
+  .vista { padding: 14px; overflow: auto; }
+  .aviso { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  .aviso form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .aviso input { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); width: 120px; }
+  .btn { font: inherit; border: 0; border-radius: 8px; padding: 6px 12px; background: var(--brand); color: var(--brand-ink); cursor: pointer; }
+  .kanban { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; }
+  @media (max-width: 720px) { .kanban { grid-template-columns: 1fr 1fr; } }
+  .col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin: 0 0 8px; display: flex; gap: 6px; align-items: center; }
+  .col h3 .n { color: var(--muted); font-weight: 400; }
+  .punto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .tarjeta { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--panel); }
+  .tarjeta b { font-variant-numeric: tabular-nums; }
+  .tarjeta .meta { color: var(--muted); font-size: 12px; }
+  .gremio { font-size: 11px; font-weight: 600; }
+  .gremio.g0 { color: var(--g0); } .gremio.g1 { color: var(--g1); }
+  .ruta { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .ruta h4 { margin: 0; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .ruta ol { margin: 8px 0 0; padding-left: 20px; }
+  .ruta li { margin-bottom: 4px; }
+  .seccion { font-size: 13px; color: var(--muted); margin: 14px 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+  .guia ol { padding-left: 20px; } .guia li { margin-bottom: 8px; }
+  code { background: var(--chip); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌱 Laboratorio de Brisa</h1>
+  <span class="sub">Celulares simulados hablando con el bot real y la API de Brota. Nada de esto sale a Meta.</span>
+  <span class="pill" id="conexion">conectando…</span>
+</header>
+<main>
+  <div class="phone" data-slot="0"></div>
+  <div class="phone" data-slot="1"></div>
+  <section class="tablero">
+    <nav class="tabs">
+      <button data-tab="ordenes" class="activa">Órdenes</button>
+      <button data-tab="rutas">Rutas de recolectores</button>
+      <button data-tab="guia">Cómo probar</button>
+    </nav>
+    <div class="vista" id="vista"></div>
+  </section>
+</main>
+
+<script>
+const PREDETERMINADOS = ["573000000001", "573000000101"];
+const CHIPS = {
+  vecino: ["hola", "PUNTOS", "ESTADO", "LIGA"],
+  coordinacion: ["hola", "BANDEJA", "ASIGNADAS"],
+  real: [],
+};
+const ESTADOS = [["nueva", "Nuevas"], ["asignada", "Asignadas"], ["recogida", "Recogidas"], ["rechazada", "Rechazadas"]];
+
+let personas = [];
+let eventos = [];
+let seq = 0;
+let tablero = [];
+let tab = "ordenes";
+const escribiendo = new Set();
+let slots = PREDETERMINADOS.slice();
+try { const g = JSON.parse(localStorage.getItem("lab.slots") || "null"); if (Array.isArray(g) && g.length === 2) slots = g; } catch (e) {}
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const formato = (t) => esc(t).replace(/\*([^*\n]+)\*/g, "<b>$1</b>").replace(/(^|\s)_([^_\n]+)_/g, "$1<i>$2</i>");
+const persona = (cel) => personas.find((p) => p.celular === cel);
+
+const BOGOTA = "America/Bogota";
+const fmtDia = new Intl.DateTimeFormat("en-CA", { timeZone: BOGOTA, year: "numeric", month: "2-digit", day: "2-digit" });
+const fmtHoraMin = new Intl.DateTimeFormat("es-CO", { timeZone: BOGOTA, hour: "numeric", minute: "2-digit" });
+function hora12(d) {
+  const p = new Intl.DateTimeFormat("en-US", { timeZone: BOGOTA, hour: "numeric", hour12: true }).formatToParts(d);
+  return p.find((x) => x.type === "hour").value + p.find((x) => x.type === "dayPeriod").value.toLowerCase();
+}
+function diaRelativo(d) {
+  const hoy = new Date();
+  const man = new Date(hoy.getTime() + 864e5);
+  const k = fmtDia.format(d);
+  if (k === fmtDia.format(hoy)) return "Hoy";
+  if (k === fmtDia.format(man)) return "Mañana";
+  return new Intl.DateTimeFormat("es-CO", { timeZone: BOGOTA, day: "numeric", month: "short" }).format(d);
+}
+function franja(a) {
+  if (!a || !a.inicio) return "Sin hora fija";
+  const i = new Date(a.inicio), f = new Date(a.fin);
+  return `${diaRelativo(i)} ${hora12(i)}–${hora12(f)}`;
+}
+function hace(iso) {
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (m < 1) return "ahora";
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `hace ${h} h` : diaRelativo(new Date(iso));
+}
+
+// ------------------------------------------------------------------ teléfonos
+
+function pintarTelefono(slot) {
+  const el = document.querySelector(`.phone[data-slot="${slot}"]`);
+  const cel = slots[slot];
+  const p = persona(cel) || { celular: cel, nombre: cel, rol: "vecino", detalle: "", simulado: true };
+  const opciones = personas.map((x) => `<option value="${x.celular}" ${x.celular === cel ? "selected" : ""}>${esc(x.nombre)}</option>`).join("");
+  el.innerHTML = `
+    <div class="phone-top"><select aria-label="Quién escribe">${opciones}</select><small>${esc(p.detalle)} · +${esc(p.simulado ? cel : cel.slice(0, 4) + "•••" + cel.slice(-4))}</small></div>
+    <div class="chat"></div>
+    <div class="chips">${(CHIPS[p.rol] || []).map((c) => `<button type="button" data-texto="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+    <form class="compose"><label class="adjuntar ${p.simulado ? "" : "apagado"}" title="Enviar foto o audio">📎<input type="file" accept="image/*,audio/*" hidden ${p.simulado ? "" : "disabled"}></label><input class="texto" placeholder="${p.simulado ? "Escribe como " + esc(p.nombre) + "…" : "Celular real: escribe desde WhatsApp"}" ${p.simulado ? "" : "disabled"} aria-label="Mensaje"><button ${p.simulado ? "" : "disabled"} aria-label="Enviar">➤</button></form>`;
+  $("select", el).onchange = (e) => {
+    slots[slot] = e.target.value;
+    try { localStorage.setItem("lab.slots", JSON.stringify(slots)); } catch (err) {}
+    pintarTelefono(slot);
+  };
+  el.querySelectorAll(".chips button").forEach((b) => (b.onclick = () => enviar(cel, { texto: b.dataset.texto })));
+  $("form", el).onsubmit = (e) => {
+    e.preventDefault();
+    const i = $("input.texto", el);
+    if (!i.value.trim()) return;
+    enviar(cel, { texto: i.value });
+    i.value = "";
+  };
+  // Foto o audio (como en WhatsApp): lo escrito en la caja va como pie de foto.
+  $("input[type=file]", el).onchange = (e) => {
+    const archivo = e.target.files[0];
+    if (!archivo) return;
+    if (archivo.size > 10 * 1024 * 1024) { alert("Máximo 10 MB"); return; }
+    const lector = new FileReader();
+    lector.onload = () => {
+      const [cabeza, datos] = String(lector.result).split(",");
+      const mime = archivo.type || cabeza.slice(5).split(";")[0];
+      const pie = $("input.texto", el);
+      enviar(cel, { texto: pie.value || null, media: { mime_type: mime, datos_base64: datos } });
+      pie.value = "";
+    };
+    lector.readAsDataURL(archivo);
+    e.target.value = "";
+  };
+  pintarChat(slot);
+}
+
+function pintarChat(slot) {
+  const el = document.querySelector(`.phone[data-slot="${slot}"] .chat`);
+  if (!el) return;
+  const cel = slots[slot];
+  const p = persona(cel) || { simulado: true };
+  const abajo = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  const mios = eventos.filter((e) => e.celular === cel);
+  el.innerHTML = mios.length ? mios.map((e) => burbuja(e, p)).join("") :
+    `<div class="vacio">Sin mensajes todavía.<br>${p.simulado ? "Escribe «hola» para empezar." : ""}</div>`;
+  if (escribiendo.has(cel)) el.insertAdjacentHTML("beforeend", `<div class="escribiendo">Brisa está escribiendo…</div>`);
+  el.querySelectorAll("[data-rid]").forEach((b) => (b.onclick = () => enviar(cel, { respuesta_id: b.dataset.rid, respuesta_titulo: b.dataset.rt })));
+  el.querySelectorAll("[data-abrir]").forEach((b) => (b.onclick = () => b.nextElementSibling.classList.toggle("abiertas")));
+  if (abajo || mios.length < 4) el.scrollTop = el.scrollHeight;
+}
+
+function burbuja(e, p) {
+  const h = `<span class="hora">${fmtHoraMin.format(new Date(e.hora))}</span>`;
+  if (e.dir === "in") return `<div class="msg in">${esc(e.texto)}${h}</div>`;
+  const m = e.mensaje;
+  const dis = p.simulado ? "" : "disabled";
+  if (m.type === "text") return `<div class="msg out">${formato(m.text.body)}${h}</div>`;
+  if (m.type === "template") {
+    const params = (m.template.components?.[0]?.parameters || []).map((x) => x.text).join(" · ");
+    return `<div class="msg out"><span class="tpl">📄 Plantilla ${esc(m.template.name)}</span>${esc(params)}${h}</div>`;
+  }
+  const i = m.interactive;
+  const pie = i.footer ? `<span class="pie">${esc(i.footer.text)}</span>` : "";
+  if (i.type === "button") {
+    const bs = i.action.buttons.map((b) => `<button ${dis} data-rid="${esc(b.reply.id)}" data-rt="${esc(b.reply.title)}">${esc(b.reply.title)}</button>`).join("");
+    return `<div class="msg out">${formato(i.body.text)}${pie}${h}<div class="acciones">${bs}</div></div>`;
+  }
+  if (i.type === "list") {
+    const filas = i.action.sections.flatMap((s) => s.rows).map((r) =>
+      `<button class="fila" ${dis} data-rid="${esc(r.id)}" data-rt="${esc(r.title)}">${esc(r.title)}${r.description ? `<small>${esc(r.description)}</small>` : ""}</button>`).join("");
+    return `<div class="msg out">${formato(i.body.text)}${h}<div class="acciones"><button data-abrir>☰ ${esc(i.action.button)}</button><div class="filas">${filas}</div></div></div>`;
+  }
+  return `<div class="msg out">${esc(JSON.stringify(m))}${h}</div>`;
+}
+
+async function enviar(cel, cuerpo) {
+  escribiendo.add(cel);
+  refrescarChats(cel);
+  try {
+    const r = await fetch("/lab/mensaje", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ de: cel, ...cuerpo }) });
+    if (!r.ok) alert("No se pudo enviar: " + (await r.text()));
+  } catch (e) {
+    alert("El bot no responde. ¿Está corriendo en el puerto 8090?");
+  } finally {
+    escribiendo.delete(cel);
+    await sondear();
+    cargarTablero();
+  }
+}
+
+function refrescarChats(cel) {
+  slots.forEach((c, i) => { if (!cel || c === cel) pintarChat(i); });
+}
+
+async function sondear() {
+  try {
+    const r = await fetch(`/lab/estado?desde=${seq}`);
+    const d = await r.json();
+    const antes = JSON.stringify(personas.map((p) => p.celular + p.nombre));
+    personas = d.personas;
+    if (d.seq < seq) { eventos = []; }  // el bot se reinició
+    eventos.push(...d.eventos);
+    const cambiados = new Set(d.eventos.map((e) => e.celular));
+    seq = d.seq;
+    if (JSON.stringify(personas.map((p) => p.celular + p.nombre)) !== antes) { pintarTelefono(0); pintarTelefono(1); }
+    else slots.forEach((c, i) => { if (cambiados.has(c)) pintarChat(i); });
+    if (cambiados.size) cargarTablero();
+    $("#conexion").textContent = "bot conectado";
+    $("#conexion").className = "pill ok";
+  } catch (e) {
+    $("#conexion").textContent = "sin conexión con el bot";
+    $("#conexion").className = "pill";
+  }
+}
+
+// ------------------------------------------------------------------ tablero
+
+async function cargarTablero() {
+  try {
+    const r = await fetch("/lab/tablero");
+    tablero = (await r.json()).data || [];
+  } catch (e) { tablero = []; }
+  pintarTablero();
+}
+
+function avisoPreparar() {
+  const faltan = tablero.filter((g) => !g.listo);
+  if (!faltan.length) return "";
+  const err = faltan.find((g) => g.error);
+  return `<div class="aviso"><b>Falta un paso:</b> darle a las cuentas de coordinación (${faltan.map((g) => esc(g.usuario)).join(", ")}) el celular simulado del laboratorio.
+    ${err ? `<div class="meta">${esc(err.error)}</div>` : ""}
+    <form id="preparar"><input name="usuario" value="admin" aria-label="Usuario admin"><input name="pin" type="password" placeholder="PIN admin" aria-label="PIN admin"><button class="btn">Preparar demo</button></form>
+    <div class="meta" id="preparado">En desarrollo el PIN es el de <code>SEED_PIN</code> al sembrar la base.</div></div>`;
+}
+
+function tarjeta(o, idx) {
+  const a = o.asignacion;
+  let extra = "";
+  if (o.estado === "asignada" && a) extra = `🚲 ${esc(a.recolector_nombre)} · ${esc(franja(a))}`;
+  if (o.estado === "recogida") extra = `✅ ${esc(a?.recolector_nombre || "")}`;
+  if (o.estado === "rechazada") extra = `❌ ${esc(o.resultado?.motivo_rechazo_nombre || "")}`;
+  return `<div class="tarjeta"><div class="gremio g${idx}">${esc(o.gremio_nombre)}</div>
+    <b>${esc(o.codigo_pasaporte)}</b> · ${esc(o.ubicacion_operativa)}
+    <div class="meta">👤 ${esc(o.contacto_nombre || "—")} · ${hace(o.created_at)}</div>
+    ${extra ? `<div class="meta">${extra}</div>` : ""}</div>`;
+}
+
+function vistaOrdenes() {
+  const todas = tablero.flatMap((g, idx) => g.ordenes.map((o) => [o, idx]));
+  if (!todas.length) return `<p class="meta">Aún no hay órdenes. Desde un vecino escribe «hola», regístrate y pide una recolección.</p>`;
+  return `<div class="kanban">${ESTADOS.map(([k, t]) => {
+    const l = todas.filter(([o]) => o.estado === k);
+    return `<div class="col"><h3><span class="punto" style="background:var(--${k})"></span>${t} <span class="n">${l.length}</span></h3>${l.map(([o, i]) => tarjeta(o, i)).join("")}</div>`;
+  }).join("")}</div>`;
+}
+
+function vistaRutas() {
+  return tablero.map((g, idx) => {
+    if (!g.listo) return "";
+    const recs = g.recolectores.map((r) => {
+      const suyas = g.ordenes.filter((o) => o.asignacion && o.asignacion.recolector_id === r.id);
+      const pend = suyas.filter((o) => o.estado === "asignada")
+        .sort((a, b) => (a.asignacion.inicio || "9") < (b.asignacion.inicio || "9") ? -1 : 1);
+      const hechas = suyas.filter((o) => o.estado === "recogida").length;
+      const lista = pend.length
+        ? `<ol>${pend.map((o) => `<li><b>${esc(franja(o.asignacion))}</b> · ${esc(o.ubicacion_operativa)} · ${esc(o.codigo_pasaporte)}<div class="meta">👤 ${esc(o.contacto_nombre || "—")}${o.observacion ? " · 📝 " + esc(o.observacion) : ""}</div></li>`).join("")}</ol>`
+        : `<div class="meta">Sin paradas pendientes.</div>`;
+      return `<div class="ruta"><h4><span>🚲 ${esc(r.nombre)}</span><span class="meta">${r.telefono_contacto ? "📞 " + esc(r.telefono_contacto) : "sin teléfono"} · ✅ ${hechas} recogidas</span></h4>${lista}</div>`;
+    }).join("");
+    return `<div class="seccion gremio g${idx}">${esc(g.coordinacion)}</div>${recs || '<div class="meta">Sin recolectores.</div>'}`;
+  }).join("") + `<p class="meta">El recolector no usa ninguna app: la coordinación lo llama al número que le muestra Brisa al asignar.</p>`;
+}
+
+function vistaGuia() {
+  return `<div class="guia"><ol>
+    <li><b>Prepara la demo</b> (una sola vez): si arriba aparece el aviso amarillo, escribe el PIN de <code>admin</code>. Así las cuentas de coordinación quedan con los celulares simulados.</li>
+    <li>En el teléfono de la izquierda elige <b>Laura</b>, escribe <code>hola</code> y sigue el registro: nombre, torre (lista), apartamento (p. ej. <code>Apto 203</code>; en el seed hay del 101 al 504: pisos 1–5, aptos 01–04), acepta los datos. Usa un apartamento distinto para cada vecino: si ya tiene una solicitud abierta, Brisa te la recuerda en vez de crear otra.</li>
+    <li>En el menú elige <b>♻ Pedir recolección</b> y escribe qué tienes (p. ej. <code>cajas de pizza, botellas de vidrio y cáscaras</code>) o elígelo de la lista. Responde los chequeos de cada material, revisa el resumen y toca <b>Enviar solicitud</b> (BR-…). Prueba también <b>❓ Tengo una duda</b> con <code>icopor</code> o <code>pilas</code>.</li>
+    <li>El teléfono de la derecha (<b>Coordinación Asorescatar</b>) recibe la alerta «🆕 Nueva solicitud». La coordinación trabaja en el <b>panel</b>: abre <code>http://localhost:3000</code> y entra con <code>coord-reciclaje</code> y su PIN.</li>
+    <li>En el panel toca <b>Asignar recolector</b>, elige recolector y franja. Laura recibe «🚲 … pasa …» y la parada aparece en <b>Rutas</b>.</li>
+    <li>En el panel marca <b>✅ Recogida</b> (Laura recibe sus puntos) o <b>❌ Rechazada</b> con el motivo (Laura recibe el consejo).</li>
+    <li>Si pediste <b>Los dos</b>, entra al panel con <code>coord-huerta</code>: tiene su propia orden de orgánicos.</li>
+    <li>Prueba también <code>PUNTOS</code>, <code>ESTADO</code> y <code>LIGA</code> como vecino. Con <code>COORDINACION_POR_WHATSAPP=true</code> la coordinación también puede asignar desde el chat (respaldo sin tablet).</li>
+  </ol>
+  <p class="meta">Tu celular real también aparece en la lista (solo lectura) cuando le escribes a Brisa por WhatsApp. Puedes ser el vecino desde tu celular y la coordinación aquí.</p></div>`;
+}
+
+function pintarTablero() {
+  const v = $("#vista");
+  const cuerpo = tab === "ordenes" ? vistaOrdenes() : tab === "rutas" ? vistaRutas() : vistaGuia();
+  const foco = document.activeElement && v.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+  if (foco) return;  // no borrar lo que escriben en el formulario
+  v.innerHTML = avisoPreparar() + cuerpo;
+  const f = $("#preparar", v);
+  if (f) f.onsubmit = async (e) => {
+    e.preventDefault();
+    const datos = Object.fromEntries(new FormData(f));
+    const r = await fetch("/lab/preparar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(datos) });
+    const d = await r.json();
+    if (!r.ok) { $("#preparado").textContent = d.detail || "No se pudo preparar."; return; }
+    $("#preparado").textContent = d.data.map((x) => `${x.usuario}: ${x.estado}`).join(" · ");
+    document.activeElement.blur();
+    cargarTablero();
+  };
+}
+
+document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("activa", x === b));
+  pintarTablero();
+}));
+
+(async function iniciar() {
+  await sondear();
+  pintarTelefono(0);
+  pintarTelefono(1);
+  cargarTablero();
+  setInterval(sondear, 1200);
+  setInterval(cargarTablero, 5000);
+})();
+</script>
+</body>
+</html>

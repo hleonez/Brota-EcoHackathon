@@ -1,9 +1,9 @@
 # Brota · Base de infraestructura
 
-Infraestructura PostgreSQL desplegable y guía para incorporar la API y los paneles
-cuando se conozcan los frameworks del reto. La base se inicia vacía: todavía no
-hay aplicaciones, tablas de negocio ni migraciones. El plan maestro es una
-referencia de producto, no una selección definitiva de tecnologías.
+Infraestructura PostgreSQL desplegable y la API central de Brota (`api/`, FastAPI
+con migraciones Alembic). La API atiende al bot de WhatsApp y a los futuros paneles.
+El plan maestro es una referencia de producto; el stack puede ajustarse si el reto
+impone otro.
 
 ## Requisitos
 
@@ -15,10 +15,34 @@ referencia de producto, no una selección definitiva de tecnologías.
 Comprueba `docker version` y `docker compose version`. Ejecuta los comandos desde
 la raíz de este repositorio, después de clonarlo y entrar en su carpeta.
 
+## Todo con un comando (Brisa conectada a WhatsApp)
+
+Con Docker Desktop abierto y `infra/env/dev.env`, `api/.env` y `bot/.env` listos:
+
+```powershell
+.\brota.ps1
+```
+
+Levanta la base de datos, la API (con Gemini), el bot, un túnel de Cloudflare y el panel. **El bot
+registra solo su webhook en Meta** con la URL del túnel; si el túnel se reinicia y cambia de URL, lo
+vuelve a registrar en menos de un minuto. Panel: `http://localhost:3000`.
+
+| Comando | Qué hace |
+| --- | --- |
+| `.\brota.ps1` | Levanta o actualiza todo y muestra la URL pública de Brisa |
+| `.\brota.ps1 estado` | Contenedores y URL pública |
+| `.\brota.ps1 logs bot` | Registros de un servicio (`db`, `api`, `bot`, `tunel`, `panel`) |
+| `.\brota.ps1 bajar` | Detiene todo (los datos se conservan) |
+
+Brisa responde mientras este equipo esté encendido y con Docker abierto (activa «Start Docker
+Desktop when you sign in» y evita que el PC se suspenda). Para publicarla 24/7, el mismo Docker va
+en un servidor (ver [docs/bitacora.md](docs/bitacora.md), próximos pasos). El laboratorio (`/lab`)
+solo existe en desarrollo con `uvicorn`, no en Docker.
+
 ## Cómo levantar el proyecto en Windows
 
-**Por ahora solo puedes levantar la base de datos.** El backend y los paneles
-todavía son carpetas preparadas para crear las aplicaciones durante la hackathon.
+Estos pasos levantan PostgreSQL. La API (FastAPI) ya existe en `api/`: después del
+paso 4 sigue [api/README.md](api/README.md). Los paneles todavía son carpetas preparadas.
 
 ### 1. Abre Docker Desktop
 
@@ -176,7 +200,11 @@ de cambiar una instalación con datos.
 
 ## Guías y estructura
 
-- [Backend](api/README.md): instrucciones de incorporación y `.env.example` local.
+- [Bitácora de cambios](docs/bitacora.md): qué se ha hecho paso a paso, estado y próximos pasos.
+- [Backend](api/README.md): ejecución, pruebas, migraciones y Docker de la API.
+- [Bot de WhatsApp](bot/README.md): Brisa, probar sin Meta, conectar el webhook y Docker.
+- [Contrato de API](docs/contrato-api.md), [integración del bot](docs/integracion-bot.md) y
+  [guía paso a paso del bot con Meta](docs/guia-bot-meta.md).
 - [Paneles](web/README.md): espacios provisionales de coordinación y Fundación,
   con puertos de desarrollo 3000 y 3001; API compartida en el puerto 8000.
 - `infra/`: Compose, ejemplos de entorno y validaciones.
