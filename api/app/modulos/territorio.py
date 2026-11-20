@@ -92,6 +92,7 @@ class EquivalenciaItem(Salida):
 
 
 class RecolectorIn(Entrada):
+    tipo: Literal["reciclador", "huertero"] = "reciclador"
     gremio_id: uuid.UUID
     nombre: str = Field(min_length=1, max_length=120)
     telefono_contacto: str | None = Field(default=None, max_length=30)
@@ -105,6 +106,7 @@ class RecolectorPatch(Entrada):
 
 
 class RecolectorOut(Salida):
+    tipo: Literal["reciclador", "huertero"]
     id: uuid.UUID
     gremio_id: uuid.UUID
     nombre: str
@@ -261,11 +263,14 @@ def get_catalogos(
 
 def _exigir_gestion(actor: Actor, gremio_id: uuid.UUID) -> None:
     if not (actor.es_admin or actor.coordina(gremio_id)):
-        raise prohibido("Solo coordinación del gremio o administración gestiona recolectores.")
+        raise prohibido("Solo coordinación del gremio o administración gestiona recicladores y huerteros.")
 
 
-@router.get("/recolectores")
+@router.get("/recicladores")
+@router.get("/huerteros")
+@router.get("/recolectores", deprecated=True)
 def get_recolectores(
+    request: Request,
     gremio_id: uuid.UUID | None = Query(None),
     activo: bool | None = Query(None),
     actor: Actor = Depends(actor_operador),
@@ -273,6 +278,10 @@ def get_recolectores(
     db: Session = Depends(get_db),
 ):
     stmt = select(Recolector)
+    if request.url.path.endswith("/huerteros"):
+        stmt = stmt.where(Recolector.tipo == "huertero")
+    elif request.url.path.endswith("/recicladores"):
+        stmt = stmt.where(Recolector.tipo == "reciclador")
     if not actor.es_admin:
         alcance = actor.gremios_coordinados
         if gremio_id is not None and gremio_id not in alcance:
@@ -286,14 +295,21 @@ def get_recolectores(
     return paginar(db, stmt, pag, lambda r: RecolectorOut.model_validate(r).model_dump(mode="json"))
 
 
-@router.post("/recolectores", status_code=201)
+@router.post("/recicladores", status_code=201)
+@router.post("/huerteros", status_code=201)
+@router.post("/recolectores", status_code=201, deprecated=True)
 def post_recolector(
     datos: RecolectorIn, request: Request, actor: Actor = Depends(actor_operador), db: Session = Depends(get_db)
 ):
     def _fn() -> RecolectorOut:
         _exigir_gestion(actor, datos.gremio_id)
         referencia_activa(db, Gremio, datos.gremio_id, "gremio_id", "Gremio")
-        r = Recolector(**datos.model_dump())
+        valores = datos.model_dump()
+        if request.url.path.endswith("/huerteros"):
+            valores["tipo"] = "huertero"
+        elif request.url.path.endswith("/recicladores"):
+            valores["tipo"] = "reciclador"
+        r = Recolector(**valores)
         db.add(r)
         db.flush()
         db.refresh(r)

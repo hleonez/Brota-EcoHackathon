@@ -271,6 +271,8 @@ class Recolector(Base):
     """Persona recolectora. No tiene cuenta ni credenciales: la coordinación registra por ella."""
 
     __tablename__ = "recolector"
+    __table_args__ = (CheckConstraint("tipo IN ('reciclador','huertero')", name="tipo"),)
+    tipo: Mapped[str] = mapped_column(String(20), server_default="reciclador", default="reciclador")
     id: Mapped[uuid.UUID] = _pk()
     gremio_id: Mapped[uuid.UUID] = _fk("gremio.id")
     nombre: Mapped[str] = mapped_column(String(120))

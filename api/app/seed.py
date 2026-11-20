@@ -135,7 +135,7 @@ def sembrar(db: Session) -> dict[str, str]:
     for gc, nombres in RECOLECTORES.items():
         for n in nombres:
             if not _uno(db, Recolector, nombre=n, gremio_id=g[gc].id):
-                db.add(Recolector(nombre=n, gremio_id=g[gc].id))
+                db.add(Recolector(nombre=n, gremio_id=g[gc].id, tipo="huertero" if gc == "ECORAZON" else "reciclador"))
 
     conj = _uno(db, Conjunto, nombre="Brisas de San Pablo")
     if conj is None:
