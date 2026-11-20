@@ -244,6 +244,10 @@ def test_rechazo_con_educacion(client, operador, catalogo):
     avisos = client.post("/v1/canal/avisos/reservas", json={"limite": 50}, headers=BOT).json()["data"]
     tipos = {a["tipo"]: a for a in avisos}
     assert "recoleccion_confirmada" in tipos and "rechazo_educativo" in tipos
+    recogida = tipos["recoleccion_confirmada"]["datos"]["texto_sugerido"]
+    assert "propuesta del equipo" in recogida
+    assert "entrega_valida" in recogida
+    assert "total 10" in recogida
     edu = tipos["rechazo_educativo"]["datos"]
     assert edu["contenido"]["titulo"] == "Qué va a la huerta"
     assert client.get("/v1/me/puntos", headers=bot(CARMEN, False)).json()["data"]["saldo"] == "10.00"

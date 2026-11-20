@@ -20,7 +20,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -120,10 +120,11 @@ def reservar(db: Session, limite: int) -> list[AvisoOut]:
     """Toma avisos pendientes (o con reserva vencida) sin bloquear a otros consumidores."""
     s = get_settings()
     t = ahora()
+    # now() de Postgres, el mismo reloj con el que nace la fila.
     filas = (
         db.execute(
             select(EventoSalida)
-            .where(EventoSalida.estado.in_(("pendiente", "en_envio")), EventoSalida.proximo_intento_at <= t)
+            .where(EventoSalida.estado.in_(("pendiente", "en_envio")), EventoSalida.proximo_intento_at <= func.now())
             .order_by(EventoSalida.proximo_intento_at, EventoSalida.created_at)
             .limit(limite)
             .with_for_update(skip_locked=True)

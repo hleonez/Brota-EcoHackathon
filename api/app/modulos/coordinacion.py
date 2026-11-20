@@ -93,6 +93,20 @@ class OrdenResultadoOut(OrdenBandejaOut):
 # --------------------------------------------------------------------------- servicio
 
 
+def _explicacion_puntos(detalle: dict | None) -> str:
+    """Modalidad, puntos por entrega, total y la nota que ya escribió acreditar."""
+    if not isinstance(detalle, dict):
+        return ""
+    modalidad = detalle.get("modalidad")
+    por_entrega = detalle.get("puntos_por_entrega")
+    total = detalle.get("total")
+    if modalidad is None or por_entrega is None or total is None:
+        return ""
+    linea = f"• {modalidad} · {por_entrega} puntos por entrega · total {total}"
+    nota = detalle.get("nota")
+    return f"{linea}\n{nota}" if nota else linea
+
+
 def _cargar_orden(db: Session, orden_id: uuid.UUID, bloquear: bool = False) -> Orden:
     stmt = (
         select(Orden)
@@ -303,6 +317,11 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
         if s.participante_id is not None:
             saldo = puntos_srv.saldo(db, s.participante_id)
             pts = f"+{otorgados.normalize():f} puntos · Tienes {saldo.normalize():f}." if otorgados else ""
+            texto = f"💚 ¡Gracias! Tu material llegó bien separado. {pts}".strip()
+            if otorgados:
+                extra = _explicacion_puntos(acr.detalle)
+                if extra:
+                    texto = f"{texto}\n\n{extra}"
             encolar_aviso(
                 db,
                 "recoleccion_confirmada",
@@ -312,7 +331,7 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
                     "puntos_otorgados": str(otorgados) if otorgados is not None else None,
                     "saldo": str(saldo),
                     "evaluacion_puntos": evaluacion,
-                    "texto_sugerido": f"💚 ¡Gracias! Tu material llegó bien separado. {pts}".strip(),
+                    "texto_sugerido": texto,
                 },
                 solicitud_id=s.id,
                 orden_id=o.id,
