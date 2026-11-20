@@ -113,34 +113,6 @@ td {
 }
 
 
-.resumen-operativo,
-.resumen-impacto {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
-  gap: 12px;
-  margin: 16px 0;
-}
-.resumen-tarea {
-  display: grid;
-  gap: 4px;
-  min-height: 96px;
-  padding: 14px;
-  text-align: left;
-  border: 1px solid #b8cfc0;
-  border-radius: var(--radio);
-  background: var(--panel);
-  color: var(--tinta);
-  font: inherit;
-  cursor: pointer;
-}
-.resumen-tarea:hover { border-color: var(--verde-eco); background: #f9fdf9; }
-.resumen-tarea strong, .cifra {
-  color: var(--bosque);
-  font-size: clamp(24px, 3vw, 32px);
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-.resumen-tarea span, .impacto-cifra span { color: var(--tenue); }
 .impacto-cifra { margin: 0; display: grid; gap: 4px; }
 .filtros-impacto { min-inline-size: 0; }
 .filtros-impacto legend { font-weight: 700; color: var(--bosque); padding-inline: 6px; }

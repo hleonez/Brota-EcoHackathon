@@ -1,0 +1,111 @@
+/* Coordination home: KPI shortcuts and the pending-requests list (mockup "Solicitudes de
+   recolección pendientes"). States always pair text, icon and color (manual §5). */
+
+/* ---------- home KPIs */
+.resumen-operativo, .resumen-impacto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+.resumen-tarea {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  min-height: 104px;
+  padding: 18px 20px;
+  border: 1px solid var(--eco-line);
+  border-radius: var(--eco-radius);
+  background: var(--eco-white);
+  color: var(--eco-charcoal);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+@media (hover: hover) { .resumen-tarea:hover { border-color: var(--eco-green); } }
+.resumen-tarea strong, .cifra {
+  display: block;
+  color: var(--eco-forest);
+  font: 700 clamp(28px, 3.4vw, 36px)/1.1 var(--font-heading);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.resumen-tarea span { color: var(--eco-muted); }
+
+/* ---------- pending list */
+.pendientes { padding: clamp(16px, 3vw, 28px); }
+.pendientes-cabeza {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 14px;
+}
+.pendientes-cabeza h2 { display: flex; align-items: center; gap: 10px; margin: 0; }
+.pendientes-cabeza h2 .icono { width: 28px; height: 28px; color: var(--eco-green); }
+.pendientes-total {
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--eco-teal-50);
+  color: var(--eco-teal-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.pendientes-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pendiente {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-areas: "icono lugar ir" "icono tipo ir" "icono hora ir";
+  align-items: center;
+  gap: 4px 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--eco-line);
+  border-radius: 18px;
+  background: var(--eco-white);
+  color: var(--eco-charcoal);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+@media (hover: hover) { .pendiente:hover { border-color: var(--eco-green); background: var(--eco-green-50); } }
+.pendiente-icono, .pendiente-ir {
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--eco-green-50);
+  color: var(--eco-green);
+}
+.pendiente-icono { grid-area: icono; width: 48px; height: 48px; }
+.pendiente-ir { grid-area: ir; width: 40px; height: 40px; border-radius: 12px; }
+.pendiente-lugar { grid-area: lugar; display: grid; min-width: 0; }
+.pendiente-lugar strong { color: var(--eco-forest); font-size: 17px; overflow-wrap: anywhere; }
+.pendiente-lugar small { color: var(--eco-muted); font-size: 14px; overflow-wrap: anywhere; }
+.pendiente-lugar .codigo { white-space: nowrap; }
+.pendiente-tipo {
+  grid-area: tipo;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 8px;
+  border-radius: 999px;
+  background: var(--eco-teal-50);
+  color: var(--eco-teal-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.pendiente-tipo .icono { width: 16px; height: 16px; }
+.pendiente-tipo.estado-asignada { background: var(--eco-yellow-100); color: var(--eco-yellow-ink); }
+.pendiente-tipo.estado-programada { background: var(--eco-green-50); color: var(--eco-green); }
+.pendiente-hora { grid-area: hora; display: flex; align-items: center; gap: 6px; color: var(--eco-muted); font-size: 14px; }
+.pendiente-hora .icono { width: 18px; height: 18px; }
+@media (min-width: 760px) {
+  .pendiente {
+    grid-template-columns: 48px minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1fr) auto;
+    grid-template-areas: "icono lugar tipo hora ir";
+  }
+}
