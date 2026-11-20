@@ -6,7 +6,8 @@ import Indicadores from "./Indicadores";
 import { Pesajes } from "./Operacion";
 import { Estado, fechaBogota } from "./portal";
 import { MarcoPanel, Portada, TarjetaAccion, TareaPrincipal, enlaceCuenta, nombresPerfil, type CuentaPanel, type GrupoPanel } from "./MarcoPanel";
-import { hace } from "./util";
+import { hace, textoFranja } from "./util";
+import { Icono } from "./Iconos";
 import { DetalleSolicitud, VistaBandeja, VistaHistorial, VistaMisOrdenes, VistaReportes, VistaRutas } from "./Vistas";
 
 const titulos = {
@@ -15,6 +16,9 @@ const titulos = {
 };
 type Vista = keyof typeof titulos | typeof enlaceCuenta.id;
 export type Accion = { tipo: "detalle" | "asignar" | "programar" | "reasignar" | "recogida" | "rechazada" | "cancelar"; orden: Orden };
+
+const estadosOrden: Record<string, string> = { nueva: "Nueva", asignada: "Asignada", programada: "Programada" };
+const iconosOrden: Record<string, string> = { nueva: "nuevo", asignada: "cuenta", programada: "calendario" };
 
 const CADA = 15_000; // la bandeja se actualiza sola
 
@@ -111,6 +115,7 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
   const asignadas = ordenes.filter((o) => o.estado === "asignada");
   const programadas = ordenes.filter((o) => o.estado === "programada");
   const abiertas = [...asignadas, ...programadas];
+  const pendientes = campo ? programadas : [...nuevas, ...asignadas];
   const primerNombre = sesion.cuenta.nombre.trim().split(/\s+/)[0] || sesion.cuenta.nombre;
 
   function listo(o: Orden, texto: string) {
@@ -214,6 +219,34 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
                 <strong>{reportesPendientes}</strong><span>Reportes por responder</span>
               </button>}
             </div>
+            <section className="eco-tarjeta pendientes">
+              <div className="pendientes-cabeza">
+                <h2><Icono nombre="reciclar" />{campo ? "Próximas recolecciones" : "Solicitudes de recolección pendientes"}</h2>
+                <span className="pendientes-total">
+                  {pendientes.length} {pendientes.length === 1 ? "solicitud" : "solicitudes"}
+                </span>
+              </div>
+              {pendientes.length ? (
+                <ul className="pendientes-lista">
+                  {pendientes.slice(0, 5).map((o) => (
+                    <li key={o.id}>
+                      <button type="button" className="pendiente" onClick={() => setAccion({ tipo: "detalle", orden: o })}>
+                        <span className="pendiente-icono"><Icono nombre="casa" /></span>
+                        <span className="pendiente-lugar">
+                          <strong>{o.contacto_nombre ?? o.ubicacion_operativa}</strong>
+                          <small>{o.contacto_nombre ? o.ubicacion_operativa + " · " : ""}<span className="codigo">{o.codigo_pasaporte}</span></small>
+                        </span>
+                        <span className={"pendiente-tipo estado-" + o.estado}>
+                          <Icono nombre={iconosOrden[o.estado] ?? "nuevo"} />{estadosOrden[o.estado] ?? o.estado}
+                        </span>
+                        <span className="pendiente-hora"><Icono nombre="reloj" />{o.asignacion?.inicio ? textoFranja(o.asignacion.inicio, o.asignacion.fin) : o.preferencia_horaria ?? hace(o.created_at)}</span>
+                        <span className="pendiente-ir"><Icono nombre="chevron" /></span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : <Estado tipo="vacio">No hay solicitudes pendientes por ahora.</Estado>}
+            </section>
           </>
         ) : vista === "indicadores" ? <Indicadores gremioId={gremioId} />
         : vista === "pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores} />
