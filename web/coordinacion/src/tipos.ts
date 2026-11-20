@@ -80,6 +80,8 @@ export interface Recolector {
   nombre: string;
   telefono_contacto: string | null;
   activo: boolean;
+  tipo: "reciclador" | "huertero";
+  version: number;
 }
 
 export interface ItemCatalogo {

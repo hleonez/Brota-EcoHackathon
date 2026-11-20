@@ -83,6 +83,7 @@ export function Campo({
   step,
   maxLength,
   pattern,
+  valorInicial,
 }: {
   nombre: string;
   titulo: string;
@@ -93,12 +94,14 @@ export function Campo({
   step?: string;
   maxLength?: number;
   pattern?: string;
+  valorInicial?: string;
 }) {
+  const inicial = valorInicial ?? "";
   return (
     <label>
       {titulo}
       {opciones ? (
-        <select name={nombre} required={!opcional} defaultValue="">
+        <select name={nombre} required={!opcional} defaultValue={inicial}>
           <option value="">
             {opcional ? "Sin seleccionar" : "Selecciona una opción"}
           </option>
@@ -109,7 +112,7 @@ export function Campo({
           ))}
         </select>
       ) : tipo === "textarea" ? (
-        <textarea required={!opcional} name={nombre} maxLength={maxLength} />
+        <textarea required={!opcional} name={nombre} maxLength={maxLength} defaultValue={inicial} />
       ) : (
         <input
           name={nombre}
@@ -119,6 +122,7 @@ export function Campo({
           step={step}
           maxLength={maxLength}
           pattern={pattern}
+          defaultValue={inicial}
           autoComplete={tipo === "password" ? "new-password" : undefined}
         />
       )}

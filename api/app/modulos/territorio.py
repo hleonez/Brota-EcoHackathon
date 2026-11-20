@@ -165,6 +165,21 @@ def get_torres(
     return res
 
 
+@router.get("/unidades/gestion")
+def get_unidades_gestion(
+    tipo: Literal["hogar", "negocio"] | None = Query(None),
+    _actor: Actor = Depends(actor_admin),
+    pag: Paginacion = Depends(paginacion),
+    db: Session = Depends(get_db),
+):
+    """Listado para administración. No reemplaza el directorio de coordinación."""
+    stmt = select(Unidad).where(Unidad.activo.is_(True))
+    if tipo is not None:
+        stmt = stmt.where(Unidad.tipo == tipo)
+    stmt = stmt.order_by(Unidad.torre_id, func.length(Unidad.referencia_local), Unidad.referencia_local, Unidad.id)
+    return paginar(db, stmt, pag, lambda u: unidad_resumen(u).model_dump(mode="json"))
+
+
 @router.get("/unidades")
 def get_unidades(
     torre_id: uuid.UUID | None = Query(None),

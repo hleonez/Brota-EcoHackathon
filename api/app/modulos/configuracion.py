@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errores import AppError, invalido
 from app.core.idempotencia import escritura
+from app.core.paginacion import Paginacion, paginacion, paginar
 from app.core.seguridad import Actor, actor_admin
 from app.core.tipos import (
     DecimalEntrada,
@@ -158,6 +159,17 @@ def _crear_catalogo(db: Session, obj) -> None:
         db.rollback()
         raise AppError(409, "DUPLICATE", "Ya existe un registro con ese código.") from None
     db.refresh(obj)
+
+
+@router.get("/materiales")
+def get_materiales(
+    _actor: Actor = Depends(actor_admin),
+    pag: Paginacion = Depends(paginacion),
+    db: Session = Depends(get_db),
+):
+    """Catálogo completo para administración, incluidos los inactivos y su versión."""
+    stmt = select(Material).order_by(Material.activo.desc(), Material.nombre, Material.id)
+    return paginar(db, stmt, pag, lambda m: MaterialOut.model_validate(m).model_dump(mode="json"))
 
 
 @router.post("/materiales", status_code=201)
