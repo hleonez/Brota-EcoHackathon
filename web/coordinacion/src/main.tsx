@@ -6,6 +6,7 @@ import "./estilos.css";
 import "./ecoconecta.css";
 import "./estilo/marca.css";
 import "./estilo/acceso.css";
+import "./estilo/marco.css";
 import "./motion/animaciones.css";
 
 createRoot(document.getElementById("root")!).render(
