@@ -101,9 +101,12 @@ def test_foto_propone_materiales_y_queda_como_fuente_foto(lab):
     assert "Entendí: 📦 Cartón y 🧴 Botellas plásticas" in cuerpo or "Entendí: 🧴 Botellas plásticas y 📦 Cartón" in cuerpo
 
     c.post("/lab/mensaje", json={"de": LAURA, "respuesta_id": "P_SI_TEXTO", "respuesta_titulo": "Sí"})
-    for boton in ("P_V:PET:vacias:si", "P_V:PET:quimicos:no", "P_V:CARTON:seco:si", "P_LISTO", "P_ENVIAR"):
+    for boton in ("P_V:PET:vacias:si", "P_V:PET:quimicos:no", "P_V:CARTON:seco:si", "P_LISTO", "P_SIN", "P_ENVIAR"):
         c.post("/lab/mensaje", json={"de": LAURA, "respuesta_id": boton, "respuesta_titulo": "x"})
-    assert {r["fuente"] for r in api.cuerpos_solicitud[0]["residuos"]} == {"foto"}
+    cuerpo = api.cuerpos_solicitud[0]
+    assert {r["fuente"] for r in cuerpo["residuos"]} == {"foto"}
+    assert cuerpo["preferencia_sin_restriccion"] is True
+    assert "preferencia_inicio" not in cuerpo and "preferencia_fin" not in cuerpo
 
 
 def test_audio_con_peligro_y_consulta_de_puntos(lab):

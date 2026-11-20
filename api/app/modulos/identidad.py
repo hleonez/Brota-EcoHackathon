@@ -7,7 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -24,12 +24,14 @@ from app.core.seguridad import (
     hash_pin,
     normalizar_celular,
 )
-from app.core.tipos import Entrada, Instante, Salida
+from app.core.tipos import Entrada, Instante, Salida, ahora
 from app.db import get_db
 from app.models import (
     Consentimiento,
     CuentaOperadora,
     Gremio,
+    HabilitacionPiloto,
+    Recolector,
     Participante,
     PermisoOperador,
     SolicitudEliminacion,
@@ -99,7 +101,17 @@ class PermisoOut(Salida):
     gremio_id: uuid.UUID | None
 
 
+class HabilitacionResumen(Salida):
+    id: uuid.UUID
+    unidad_id: uuid.UUID
+    activo: bool
+    vigente_desde: Instante
+    vigente_hasta: Instante | None
+    revocada_at: Instante | None = None
+
+
 class MeOut(Salida):
+    trabajador_id: uuid.UUID | None = None
     tipo_actor: str
     registrado: bool
     participante_id: uuid.UUID | None = None
@@ -110,6 +122,7 @@ class MeOut(Salida):
     politica_datos_version: str
     permisos: list[PermisoOut] = []
     capacidades: list[str] = []
+    habilitaciones: list[HabilitacionResumen] = []
 
 
 class SolicitudEliminacionIn(Entrada):
@@ -123,11 +136,12 @@ class SolicitudEliminacionOut(Salida):
 
 
 class PermisoIn(Entrada):
-    rol: Literal["coordinacion", "fundacion", "admin"]
+    rol: Literal["coordinacion", "fundacion", "admin", "reciclador", "huertero"]
     gremio_id: uuid.UUID | None = None
 
 
 class CuentaIn(Entrada):
+    trabajador_id: uuid.UUID | None = None
     nombre: str = Field(min_length=1, max_length=120)
     usuario: str = Field(min_length=3, max_length=60, pattern=r"^[a-zA-Z0-9._-]+$")
     pin: str = Field(min_length=4, max_length=12, pattern=r"^\d+$")
@@ -144,6 +158,7 @@ class CuentaPatch(Entrada):
 
 
 class CuentaOut(Salida):
+    trabajador_id: uuid.UUID | None = None
     id: uuid.UUID
     nombre: str
     usuario: str
@@ -152,6 +167,18 @@ class CuentaOut(Salida):
     version: int
     permisos: list[PermisoOut]
     created_at: Instante
+
+
+class UnidadVinculadaOut(Salida):
+    id: uuid.UUID
+    tipo: str
+    etiqueta: str
+
+
+class ParticipanteListaOut(Salida):
+    id: uuid.UUID
+    nombre: str
+    unidades: list[UnidadVinculadaOut]
 
 
 # --------------------------------------------------------------------------- servicio
@@ -245,6 +272,8 @@ def capacidades_de(actor: Actor) -> list[str]:
     if actor.tipo == "servicio_bot":
         return ["avisos"]
     caps: set[str] = set()
+    if actor.trabajador_id is not None:
+        caps |= {"mis_asignaciones", "resultado"}
     if actor.gremios_coordinados:
         caps |= {"bandeja", "asignar", "resultado", "pesajes", "entregas_directas", "recolectores", "registro_asistido", "sync"}
     if actor.es_fundacion:
@@ -268,8 +297,18 @@ def me(db: Session, actor: Actor) -> MeOut:
         base.nombre = actor.nombre
         base.unidades = [unidad_resumen(u) for u in unidades_vigentes(db, actor.participante_id)]
         base.consentimiento_vigente = ConsentimientoOut.model_validate(c) if c else None
+        vigentes = db.execute(
+            select(HabilitacionPiloto).where(
+                HabilitacionPiloto.participante_id == actor.participante_id,
+                HabilitacionPiloto.activo.is_(True),
+                HabilitacionPiloto.vigente_desde <= ahora(),
+                or_(HabilitacionPiloto.vigente_hasta.is_(None), HabilitacionPiloto.vigente_hasta > ahora()),
+            )
+        ).scalars()
+        base.habilitaciones = [HabilitacionResumen.model_validate(h) for h in vigentes]
     elif actor.es_operador:
         base.cuenta_operadora_id = actor.cuenta_id
+        base.trabajador_id = actor.trabajador_id
         base.nombre = actor.nombre
         base.permisos = [PermisoOut(rol=r, gremio_id=g) for r, g in actor.permisos]
     return base
@@ -277,7 +316,7 @@ def me(db: Session, actor: Actor) -> MeOut:
 
 def _validar_permisos(db: Session, permisos: list[PermisoIn]) -> None:
     for i, p in enumerate(permisos):
-        if p.rol == "coordinacion":
+        if p.rol in ("coordinacion", "reciclador", "huertero"):
             referencia_activa(db, Gremio, p.gremio_id, f"permisos.{i}.gremio_id", "Gremio")
         elif p.gremio_id is not None:
             raise invalido({f"permisos.{i}.gremio_id": "Solo coordinación lleva gremio"})
@@ -286,6 +325,7 @@ def _validar_permisos(db: Session, permisos: list[PermisoIn]) -> None:
 def _cuenta_out(c: CuentaOperadora) -> CuentaOut:
     return CuentaOut(
         id=c.id,
+        trabajador_id=c.trabajador_id,
         nombre=c.nombre,
         usuario=c.usuario,
         celular=c.celular_normalizado,
@@ -380,6 +420,29 @@ def get_solicitudes_eliminacion(
     return paginar(db, stmt, pag, lambda s: SolicitudEliminacionOut.model_validate(s).model_dump(mode="json"))
 
 
+def _participante_lista(db: Session, participante: Participante) -> dict:
+    unidades = [
+        UnidadVinculadaOut(id=u.id, tipo=u.tipo, etiqueta=etiqueta_unidad(u))
+        for u in unidades_vigentes(db, participante.id)
+    ]
+    return ParticipanteListaOut(
+        id=participante.id, nombre=participante.nombre, unidades=unidades
+    ).model_dump(mode="json")
+
+
+@router.get("/participantes")
+def get_participantes(
+    actor: Actor = Depends(actor_admin), pag: Paginacion = Depends(paginacion), db: Session = Depends(get_db)
+):
+    """Personas vigentes, con o sin habilitación. La habilitación sigue en /v1/piloto/habilitaciones."""
+    stmt = (
+        select(Participante)
+        .where(Participante.estado != "eliminado")
+        .order_by(Participante.created_at.desc(), Participante.id.desc())
+    )
+    return paginar(db, stmt, pag, lambda p: _participante_lista(db, p))
+
+
 @router.get("/cuentas-operadoras")
 def get_cuentas(
     actor: Actor = Depends(actor_admin), pag: Paginacion = Depends(paginacion), db: Session = Depends(get_db)
@@ -394,7 +457,9 @@ def post_cuenta(
 ):
     def _fn() -> CuentaOut:
         _validar_permisos(db, datos.permisos)
+        _validar_trabajador(db, datos.trabajador_id, datos.permisos)
         c = CuentaOperadora(
+            trabajador_id=datos.trabajador_id,
             nombre=datos.nombre,
             usuario=datos.usuario.lower(),
             pin_hash=hash_pin(datos.pin),
@@ -432,6 +497,7 @@ def patch_cuenta(
             c.pin_hash = hash_pin(datos.pin)
         if datos.permisos is not None:
             _validar_permisos(db, datos.permisos)
+            _validar_trabajador(db, c.trabajador_id, datos.permisos)
             c.permisos = [PermisoOperador(rol=p.rol, gremio_id=p.gremio_id) for p in datos.permisos]
         if "celular" in datos.model_fields_set:
             c.celular_normalizado = normalizar_celular(datos.celular) if datos.celular else None
@@ -445,3 +511,14 @@ def patch_cuenta(
         return _cuenta_out(c)
 
     return escritura(request, db, actor, datos.model_dump(mode="json", exclude={"pin"}), _fn)
+
+
+def _validar_trabajador(db, trabajador_id, permisos):
+    roles = [p for p in permisos if p.rol in ("reciclador", "huertero")]
+    if trabajador_id is None:
+        if roles:
+            raise invalido({"trabajador_id": "Este perfil requiere un trabajador vinculado"})
+        return
+    trabajador = referencia_activa(db, Recolector, trabajador_id, "trabajador_id", "Trabajador")
+    if len(permisos) != 1 or len(roles) != 1 or roles[0].rol != trabajador.tipo or roles[0].gremio_id != trabajador.gremio_id:
+        raise invalido({"permisos": "Debe coincidir el perfil y gremio del trabajador, sin permisos adicionales"})

@@ -7,13 +7,18 @@ nunca apuntes TEST_DB_NAME a la base de desarrollo o producción.
 from __future__ import annotations
 
 import os
+import re
+import time
 import uuid
 
 import pytest
 
 TEST_DB = os.environ.get("TEST_DB_NAME", "brota_test")
-if TEST_DB in ("brota", "postgres"):
-    raise RuntimeError("TEST_DB_NAME no puede ser la base de desarrollo")
+_PROHIBIDAS = {"brota", "postgres", "template0", "template1"}
+if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", TEST_DB):
+    raise RuntimeError("TEST_DB_NAME debe ser un identificador simple")
+if TEST_DB.lower() in _PROHIBIDAS:
+    raise RuntimeError("TEST_DB_NAME no puede ser la base de desarrollo ni una base del sistema")
 
 os.environ.update(
     DB_NAME=TEST_DB,
@@ -33,14 +38,36 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.config import API_DIR, get_settings  # noqa: E402
 
+_host = get_settings().db_host.strip().lower()
+if _host not in {"127.0.0.1", "localhost", "::1"} and os.environ.get("BROTA_ALLOW_REMOTE_TEST") != "1":
+    raise RuntimeError(
+        "La base de pruebas solo se acepta en loopback. "
+        "Define BROTA_ALLOW_REMOTE_TEST=1 para autorizar otro host."
+    )
+if get_settings().db_name.lower() in {"brota", "postgres", "template0", "template1"}:
+    raise RuntimeError("La conexión de pruebas apunta a la base de desarrollo o del sistema")
+
 BOT = {"Authorization": "Bearer token-de-prueba-del-bot"}
+
+
+def _conectar_admin(url: str):
+    """Reintenta: el puerto local puede tardar unos segundos en aceptar conexiones."""
+    ultimo: Exception | None = None
+    for _ in range(15):
+        try:
+            return psycopg.connect(url, autocommit=True, connect_timeout=3)
+        except psycopg.OperationalError as exc:
+            ultimo = exc
+            time.sleep(1)
+    assert ultimo is not None
+    raise ultimo
 
 
 def _preparar_base() -> None:
     s = get_settings()
     admin = s.database_url().set(database="postgres").render_as_string(hide_password=False)
     admin = admin.replace("postgresql+psycopg", "postgresql")
-    with psycopg.connect(admin, autocommit=True) as conn:
+    with _conectar_admin(admin) as conn:
         conn.execute(f'DROP DATABASE IF EXISTS "{TEST_DB}" WITH (FORCE)')
         conn.execute(f'CREATE DATABASE "{TEST_DB}"')
     cfg = Config(str(API_DIR / "alembic.ini"))
@@ -96,3 +123,27 @@ def catalogo(client: TestClient) -> dict:
     for t in client.get(f"/v1/conjuntos/{conj}/torres", headers=BOT).json()["data"]:
         por_codigo[f"torre:{t['codigo']}"] = t["id"]
     return por_codigo
+
+
+def vaciar_avisos(client) -> None:
+    """Confirma los avisos pendientes para que otra prueba no los confunda con los suyos."""
+    while True:
+        avisos = client.post("/v1/canal/avisos/reservas", json={"limite": 50}, headers=BOT).json()["data"]
+        if not avisos:
+            return
+        for aviso in avisos:
+            client.post(
+                f"/v1/canal/avisos/{aviso['id']}/resultado",
+                json={"estado": "enviado", "id_externo": "prueba"},
+                headers=BOT,
+            )
+
+
+def habilitar_piloto(client, celular):
+    """La preparación de cada recorrido autoriza explícitamente a su solicitante."""
+    me = client.get("/v1/me", headers=bot(celular, False)).json()["data"]
+    sesion = client.post("/v1/auth/sesiones", json={"usuario": "admin", "pin": "2468"}).json()["data"]
+    for unidad in me["unidades"]:
+        r = client.post("/v1/piloto/habilitaciones", json={"participante_id": me["participante_id"], "unidad_id": unidad["id"]},
+            headers={"Authorization": "Bearer " + sesion["token"], **clave()})
+        assert r.status_code == 201, r.text

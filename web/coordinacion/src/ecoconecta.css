@@ -1,0 +1,362 @@
+.acceso {
+  width: min(100% - 2rem, 62rem);
+  margin: 0 auto;
+  align-content: center;
+}
+.acceso-cabecera {
+  width: 100%;
+  text-align: left;
+}
+.acceso-columnas {
+  display: grid;
+  width: 100%;
+  gap: 1rem;
+}
+.acceso-ilustracion {
+  display: none;
+}
+.acceso .login-caja {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.teclado-pin {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .35rem;
+}
+.teclado-pin .btn {
+  justify-content: center;
+  background: #edf4ee;
+  color: #174735;
+}
+@media (min-width: 730px) {
+  .acceso-columnas {
+    grid-template-columns: 1fr 1fr;
+  }
+  .acceso-ilustracion {
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    background: #dfefe3;
+    color: #134839;
+    overflow: hidden;
+  }
+  .acceso-ilustracion img {
+    width: min(85%, 16rem);
+    margin: auto auto -1.5rem;
+    object-fit: contain;
+  }
+}
+
+.cuenta-barra {
+  display: flex;
+  justify-content: flex-end;
+  padding: .5rem 1rem;
+}
+
+:root {
+  --fondo: #f2f5f2;
+  --panel: white;
+  --tinta: #202522;
+  --tenue: #465c50;
+  --linea: #cedbd2;
+  --marca: #127a27;
+  --marca-tinta: white;
+  --marca-suave: #e3f1e6;
+  --nueva: #0a9b70;
+  --asignada: #847017;
+  --sombra: 0 6px 20px #063b2e0e;
+  --radio: 22px;
+  color-scheme: light;
+}
+body {
+  font-family: Inter, Arial, sans-serif;
+}
+h1,
+h2,
+h3 {
+  font-family: Poppins, Inter, Arial, sans-serif;
+  color: #063b2e;
+}
+h1 {
+  font-size: clamp(28px, 3.2vw, 38px);
+  letter-spacing: -0.03em;
+}
+h2 {
+  font-size: 22px;
+}
+.logo-placa,
+.identidad img {
+  box-sizing: border-box;
+  width: 272px;
+  max-width: 100%;
+  padding: 14px 22px;
+  border-radius: 24px;
+  background: white;
+  object-fit: contain;
+  height: 108px;
+}
+.identidad {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+.encabezado,
+.barra {
+  background: #063b2e;
+  color: white;
+  padding: 16px clamp(16px, 4vw, 64px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.barra .tenue {
+  color: #d5e8df;
+}
+.encabezado .btn {
+  margin-left: 12px;
+}
+.portal main {
+  padding-block: 24px;
+  min-height: 52vh;
+}
+.eco-tarjeta,
+.login-caja {
+  padding: clamp(18px, 2.5vw, 32px);
+  border: 1px solid var(--linea);
+  border-radius: 24px;
+  box-shadow: var(--sombra);
+  background: white;
+  min-width: 0;
+}
+.eco-tarjeta {
+  margin: 12px 0;
+}
+.eco-tarjeta h2 {
+  margin-top: 0;
+}
+.aliados {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 3vw, 32px);
+  flex-wrap: wrap;
+  background: white;
+  padding: 14px;
+  font-size: 14px;
+}
+.aliados img {
+  max-width: 138px;
+  height: 52px;
+  object-fit: contain;
+}
+.campos,
+.registros li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.campos label,
+.formulario label {
+  display: grid;
+  gap: 5px;
+  font-weight: 600;
+}
+.formulario {
+  display: grid;
+  gap: 14px;
+}
+.formulario input:not([type="checkbox"]),
+.formulario select,
+.formulario textarea,
+.campos input,
+.campos select {
+  border: 1px solid #9ab8a2;
+  border-radius: 14px;
+  background: #f7f9f7;
+  min-height: 46px;
+  padding: 9px 12px;
+  font: inherit;
+  width: 100%;
+}
+.formulario textarea {
+  min-height: 90px;
+}
+.registros {
+  padding: 0;
+  list-style: none;
+}
+.registros li {
+  display: grid;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--linea);
+  gap: 5px;
+}
+.cifra {
+  display: block;
+  font-size: 32px;
+  color: #063b2e;
+}
+.medida {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) 2fr 3em;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+.medida progress {
+  width: 100%;
+  accent-color: #168a2e;
+}
+.desliza {
+  overflow: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+}
+th,
+td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--linea);
+}
+.btn,
+.pestana {
+  border-radius: 16px;
+}
+.portal .pestanas {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  gap: 6px;
+}
+.pestana.activa {
+  background: #e3f1e6;
+  color: #063b2e;
+}
+.login {
+  gap: 20px;
+  align-content: center;
+}
+.login .identidad {
+  align-items: center;
+}
+.login-caja {
+  max-width: 100%;
+}
+.login .aliados {
+  border-radius: 14px;
+}
+.bienvenida {
+  background: #e3f1e6;
+  padding: 20px;
+  border-radius: 20px;
+}
+.grupo {
+  margin: 10px 0;
+}
+.portal :focus-visible,
+.app :focus-visible,
+.login :focus-visible {
+  outline: 3px solid #063b2e;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px #b9ead6;
+}
+.eco-tarjeta li {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .barra,
+  .encabezado {
+    align-items: start;
+  }
+  .barra .estado-conexion {
+    flex-wrap: wrap;
+  }
+  .pestanas {
+    overflow: auto;
+  }
+  .contenido {
+    padding: 12px;
+  }
+  .campos label {
+    width: 100%;
+  }
+  .portal main {
+    padding-inline: 14px;
+  }
+  .aliados img {
+    height: 42px;
+  }
+  .btn {
+    min-height: 48px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *:before,
+  *:after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+.bienvenida {
+  display: flow-root;
+  min-height: 230px;
+}
+.personaje {
+  float: right;
+  width: clamp(100px, 22%, 210px);
+  height: auto;
+}
+.saludo-admin {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.saludo-admin img {
+  width: 78px;
+}
+.modal::backdrop {
+  background: #063b2e82;
+}
+@media (min-width: 1024px) {
+  .app {
+    display: grid;
+    grid-template-columns: 272px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    min-height: 100vh;
+  }
+  .app > .barra {
+    grid-column: 1/-1;
+    position: static;
+  }
+  .app > .pestanas {
+    flex-direction: column;
+    background: #063b2e;
+    align-items: stretch;
+    padding: 20px 14px;
+    gap: 8px;
+  }
+  .app > .pestanas button {
+    color: white;
+    text-align: left;
+    padding: 12px 16px;
+    border: none;
+  }
+  .app > .pestanas button.activa {
+    background: #e3f1e6;
+    color: #063b2e;
+  }
+  .app > .contenido {
+    width: 100%;
+  }
+}

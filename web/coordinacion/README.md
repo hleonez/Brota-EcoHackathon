@@ -1,26 +1,27 @@
-# Panel de coordinación
+# Brota · EcoConecta Villas de San Pablo
 
-Panel web para la coordinadora de cada gremio (Asorescatar, Huerta Ecorazón), pensado para tablet.
-React 19 + Vite + TypeScript, sin librerías de componentes. Habla solo con la API de Brota.
+Frontend React y TypeScript para la comunidad, los colectivos de recolección y la Fundación Santo Domingo. La distribución incluye Bootstrap Grid 5.3.3 y los logos oficiales. El servicio lee datos de FastAPI y conserva los controles de acceso en el servidor.
 
-| Sección | Qué hace |
+| Perfil | Recorrido |
 | --- | --- |
-| **Bandeja** | Solicitudes nuevas (la más antigua primero) y asignadas por cerrar. Se actualiza sola cada 15 s y avisa cuando llega una nueva. |
-| **Asignar** | Recolector del gremio (con su teléfono), franja de hoy o mañana (o sin hora fija) y cómo se le avisa (llamada o recado). Brisa le escribe al vecino quién pasa. |
-| **Rutas de hoy** | Paradas pendientes por recolector, ordenadas por franja, con su teléfono para llamar. Filtros: hoy, mañana, sin hora. |
-| **Cerrar** | ✅ Recogida (el vecino recibe sus puntos) o ❌ Rechazada con motivo del gremio (el vecino recibe un consejo). También se puede reasignar. |
-| **Reportes** | Quejas y pedidos de «hablar con alguien» de los vecinos; se responden aquí y la respuesta les llega por WhatsApp. |
-| **Historial** | Órdenes cerradas (recogidas, rechazadas y canceladas por el vecino), con totales del día. |
+| Hogares y negocios | Guía de separación, preparación y horarios. Solicitudes y seguimiento mediante Brisa en WhatsApp. Configura el número oficial con VITE_WHATSAPP_NUMERO en formato internacional, solo dígitos. |
+| Huerta y Asorescatar | Inicio, bandeja, asignación con o sin franja, programación, rutas, cierre, pasaporte, avisos, equipo, pesajes y reportes agregados del colectivo. |
+| Fundación | Hogares participantes, órdenes por estado, valor estimado y materiales por método de medición. Filtros de fechas y colectivo. El panel solicita reportes agregados. |
+| Administración | Cuentas y PIN, recolectores, unidades productivas, registro asistido, materiales, motivos, contenidos, equivalencias y versiones de reglas. |
 
-Pendiente: pesajes (kg por material y lectura del tiquete), modo sin conexión y registro asistido.
+## Compatibilidad con el servidor
+
+La base de esta rama es develop, commit 40fa9a4. La API vigente expresa una orden programada mediante una asignación con inicio y fin. El panel exige la franja antes del cierre y conserva los materiales aceptados en la observación disponible en el contrato. El servidor evalúa los puntos. La aplicación distingue el estado de los avisos consultando la cola.
+
+La habilitación del piloto por persona y unidad requiere las rutas del plan de API. Sin esas rutas el panel informa la dependencia. El backend base tampoco implementa cuentas de recolector, historial editorial de publicación ni materiales de cierre estructurados. La bandeja y los resúmenes muestran los estados que provee cada endpoint. Las funcionalidades de IA del bot requieren una revisión separada del equipo antes del despliegue institucional.
 
 ## Arrancar en desarrollo
 
-Requisitos: Node 20 o superior y la API corriendo.
+Requisitos: Node 22.12 o superior y la API corriendo.
 
 ```powershell
 cd web/coordinacion
-npm install
+npm ci
 Copy-Item .env.example .env.local
 npm run dev
 ```
@@ -65,3 +66,15 @@ src/
 ```
 
 Consulta las [convenciones comunes](../README.md) y el [contrato de la API](../../docs/contrato-api.md).
+
+
+## Recorridos de diseño
+
+| Referencias | Navegación |
+| --- | --- |
+| A01–A04 | Inicio de sesión, acceso restringido, sesión vencida y Mi cuenta. |
+| H01–H15 | Inicio de huerta, bandeja, detalle, asignación, programación, reasignación, cierre, cancelación, rutas, baldes, historial, indicadores, mensajes y equipo. |
+| R01–R16 | Las mismas operaciones para reciclaje, con registro de pesajes, consulta de registros y Tiquete Vivo. |
+| D01–D19 | Inicio de administración, cuentas, recolectores, piloto, unidades, registro asistido, reglas, educación, catálogos y estado del sistema. |
+
+La cancelación desde coordinación informa el canal disponible para el vecino. El módulo de piloto requiere las rutas del plan de API. El editor puede publicar contenido nuevo y consultar el existente; la edición de contenido publicado y el guardado de borradores requieren soporte del servidor.

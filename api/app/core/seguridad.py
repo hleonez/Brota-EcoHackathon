@@ -32,7 +32,7 @@ from app.config import get_settings
 from app.core.errores import AppError, prohibido
 from app.core.tipos import ahora
 from app.db import get_db
-from app.models import CuentaOperadora, Participante
+from app.models import CuentaOperadora, Participante, Recolector
 
 TipoActor = Literal["servicio_bot", "participante", "no_registrado", "operador"]
 
@@ -44,6 +44,7 @@ class Actor:
     participante_id: uuid.UUID | None = None
     celular: str | None = None
     cuenta_id: uuid.UUID | None = None
+    trabajador_id: uuid.UUID | None = None
     nombre: str | None = None
     permisos: list[tuple[str, uuid.UUID | None]] = field(default_factory=list)
 
@@ -151,6 +152,13 @@ def _bearer(request: Request) -> str:
     return auth[7:].strip()
 
 
+def get_actor_opcional(request: Request, db: Session = Depends(get_db)) -> Actor | None:
+    """Sin cabecera Authorization no exige sesión. Si la cabecera viene, se valida como get_actor."""
+    if request.headers.get("authorization") is None:
+        return None
+    return get_actor(request, db)
+
+
 def get_actor(request: Request, db: Session = Depends(get_db)) -> Actor:
     token = _bearer(request)
     s = get_settings()
@@ -173,6 +181,7 @@ def get_actor(request: Request, db: Session = Depends(get_db)) -> Actor:
                 canal="whatsapp",
                 celular=celular,
                 cuenta_id=cuenta.id,
+                trabajador_id=_trabajador_activo(db, cuenta),
                 nombre=cuenta.nombre,
                 permisos=[(pm.rol, pm.gremio_id) for pm in cuenta.permisos],
             )
@@ -200,6 +209,7 @@ def get_actor(request: Request, db: Session = Depends(get_db)) -> Actor:
         tipo="operador",
         canal="tablet",
         cuenta_id=cuenta.id,
+        trabajador_id=_trabajador_activo(db, cuenta),
         nombre=cuenta.nombre,
         permisos=[(p.rol, p.gremio_id) for p in cuenta.permisos],
     )
@@ -232,3 +242,14 @@ def actor_admin(actor: Actor = Depends(actor_operador)) -> Actor:
     if not actor.es_admin:
         raise prohibido("Se requiere capacidad de administración.")
     return actor
+
+
+def _trabajador_activo(db: Session, cuenta: CuentaOperadora):
+    if cuenta.trabajador_id is None:
+        return None
+    trabajador = db.get(Recolector, cuenta.trabajador_id)
+    if trabajador is None or not trabajador.activo:
+        raise _no_autenticado("El trabajador no está activo.")
+    if len(cuenta.permisos) != 1 or not any(p.rol == trabajador.tipo and p.gremio_id == trabajador.gremio_id for p in cuenta.permisos):
+        raise _no_autenticado("El perfil del trabajador requiere revisión administrativa.")
+    return trabajador.id

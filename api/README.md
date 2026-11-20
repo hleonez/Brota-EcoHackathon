@@ -39,7 +39,7 @@ uv run uvicorn app.main:app --reload --port 8000
 ```
 
 Abre `http://localhost:8000/docs`. Cuentas de la semilla (PIN = `SEED_PIN`; si no lo defines,
-la semilla genera uno y lo imprime una vez): `coord-reciclaje`, `coord-huerta`, `fundacion`, `admin`.
+la semilla genera uno y lo imprime una vez): `coord-reciclaje`, `coord-huerta`, `fundacion`, `admin`, `huertero-demo`, `reciclador-demo`.
 
 Si el puerto 8000 está ocupado, usa otro (`--port 8010`) y ajusta la URL del bot.
 
@@ -49,10 +49,11 @@ Si el puerto 8000 está ocupado, usa otro (`--port 8010`) y ajusta la URL del bo
 uv run pytest
 ```
 
-Crean y vacían la base `brota_test` en el mismo PostgreSQL (nunca la de desarrollo). Cubren:
-registro por canal, solicitud mixta, idempotencia y doble toque concurrente, solicitud abierta,
-permisos por gremio, asignación/reasignación, avisos pull y webhook firmado, puntos únicos,
-rechazo con educación, pesaje de lote, baldes, corrección, Liga, reportes y sync offline.
+Crean y vacían solo `brota_test` en el PostgreSQL local (nunca `brota`, `postgres`, `template0` ni `template1`). El host tiene que ser loopback, salvo `BROTA_ALLOW_REMOTE_TEST=1`. Cubren registro por canal, solicitud mixta, idempotencia, permisos por gremio, los dos recorridos oficiales, piloto, privacidad, programación, puntos únicos, educación, pesaje, Liga, reportes y sync.
+
+`python -m tests.verificar_migracion` aplica `upgrade head` en `brota_vacia_test` y, aparte, sube una copia del esquema `0004` con filas históricas en `brota_migrate_test`. Compara columnas y claves foráneas con el modelo y borra esas dos bases al terminar. La suite lo ejecuta como `test_upgrade_vacio_y_desde_el_esquema_anterior`.
+
+Con el Compose de desarrollo, PostgreSQL queda en `127.0.0.1:5432` dentro de WSL. Si Windows no alcanza ese puerto, corre pytest desde la misma WSL con `DB_HOST`, `DB_PORT`, `DB_USER` y `DB_SSLMODE` de `infra/env/dev.env`, y la contraseña leída de `DB_PASSWORD_FILE` sin imprimirla. No definas `DB_NAME`: el fixture fuerza `brota_test`.
 
 ## Ejecutar en Docker
 
@@ -101,3 +102,8 @@ uv export --no-dev --no-hashes --format requirements-txt -o requirements.txt
 - Rol de PostgreSQL restringido para la API (hoy, en desarrollo, se usa el administrador).
 - M06 (foto de tiquete, audio), canjes, exportaciones Excel, Certificado Verde y hoja de ruta.
 - Reemplazar los valores de ejemplo de la semilla por datos reales (viviendas, precios, balde).
+
+
+## Actualización EcoConecta
+
+Contrato `0.3-ecoconecta.1`: consultar [campos obligatorios, rutas y migraciones](../docs/avance-api-ecoconecta.md). Antes de actualizar una base existente, crear respaldo y probar migraciones sobre copia. Este cambio requiere actualizar los clientes: preferencia horaria, canal de acuerdo y materiales confirmados al cierre. Gemini está desactivado en la API. La migración vigente es 0011.

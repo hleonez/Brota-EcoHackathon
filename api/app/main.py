@@ -20,6 +20,7 @@ from app.modulos import (
     coordinacion,
     ia,
     identidad,
+    piloto,
     pesajes,
     puntos,
     reportes,
@@ -83,6 +84,7 @@ def crear_app(iniciar_despachador: bool = True) -> FastAPI:
     for m in (
         sistema,
         identidad,
+        piloto,
         territorio,
         residuos,
         solicitudes,

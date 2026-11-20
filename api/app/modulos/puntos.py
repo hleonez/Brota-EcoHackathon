@@ -41,6 +41,7 @@ class ResultadoAcreditacion:
     puntos: Decimal | None = None
     movimiento_id: uuid.UUID | None = None
     nuevo: bool = False
+    detalle: dict | None = None
 
 
 def regla_vigente(
@@ -95,6 +96,15 @@ def acreditar(
         return ResultadoAcreditacion("requiere_revision")
     if puntos <= 0:
         return ResultadoAcreditacion("requiere_revision")
+    detalle = {
+        "modalidad": modalidad,
+        "cantidad": "1",
+        "puntos_por_entrega": str(puntos),
+        "total": str(puntos),
+        "regla_codigo": regla.codigo,
+        "regla_id": str(regla.id),
+        "nota": "Regla propuesta del equipo; valores sujetos a validación FSD",
+    }
     mov_id = db.execute(
         pg_insert(MovimientoPuntos)
         .values(
@@ -102,6 +112,7 @@ def acreditar(
             unidad_id=unidad_id,
             torre_id=torre_id,
             delta=puntos,
+            detalle_calculo=detalle,
             tipo="abono",
             version_regla_id=regla.id,
             resultado_orden_id=resultado_orden_id,
@@ -117,8 +128,10 @@ def acreditar(
         existente = db.execute(
             select(MovimientoPuntos).where(MovimientoPuntos.clave_aplicacion == clave)
         ).scalar_one()
-        return ResultadoAcreditacion("acreditada", existente.delta, existente.id, nuevo=False)
-    return ResultadoAcreditacion("acreditada", puntos, mov_id, nuevo=True)
+        return ResultadoAcreditacion(
+            "acreditada", existente.delta, existente.id, nuevo=False, detalle=existente.detalle_calculo
+        )
+    return ResultadoAcreditacion("acreditada", puntos, mov_id, nuevo=True, detalle=detalle)
 
 
 def saldo(db: Session, participante_id: uuid.UUID) -> Decimal:
@@ -140,6 +153,7 @@ class SaldoOut(Salida):
 
 
 class MovimientoOut(Salida):
+    detalle_calculo: dict | None = None
     id: uuid.UUID
     delta: PuntosSalida
     tipo: str
@@ -185,6 +199,7 @@ def get_mis_movimientos(
         return MovimientoOut(
             id=m.id,
             delta=m.delta,
+            detalle_calculo=m.detalle_calculo,
             tipo=m.tipo,
             regla_codigo=regla,
             codigo_pasaporte=pasaporte,
