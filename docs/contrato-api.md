@@ -76,6 +76,7 @@ directorio de unidades ni datos personales. Fundación ve reportes agregados, si
 | --- | --- | --- |
 | ● | `GET /v1/conjuntos`, `GET /v1/conjuntos/{id}/torres` | Torres con `numero_viviendas` vigente |
 | ● | `GET /v1/unidades` | Canal: coincidencia exacta `torre_id` + `referencia`. Directorio filtrado: solo coordinación de su gremio. Admin, fundación y trabajador reciben `403` |
+| ● | `GET /v1/unidades/gestion` | Solo admin. Unidades activas con `id`, `tipo`, `referencia_local`, `etiqueta` y torre. Filtro opcional `tipo`. Coordinación, fundación y trabajador reciben `403`. No abre el directorio de coordinación |
 | ● | `POST /v1/unidades` | Admin |
 | ● | `GET /v1/catalogos` | Gremios, tipos de servicio, materiales, motivos, puntos de recepción, equivalencias vigentes |
 | ● | `GET`, `POST /v1/recolectores`, `PATCH /v1/recolectores/{id}` | Coordinación del gremio o admin |
@@ -143,6 +144,7 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 | | Ruta | Notas |
 | --- | --- | --- |
 | ● | `GET /v1/contenidos-educativos` | Se lee sin sesión. Público: `tema` (`separacion`, `huerta`, `horarios_rutas`, `servicio`), `version`, vigencia y publicación. Filtro `tema`. Borradores (`publicado` falso) y retirados (`activo` falso o fuera de vigencia) no aparecen; un Bearer inválido sigue en `401`. Admin: `PATCH /v1/contenidos-educativos/{id}` edita título, texto, tema, publicación, activo, gremio y vigencia |
+| ● | `GET /v1/contenidos-educativos/gestion` | Solo admin. El mismo contenido, incluidos borradores, retirados y fuera de vigencia. Filtro opcional `tema`. Coordinación y fundación reciben `403`. La lectura pública no cambia |
 | ● | `GET /v1/ordenes/{id}/avisos` | Estado de avisos de una orden (coordinación) |
 | ● | `POST /v1/canal/avisos/reservas`, `POST /v1/canal/avisos/{id}/resultado`, `GET /v1/canal/avisos` | Bot (modo pull). Modo webhook: ver integracion-bot.md |
 
@@ -155,7 +157,7 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 | ○ | Exportaciones, Certificado Verde, hoja de ruta, `/trabajos/{id}` | Pendiente |
 
 ### M10 · Configuración (admin)
-● `POST /v1/materiales`, `PATCH /v1/materiales/{id}`, `POST /v1/motivos-rechazo`,
+● `GET /v1/materiales` (admin; incluye inactivos y `version`), `POST /v1/materiales`, `PATCH /v1/materiales/{id}` (nombre y activo), `POST /v1/motivos-rechazo`,
 `POST /v1/contenidos-educativos`, `POST /v1/precios-material`, `POST /v1/equivalencias`,
 `POST /v1/reglas-incentivo` (parámetros v1: `{"puntos": "10"}`), `POST /v1/torres/{id}/capacidades`,
 `GET /v1/configuracion?tipo=`. Una versión nueva cierra la vigente; los solapamientos dan `409`.
@@ -195,4 +197,4 @@ El bot y el panel tienen que dejar de enviar `preferencia_horaria` como campo de
 - El cierre envía `materiales_confirmados` como lista de UUID del catálogo `material`. Un UUID desconocido no se guarda ni se inventa. Los kilos siguen saliendo del pesaje.
 - Tratar `programada` como estado propio. `cancelada` y `rechazada` no son recogidas. Una recogida junto con un rechazo es `finalizada_con_novedades`, no `atendida`.
 - Mostrar `tema` en educación y las `habilitaciones` de `GET /v1/me`.
-- No usar el directorio `GET /v1/unidades` desde admin, fundación o la cuenta del trabajador.
+- No usar el directorio `GET /v1/unidades` desde admin, fundación o la cuenta del trabajador. La administración lista unidades con `GET /v1/unidades/gestion`.

@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
-import { pedir } from "./api";
+import { ErrorApi, pedir } from "./api";
 import { claveParaEnvio } from "./util";
 
 export type Valores = Record<string, string>;
@@ -13,12 +13,14 @@ export function Formulario({
   children,
   preparar,
   alGuardar,
+  alConflicto,
   accion = "Guardar",
 }: {
   titulo: string;
   children: ReactNode;
   preparar: (v: Valores) => Operacion;
   alGuardar: () => void;
+  alConflicto?: () => void;
   accion?: string;
 }) {
   const [mensaje, setMensaje] = useState("");
@@ -41,15 +43,18 @@ export function Formulario({
         cuerpo: operacion.cuerpo,
         clave: clave.current(operacion),
       });
+      if (!form.isConnected) return;
       clave.current = claveParaEnvio();
       form.reset();
       setMensaje("Cambios guardados.");
       alGuardar();
     } catch (e) {
+      if (!form.isConnected) return;
       setError((e as Error).message);
+      if (e instanceof ErrorApi && e.codigo === "VERSION_CONFLICT") alConflicto?.();
     } finally {
       ocupadoRef.current = false;
-      setOcupado(false);
+      if (form.isConnected) setOcupado(false);
     }
   }
   return (
@@ -78,6 +83,7 @@ export function Campo({
   step,
   maxLength,
   pattern,
+  valorInicial,
 }: {
   nombre: string;
   titulo: string;
@@ -88,12 +94,14 @@ export function Campo({
   step?: string;
   maxLength?: number;
   pattern?: string;
+  valorInicial?: string;
 }) {
+  const inicial = valorInicial ?? "";
   return (
     <label>
       {titulo}
       {opciones ? (
-        <select name={nombre} required={!opcional} defaultValue="">
+        <select name={nombre} required={!opcional} defaultValue={inicial}>
           <option value="">
             {opcional ? "Sin seleccionar" : "Selecciona una opción"}
           </option>
@@ -104,7 +112,7 @@ export function Campo({
           ))}
         </select>
       ) : tipo === "textarea" ? (
-        <textarea required={!opcional} name={nombre} maxLength={maxLength} />
+        <textarea required={!opcional} name={nombre} maxLength={maxLength} defaultValue={inicial} />
       ) : (
         <input
           name={nombre}
@@ -114,6 +122,7 @@ export function Campo({
           step={step}
           maxLength={maxLength}
           pattern={pattern}
+          defaultValue={inicial}
           autoComplete={tipo === "password" ? "new-password" : undefined}
         />
       )}
