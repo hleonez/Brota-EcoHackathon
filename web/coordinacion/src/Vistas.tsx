@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, ErrorApi } from "./api";
-import { Espera, useDatos } from "./portal";
+import { Espera, Estado, useDatos } from "./portal";
 import Pasaporte from "./Pasaporte";
 import { Avisos } from "./Operacion";
 import type { Accion } from "./Panel";
@@ -11,7 +11,16 @@ interface Comunes {
   servicios: Map<string, ItemCatalogo>;
   recientes: Set<string>;
   onAccion: (a: Accion) => void;
+  /** Huertero o reciclador: solo ve sus órdenes y cierra; no asigna ni programa. */
+  campo?: boolean;
 }
+
+const ETIQUETA_ESTADO: Record<string, string> = {
+  nueva: "Recibida",
+  asignada: "Asignada",
+  programada: "Programada",
+};
+const ETIQUETA_CANAL: Record<string, string> = { whatsapp: "WhatsApp", llamada: "llamada", presencial: "presencial" };
 
 function porFranja(a: Orden, b: Orden): number {
   const x = a.asignacion?.inicio ?? "9999";
@@ -21,22 +30,27 @@ function porFranja(a: Orden, b: Orden): number {
 
 // ------------------------------------------------------------------ tarjeta
 
-function Tarjeta({ orden: o, servicios, recientes, onAccion, sinRecolector, detalle }: Comunes & { orden: Orden; sinRecolector?: boolean; detalle?: boolean }) {
+function Tarjeta({ orden: o, servicios, recientes, onAccion, campo, sinRecolector, detalle }: Comunes & { orden: Orden; sinRecolector?: boolean; detalle?: boolean }) {
   const a = o.asignacion;
+  const reciente = o.estado === "nueva" && recientes.has(o.id);
   return (
-    <article className={`tarjeta estado-${o.estado} ${o.estado === "nueva" && recientes.has(o.id) ? "reciente" : ""}`}>
+    <article className={`tarjeta estado-${o.estado} ${reciente ? "reciente" : ""}`}
+      data-motion={reciente ? "new-item" : undefined} data-state={reciente ? "visible" : undefined}>
       <div className="tarjeta-cabeza">
-        <span className="codigo">{o.codigo_pasaporte}</span><b>{o.estado==="nueva"?"Recibida":o.estado === "asignada" ? (a?.inicio && a.fin ? "Programada" : "Asignada") : o.estado}</b>
+        <span className="codigo">{o.codigo_pasaporte}</span><b>{ETIQUETA_ESTADO[o.estado] ?? o.estado}</b>
         <span className="tenue">{hace(o.created_at)}</span>
       </div>
+      {reciente && <span className="orden-reciente">Recién llegada</span>}
       <div className="ubicacion">📍 {o.ubicacion_operativa}</div>
       <div className="fila-datos">
         <span>👤 {o.contacto_nombre ?? "Sin nombre"}</span>
+        {o.tipo_generador && <span className="chip">{o.tipo_generador === "negocio" ? "🏪 Negocio" : "🏠 Hogar"}</span>}
         {o.tipo_servicio_ids.map((id) => {
           const s = servicios.get(id);
           return s ? <span key={id} className="chip">{s.nombre}</span> : null;
         })}
       </div>
+      {o.preferencia_horaria && <div className="fila-datos"><span>🕒 Preferencia: {o.preferencia_horaria}</span></div>}
       {o.residuos?.length > 0 && (
         <ul className="residuos" aria-label="Materiales declarados">
           {o.residuos.map((r) => (
@@ -52,30 +66,37 @@ function Tarjeta({ orden: o, servicios, recientes, onAccion, sinRecolector, deta
         </ul>
       )}
       {o.observacion && <div className="nota">📝 {o.observacion}</div>}
-      {a && o.estado === "asignada" && (
+      {a && (o.estado === "asignada" || o.estado === "programada") && (
         <div className="asignacion">
-          {!sinRecolector && <strong>🚲 {a.recolector_nombre}</strong>} <span>🕑 {textoFranja(a.inicio, a.fin)}</span>
-          <span className="tenue"> · aviso por {a.forma_aviso}</span>
+          {!sinRecolector && <strong>🚲 {a.recolector_nombre}</strong>}
+          {o.estado === "programada" && <span> 🕑 {textoFranja(a.inicio, a.fin)}{a.acuerdo_canal && ` · acordado por ${ETIQUETA_CANAL[a.acuerdo_canal]}`}</span>}
+          {!campo && <span className="tenue"> · aviso por {a.forma_aviso}</span>}
           {o.reasignaciones > 0 && <span className="tenue"> · reasignada {o.reasignaciones}×</span>}
         </div>
       )}
-      {detalle && <><Pasaporte orden={o} /><Avisos id={o.id} /></>}
+      {detalle && !campo && <><Pasaporte orden={o} /><Avisos id={o.id} /></>}
       <div className="acciones">
         {!detalle && <button className="btn" onClick={() => onAccion({ tipo: "detalle", orden: o })}>Ver detalle</button>}
-        {detalle && (o.estado === "asignada" || o.estado === "nueva") && (
+        {detalle && !campo && (o.estado === "asignada" || o.estado === "programada" || o.estado === "nueva") && (
           <button className="btn" onClick={() => onAccion({ tipo: "cancelar", orden: o })}>Cancelar recolección</button>
         )}
-        {o.estado === "nueva" && (
+        {!campo && o.estado === "nueva" && (
           <button className="btn primario grande" onClick={() => onAccion({ tipo: "asignar", orden: o })}>
             🚲 Asignar recolector
           </button>
         )}
-        {o.estado === "asignada" && (
+        {!campo && o.estado === "asignada" && (
           <>
-            <button disabled={!a?.inicio || !a.fin} className="btn exito" onClick={() => onAccion({ tipo: "recogida", orden: o })}>✅ Recogida</button>
-            <button disabled={!a?.inicio || !a.fin} className="btn peligro" onClick={() => onAccion({ tipo: "rechazada", orden: o })}>❌ Rechazada</button>
-            <button className="btn" onClick={() => onAccion({ tipo: "programar", orden: o })}>Programar</button>
+            <button className="btn primario" onClick={() => onAccion({ tipo: "programar", orden: o })}>🗓 Programar</button>
             <button className="btn" onClick={() => onAccion({ tipo: "reasignar", orden: o })}>Reasignar</button>
+          </>
+        )}
+        {o.estado === "programada" && (
+          <>
+            <button className="btn exito" onClick={() => onAccion({ tipo: "recogida", orden: o })}>✅ Recogida</button>
+            <button className="btn peligro" onClick={() => onAccion({ tipo: "rechazada", orden: o })}>❌ Rechazada</button>
+            {!campo && <button className="btn" onClick={() => onAccion({ tipo: "programar", orden: o })}>🗓 Reprogramar</button>}
+            {!campo && <button className="btn" onClick={() => onAccion({ tipo: "reasignar", orden: o })}>Reasignar</button>}
           </>
         )}
       </div>
@@ -92,7 +113,7 @@ export function DetalleSolicitud({ id, ...comunes }: Comunes & { id: string }) {
 
 // ------------------------------------------------------------------ bandeja
 
-export function VistaBandeja({ nuevas, asignadas, ...c }: Comunes & { nuevas: Orden[]; asignadas: Orden[] }) {
+export function VistaBandeja({ nuevas, asignadas, programadas, ...c }: Comunes & { nuevas: Orden[]; asignadas: Orden[]; programadas: Orden[] }) {
   const porLlegada = [...nuevas].sort((a, b) => (a.created_at < b.created_at ? -1 : 1)); // la más antigua primero
   return (
     <div className="columnas">
@@ -103,12 +124,33 @@ export function VistaBandeja({ nuevas, asignadas, ...c }: Comunes & { nuevas: Or
         )}
       </section>
       <section>
-        <h2>Asignadas <span className="tenue">· por cerrar ({asignadas.length})</span></h2>
+        <h2>Asignadas <span className="tenue">· por programar ({asignadas.length})</span></h2>
         {asignadas.length ? [...asignadas].sort(porFranja).map((o) => <Tarjeta key={o.id} orden={o} {...c} />) : (
-          <Vacio texto="Nada en ruta por ahora." />
+          <Vacio texto="Todas las asignadas ya tienen horario." />
+        )}
+      </section>
+      <section>
+        <h2>Programadas <span className="tenue">· por cerrar ({programadas.length})</span></h2>
+        {programadas.length ? [...programadas].sort(porFranja).map((o) => <Tarjeta key={o.id} orden={o} {...c} />) : (
+          <Vacio texto="Nada programado por ahora." />
         )}
       </section>
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ mis órdenes (huertero y reciclador)
+
+export function VistaMisOrdenes({ ordenes, ...c }: Comunes & { ordenes: Orden[] }) {
+  const abiertas = ordenes.filter((o) => o.estado === "asignada" || o.estado === "programada").sort(porFranja);
+  return (
+    <section>
+      <h2>Mis órdenes <span className="tenue">· por recoger ({abiertas.length})</span></h2>
+      {abiertas.length ? abiertas.map((o) => <Tarjeta key={o.id} orden={o} sinRecolector {...c} />) : (
+        <Vacio texto="No tienes órdenes pendientes. Cuando coordinación te asigne una, aparece aquí." />
+      )}
+      {abiertas.some((o) => o.estado === "asignada") && <p className="tenue">Las órdenes «Asignadas» esperan que coordinación acuerde el horario; podrás cerrarlas cuando estén programadas.</p>}
+    </section>
   );
 }
 
@@ -117,7 +159,7 @@ export function VistaBandeja({ nuevas, asignadas, ...c }: Comunes & { nuevas: Or
 type FiltroDia = "todas" | "hoy" | "manana" | "sin";
 
 export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asignadas: Orden[]; recolectores: Recolector[] }) {
-  const [filtro, setFiltro] = useState<FiltroDia>("todas");
+  const [filtro, setFiltro] = useState<FiltroDia>("hoy");
   const visibles = asignadas.filter((o) => {
     if (filtro === "todas") return true;
     const d = diaDe(o.asignacion?.inicio ?? null);
@@ -126,8 +168,8 @@ export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asigna
   // Recolectores del gremio, más cualquiera que tenga paradas y ya no esté activo.
   const lista = [...recolectores];
   for (const o of visibles) {
-    const a = o.asignacion!;
-    if (!lista.some((r) => r.id === a.recolector_id)) {
+    const a = o.asignacion;
+    if (a && !lista.some((r) => r.id === a.recolector_id)) {
       lista.push({ id: a.recolector_id, nombre: a.recolector_nombre, telefono_contacto: null, gremio_id: o.gremio_id, activo: false });
     }
   }
@@ -165,7 +207,7 @@ export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asigna
         ))}
       </div>
       {libres.length > 0 && <p className="tenue">Sin paradas: {libres.map((r) => r.nombre).join(", ")}.</p>}
-      <p className="tenue">El recolector no usa ninguna app: llámalo o déjale el recado con sus paradas.</p>
+      <p className="tenue">Usa el número de contacto para compartir las paradas con el responsable.</p>
     </div>
   );
 }
@@ -296,5 +338,5 @@ function TarjetaCaso({ caso: c, onRespondido, onConflicto }: { caso: Caso; onRes
 }
 
 function Vacio({ texto }: { texto: string }) {
-  return <p className="vacio">{texto}</p>;
+  return <Estado tipo="vacio">{texto}</Estado>;
 }
