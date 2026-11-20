@@ -1,0 +1,25 @@
+# Túnel rápido de Cloudflare: publica el webhook del bot en internet sin dominio ni puertos abiertos.
+# Requiere compose.bot.yaml. El bot lee la URL pública en las métricas del túnel y la registra sola
+# como webhook en Meta (bot/app/enlace.py). La URL cambia cada vez que el túnel se reinicia; el bot
+# lo detecta y la vuelve a registrar.
+#
+# Los túneles rápidos no garantizan disponibilidad (son para pruebas y demos). Para producción:
+# un túnel con nombre y dominio propio, o un servidor con HTTPS.
+services:
+  tunel:
+    image: cloudflare/cloudflared:2026.7.3
+    # http2 (TCP): desde Docker en Windows/WSL, QUIC (UDP) a veces no logra conectar con Cloudflare.
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--metrics", "0.0.0.0:2000", "--url", "http://bot:8090"]
+    depends_on:
+      bot:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  bot:
+    environment:
+      TUNEL_METRICAS_URL: http://tunel:2000

@@ -15,11 +15,26 @@
 - Convenciones: carpetas y documentos en minúsculas, nombres nuevos con guiones,
   UTF-8 y LF; cada framework conservará sus convenciones internas.
 
+## Decisiones de la API (18-nov-2026)
+
+Revisables si el reto impone otro stack el 20-nov; el dominio y el contrato se conservan.
+
+- API en Python 3.12 + FastAPI, SQLAlchemy 2 (síncrono) + psycopg 3, migraciones Alembic,
+  dependencias gestionadas con uv (`api/uv.lock`, `api/requirements.txt` para Docker).
+- El bot de WhatsApp es un servicio separado: recibe el webhook del proveedor y llama a la API
+  con `BOT_SERVICE_TOKEN` + `X-Canal-Celular`. El estado conversacional vive en el bot.
+- Avisos al residente con bandeja de salida (`evento_salida`) en la misma transacción del hecho;
+  entrega al bot por reserva (pull) o webhook firmado HMAC-SHA256 (push).
+- Operadores con usuario + PIN (scrypt) y JWT HS256; permisos por gremio en la base.
+- Idempotencia por actor + ruta + clave, en la misma transacción de la escritura (72 h).
+- Puntos: libro inmutable con clave única por hecho; reglas versionadas (+10 entrega válida,
+  +15 entrega directa) como propuesta pendiente de validar con la Fundación.
+- La semilla usa valores de ejemplo (5 torres × 110 viviendas, precios, 8 kg por balde).
+
 ## Alcance pendiente
 
-Frameworks, esquema, autenticación, reglas de negocio, integraciones, colas,
-almacenamiento de archivos, Dockerfiles y proxy HTTPS se definirán con el reto.
-No se instalarán dependencias de aplicación antes de esa decisión.
+Rol de base de datos restringido para la API, archivos e IA, canjes, exportaciones,
+certificados, colas externas y proxy HTTPS se definirán con el reto.
 
 ## Datos que debe confirmar la Fundación
 
