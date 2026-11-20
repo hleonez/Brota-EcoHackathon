@@ -4,6 +4,8 @@
     uv run python -m app.meta suscribir           # conecta ESTA app a la cuenta de WhatsApp Business
     uv run python -m app.meta plantillas          # estado de las plantillas de Brota en Meta
     uv run python -m app.meta crear-plantillas    # las envía a aprobación (omite las que ya existen)
+    uv run python -m app.meta perfil              # textos del perfil de WhatsApp (descripción, web…)
+    uv run python -m app.meta perfil --foto assets/perfil-brisa.jpg   # y además la foto
 
 La cuenta (WABA) sale de WHATSAPP_WABA_ID en bot/.env o de --waba.
 Si el webhook está verificado y suscrito a `messages` pero no llega ningún POST al bot,
@@ -14,7 +16,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import mimetypes
 import sys
+from pathlib import Path
 
 import httpx
 
@@ -49,11 +53,27 @@ DEFINICIONES: dict[str, tuple[str, list[str]]] = {
 }
 
 
+# Perfil del número en WhatsApp (lo que ve el vecino al tocar el nombre). Límites de Meta:
+# about ≤ 139, description ≤ 512, hasta 2 websites. El NOMBRE visible no se cambia por aquí:
+# se pide en WhatsApp Manager y Meta lo revisa.
+PERFIL: dict[str, object] = {
+    "about": "🌱 Brisa, asistente de reciclaje de Brota · Villas de San Pablo",
+    "description": (
+        "Soy Brisa 🌱. Pide aquí la recolección de tu material reciclable y orgánico, resuelve dudas "
+        "sobre cómo separar y suma puntos para tu torre. Escríbeme o mándame una nota de voz o una foto."
+    ),
+    "address": "Villas de San Pablo, Barranquilla",
+    "websites": ["https://github.com/hleonez/Brota-EcoHackathon"],
+    "vertical": "OTHER",
+}
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
     p = argparse.ArgumentParser(description="Configuración de la WhatsApp Cloud API")
-    p.add_argument("accion", choices=["estado", "suscribir", "plantillas", "crear-plantillas"])
+    p.add_argument("accion", choices=["estado", "suscribir", "plantillas", "crear-plantillas", "perfil"])
     p.add_argument("--waba", default=None, help="WhatsApp Business Account ID (por defecto, WHATSAPP_WABA_ID)")
+    p.add_argument("--foto", default=None, help="perfil: imagen JPG o PNG cuadrada (640×640 recomendado)")
     a = p.parse_args()
 
     s = get_settings()
@@ -66,6 +86,9 @@ def main() -> None:
         if "error" in num:
             raise SystemExit(f"Meta rechazó el token o el Phone Number ID: {num['error'].get('message')}")
         print(f"Número: {num.get('display_phone_number')} · {num.get('verified_name')}")
+        if a.accion == "perfil":
+            _perfil(c, base, h, s.whatsapp_phone_number_id, s.whatsapp_token, s.whatsapp_app_id, a.foto)
+            return
         if waba is None:
             raise SystemExit("Indica --waba <WhatsApp Business Account ID> o WHATSAPP_WABA_ID en bot/.env.")
         if a.accion in ("plantillas", "crear-plantillas"):
@@ -81,6 +104,46 @@ def main() -> None:
         for x in apps.get("data", []):
             d = x.get("whatsapp_business_api_data", {})
             print(f"  · {d.get('name')} (app_id {d.get('id')})")
+
+
+def _subir_foto(c: httpx.Client, base: str, h: dict[str, str], token: str, app_id: str, ruta: Path) -> str:
+    """API de subida reanudable de Meta: abre una sesión en la app y sube los bytes; devuelve el handle."""
+    datos = ruta.read_bytes()
+    if len(datos) > 5 * 1024 * 1024:
+        raise SystemExit("La foto pesa más de 5 MB.")
+    tipo = mimetypes.guess_type(ruta.name)[0] or ""
+    if tipo not in ("image/jpeg", "image/png"):
+        raise SystemExit("La foto debe ser JPG o PNG.")
+    if not app_id:
+        app_id = c.get(f"{base}/app", headers=h).json().get("id", "")
+    sesion = c.post(f"{base}/{app_id}/uploads", headers=h,
+                    params={"file_name": ruta.name, "file_length": len(datos), "file_type": tipo}).json()
+    if "id" not in sesion:
+        raise SystemExit(f"Meta no abrió la subida: {sesion.get('error', {}).get('message', sesion)}")
+    r = c.post(f"{base}/{sesion['id']}", content=datos,
+               headers={"Authorization": f"OAuth {token}", "file_offset": "0"}).json()
+    if "h" not in r:
+        raise SystemExit(f"Meta no recibió la foto: {r.get('error', {}).get('message', r)}")
+    return r["h"]
+
+
+def _perfil(c: httpx.Client, base: str, h: dict[str, str], numero: str, token: str, app_id: str,
+            foto: str | None) -> None:
+    cuerpo: dict[str, object] = {"messaging_product": "whatsapp", **PERFIL}
+    if foto:
+        cuerpo["profile_picture_handle"] = _subir_foto(c, base, h, token, app_id, Path(foto))
+        print(f"  + foto subida: {foto}")
+    r = c.post(f"{base}/{numero}/whatsapp_business_profile", json=cuerpo, headers=h).json()
+    if "error" in r:
+        e = r["error"]
+        raise SystemExit(f"Meta rechazó el perfil: {e.get('error_user_msg') or e.get('message')}")
+    campos = "about,description,address,websites,vertical,profile_picture_url"
+    ahora = c.get(f"{base}/{numero}/whatsapp_business_profile", headers=h, params={"fields": campos}).json()
+    p = (ahora.get("data") or [{}])[0]
+    print("Perfil actualizado:")
+    for k in ("about", "description", "address", "websites", "vertical"):
+        print(f"  · {k}: {p.get(k)}")
+    print(f"  · foto: {'sí' if p.get('profile_picture_url') else 'no'}")
 
 
 def _existentes(c: httpx.Client, base: str, h: dict[str, str], waba: str) -> dict[str, dict]:

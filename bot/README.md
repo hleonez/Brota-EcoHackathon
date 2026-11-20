@@ -31,6 +31,11 @@ Detalle en [docs/integracion-bot.md](../docs/integracion-bot.md) §4.
 **Si el webhook está verificado pero no llega ningún mensaje:** conecta la app a la cuenta de WhatsApp:
 `uv run python -m app.meta suscribir --waba <WhatsApp Business Account ID>`.
 
+**Perfil de Brisa en WhatsApp** (descripción, dirección, web y foto, definidos en `PERFIL` de
+`app/meta.py`): `uv run python -m app.meta perfil --foto assets/perfil-brisa.jpg`. Si Meta responde
+«An unknown error has occurred», vuelve a correrlo (es un fallo pasajero). El **nombre visible** no se
+cambia por la API: se pide en WhatsApp Manager y Meta lo revisa.
+
 Lo que ya entiende un vecino: «hola» abre el menú (♻ Pedir recolección, ❓ Tengo una duda, 📦 Mis
 solicitudes, ⭐ Mis puntos, 🏆 Liga). **Pedir** es guiado (`app/pedido.py`):
 1. Elige materiales de la lista o los escribe («cajas y botellas», con `app/catalogo.py`).

@@ -560,6 +560,43 @@ Bot: 55 pruebas (3 nuevas). Contenedor del bot actualizado.
 
 ---
 
+## 17 · 20-nov-2026 · Número propio de Brisa
+
+Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263**.
+- **En Meta (el equipo):** número agregado y verificado por SMS en una cuenta de WhatsApp Business
+  nueva, «Fymbot» (`1672224761118654`). Phone Number ID: `1407345502471355`. Estado: `CONNECTED`,
+  `CLOUD_API`, `account_mode LIVE`, límite `TIER_250` (negocio sin verificar). El token permanente de
+  `bot-dev` ya tiene acceso.
+- **Desde el código:** `app.meta suscribir` conectó la app BrotaBrisa a la cuenta nueva.
+  `app.meta crear-plantillas` envió las 4 plantillas, que quedaron `PENDING` como UTILITY.
+- **`bot/.env`** (local) apunta al número y la cuenta nuevos. Los IDs de prueba quedan comentados
+  por si hay que volver.
+- **Nombre visible:** quedó «Fymbot», el nombre de la empresa. Para que diga «Brota» hay que pedir el
+  cambio en WhatsApp Manager → Números de teléfono → Perfil (Meta lo revisa).
+- **Túnel caducado:** el túnel gratuito de Cloudflare llevaba horas prendido y respondía «Tunnel not
+  found». `.\brota.ps1` ahora reinicia el túnel en cada arranque. Brisa toma la dirección nueva y la
+  registra sola en Meta: probado, se reconectó en unos 15 s.
+- **Prueba real:** un «hola» al número nuevo llegó al bot y Brisa respondió sin errores.
+
+---
+
+## 18 · 20-nov-2026 · Perfil de Brisa en WhatsApp
+
+- **Foto de perfil:** la mascota de Brisa que hizo el equipo («Brisa · Asistente de Brota»), en
+  `bot/assets/perfil-brisa.jpg`. Se convirtió a 640×640 JPG con un margen blanco para que WhatsApp no
+  corte el borde verde al recortarla en círculo.
+- **Nuevo comando `uv run python -m app.meta perfil [--foto …]`:** sube la foto con la API de subida
+  reanudable de Meta (`POST /{app_id}/uploads` y luego los bytes, que devuelven un handle). Después
+  actualiza `whatsapp_business_profile` con la descripción, el «about», la dirección (Villas de San
+  Pablo, Barranquilla), la web (el repositorio de GitHub) y la foto. Los textos están en `PERFIL` de
+  `app/meta.py`.
+- **Probado:** el perfil quedó con foto y los textos. La primera vez Meta respondió «An unknown error
+  has occurred». Al repetirlo funcionó: fue un fallo pasajero, documentado en el README del bot.
+- **Nombre visible:** sigue en «Fymbot». La API no lo cambia: se pide «Brota» en WhatsApp Manager y
+  Meta lo revisa.
+
+---
+
 ## Próximos pasos
 
 - [ ] Revisar las ramas y fusionar `feat/coordinacion-whatsapp` a `main`.
@@ -577,8 +614,9 @@ Bot: 55 pruebas (3 nuevas). Contenedor del bot actualizado.
 - [x] Token permanente (usuario del sistema `bot-dev`).
 - [x] Arranque con un comando y webhook de Meta automático (`.\brota.ps1`).
 - [ ] Publicar 24/7: VM gratis (Oracle Cloud Always Free) con el mismo Docker.
-- [ ] Meta: app en modo Live (URL de privacidad), número propio, plantillas y verificación del negocio.
-- [ ] Plantillas de WhatsApp enviadas a aprobación.
+- [x] Meta: número propio (+57 312 708 3263) conectado.
+- [ ] Meta: app en modo Live (URL de privacidad), nombre visible «Brota» y verificación del negocio.
+- [x] Plantillas de WhatsApp enviadas a aprobación (falta que Meta las apruebe).
 - [ ] API: CI en GitHub Actions y configuración de ruff.
 - [ ] API: módulo M06 con Gemini (interpretar audio/texto y leer el tiquete de pesaje).
 - [ ] Datos reales: viviendas por torre, lista de precios de Asorescatar, peso del balde.
