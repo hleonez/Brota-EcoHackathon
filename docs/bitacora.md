@@ -597,6 +597,29 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
 
 ---
 
+## 19 · 20-nov-2026 · Reto oficial EcoConecta y rama personal
+
+- **Ramas:** el equipo integró todo en `develop` (`main` sigue en la versión inicial). Cada integrante
+  trabaja en su propia rama. Se creó `dev/jeremy` desde `develop` (`40fa9a4`).
+- **Documentos revisados:** el reto oficial, la agenda del 20 y 21 de noviembre y el manual de
+  identidad visual (paleta `--eco-*`, Poppins/Inter). El plan del equipo
+  (`docs/plan-api-bd-ecoconecta.md`) ya cruza cada requisito con el código. Se confirmó en el código
+  lo que falta:
+  - El rol de recolector: solo existen `coordinacion`, `fundacion` y `admin`.
+  - El estado `programada` en `orden`.
+  - La preferencia horaria en `solicitud`.
+  - La habilitación de piloto.
+  - Estilos con Bootstrap o Tailwind.
+  - El despliegue en la nube.
+- **IA:** el reto escrito (§8 y §8.1) solo nombra OpenAI, Azure OpenAI, Azure AI Foundry y Claude API.
+  **La organización autorizó al equipo usar Gemini** (20-nov-2026), así que se mantiene en
+  `api/app/modulos/ia.py` y `bot/app/ia.py`. Conviene tener esa autorización por escrito (correo o
+  mensaje del mentor) y mencionarla en la sustentación. Según §9, hay que explicar el modelo, los datos
+  procesados, el resultado y los controles. El control humano ya existe: la IA propone, el vecino
+  confirma y la coordinación asigna, programa y cierra.
+
+---
+
 ## Próximos pasos
 
 - [ ] Revisar las ramas y fusionar `feat/coordinacion-whatsapp` a `main`.
