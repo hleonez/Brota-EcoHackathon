@@ -11,9 +11,15 @@ Frontend React y TypeScript para la comunidad, los colectivos de recolección y 
 
 ## Compatibilidad con el servidor
 
-La base de esta rama es develop, commit 40fa9a4. La API vigente expresa una orden programada mediante una asignación con inicio y fin. El panel exige la franja antes del cierre y conserva los materiales aceptados en la observación disponible en el contrato. El servidor evalúa los puntos. La aplicación distingue el estado de los avisos consultando la cola.
+Comunidad y Administración se integran con la API de develop, commit f03226a.
 
-La habilitación del piloto por persona y unidad requiere las rutas del plan de API. Sin esas rutas el panel informa la dependencia. El backend base tampoco implementa cuentas de recolector, historial editorial de publicación ni materiales de cierre estructurados. La bandeja y los resúmenes muestran los estados que provee cada endpoint. Las funcionalidades de IA del bot requieren una revisión separada del equipo antes del despliegue institucional.
+- La guía consulta contenidos públicos por tema mediante `GET /v1/contenidos-educativos`.
+- Administración crea cuentas de huertero y reciclador vinculadas a trabajadores activos sin cuenta. El gremio se toma del trabajador.
+- Educación admite título, texto, tema y publicación, además del retiro con versión esperada. El listado actual devuelve solo publicaciones vigentes. Los borradores y retirados permanecen guardados y requieren una lectura administrativa para recuperarlos.
+- Piloto elige participante y unidad mediante `GET /v1/participantes`. Las fechas se interpretan en Bogotá. Cambiar una fecha conserva el vencimiento original cuando el día no cambia. Quitar el vencimiento y revocar son acciones explícitas.
+- Los formularios recargan la lista ante conflictos de versión. Las respuestas de formularios desmontados no cierran otro editor.
+
+La vista operativa de las cuentas de trabajador depende de la integración del frontend de Operación. El registro asistido desde administración requiere resolver el acceso al listado de unidades. El servidor conserva la validación de permisos, transiciones y puntos.
 
 ## Arrancar en desarrollo
 

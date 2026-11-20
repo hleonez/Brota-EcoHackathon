@@ -87,7 +87,7 @@ export function Espera({
   return error ? (
     <p role="alert">
       {error}{" "}
-      <button className="btn" onClick={reintentar}>
+      <button type="button" className="btn" onClick={reintentar}>
         Reintentar
       </button>
     </p>
