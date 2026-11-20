@@ -10,26 +10,24 @@
 
 /* A desktop sidebar stays stable. React supplies inert/hidden on mobile. */
 @media (max-width: 1023px) {
+  /* The drawer stays rendered; visibility flips after the slide so it never blocks taps. */
   [data-motion="nav"][data-state] {
-    transition-behavior: allow-discrete;
-    transition: transform var(--eco-motion-nav) var(--ease-drawer),
-      opacity var(--eco-motion-nav) var(--ease-out);
-  }
-
-  .panel-nav[data-motion="nav"][data-state] {
     transition: transform var(--eco-motion-nav) var(--ease-drawer),
       opacity var(--eco-motion-nav) var(--ease-out),
-      display var(--eco-motion-nav) allow-discrete;
+      visibility 0s linear var(--eco-motion-nav);
   }
 
   [data-motion="nav"][data-state="open"] {
     transform: translateX(0);
     opacity: 1;
+    visibility: visible;
+    transition-delay: 0s;
   }
 
   [data-motion="nav"][data-state="closed"] {
-    transform: translateX(-100%);
+    transform: translateX(-104%);
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
   }
 }
@@ -113,7 +111,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-motion][data-state], .panel-nav[data-motion="nav"][data-state] {
+  [data-motion][data-state] {
     transition: none;
     animation: none;
   }
