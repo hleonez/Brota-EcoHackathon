@@ -100,7 +100,7 @@ uv export --no-dev --no-hashes --format requirements-txt -o requirements.txt
 ## Pendiente
 
 - Rol de PostgreSQL restringido para la API (hoy, en desarrollo, se usa el administrador).
-- Canjes, exportaciones Excel y hoja de ruta. Papel Inteligente (`POST /v1/pesajes/desde-foto`) y Certificado Verde (`GET /v1/reportes/certificado`) ya están. `POST /v1/ia/interpretar` sigue apagado.
+- M06 (foto de tiquete, audio), canjes, exportaciones Excel, Certificado Verde y hoja de ruta.
 - Reemplazar los valores de ejemplo de la semilla por datos reales (viviendas, precios, balde).
 
 
