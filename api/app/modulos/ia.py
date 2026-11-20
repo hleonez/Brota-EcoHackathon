@@ -199,8 +199,8 @@ def _llamar(s: Settings, modelo: str, sistema: str, partes: list[dict[str, Any]]
 
 def interpretar(db: Session, datos: InterpretarIn) -> InterpretacionOut:
     s = get_settings()
-    if not s.gemini_api_key:
-        raise AppError(503, "IA_NO_DISPONIBLE", "La IA no está configurada (GEMINI_API_KEY).")
+    if not proveedor_autorizado():
+        raise AppError(503, "IA_NO_DISPONIBLE", "La IA está desactivada para la entrega EcoConecta; utiliza el catálogo guiado.")
     residuos = list(db.execute(select(Residuo).where(Residuo.activo.is_(True)).order_by(Residuo.orden)).scalars())
     por_codigo = {r.codigo: r for r in residuos}
 
@@ -265,3 +265,8 @@ def interpretar(db: Session, datos: InterpretarIn) -> InterpretacionOut:
 def post_interpretar(datos: InterpretarIn, actor: Actor = Depends(get_actor), db: Session = Depends(get_db)) -> dict:
     """Lectura sin efectos: no guarda nada (por eso no pide Idempotency-Key)."""
     return {"data": interpretar(db, datos).model_dump(mode="json")}
+
+
+def proveedor_autorizado() -> bool:
+    """Gemini no está permitido por el reto; solo se habilitará al migrar el adaptador."""
+    return False

@@ -13,7 +13,7 @@ import json
 import httpx
 import pytest
 
-from tests.conftest import BOT, bot
+from tests.conftest import BOT, bot, habilitar_piloto
 
 CARMEN = "573001112233"  # wa_id tal como lo envía WhatsApp
 VECINO = "3005556677"  # móvil colombiano sin indicativo
@@ -60,6 +60,7 @@ def test_registro_por_whatsapp(client, catalogo):
     r = client.post("/v1/registros", json=cuerpo, headers=bot(CARMEN))
     assert r.status_code == 201, r.text
     assert r.json()["data"]["estado_registro"] == "completo"
+    habilitar_piloto(client, CARMEN)
 
     r = client.post("/v1/registros", json=cuerpo, headers=bot(CARMEN))
     assert r.status_code == 409 and _err(r) == "CONTACT_ALREADY_REGISTERED"
@@ -83,7 +84,7 @@ def test_registro_sin_consentimiento_rechazado(client, catalogo):
 
 
 def test_solicitud_mixta_e_idempotencia(client, catalogo):
-    cuerpo = {
+    cuerpo = {"preferencia_sin_restriccion": True,
         "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"], catalogo["tipos_servicio:ORGANICOS"]],
         "observacion": "Cartón y restos de cocina",
     }
@@ -113,7 +114,7 @@ def test_solicitud_mixta_e_idempotencia(client, catalogo):
     assert r3.status_code == 409 and _err(r3) == "IDEMPOTENCY_CONFLICT"
 
     # Otra solicitud del mismo servicio con una abierta → regla de solicitud abierta.
-    r4 = client.post("/v1/solicitudes", json={"tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]}, headers=bot(CARMEN))
+    r4 = client.post("/v1/solicitudes", json={"preferencia_sin_restriccion": True, "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]}, headers=bot(CARMEN))
     assert r4.status_code == 409 and _err(r4) == "OPEN_REQUEST_EXISTS"
     assert r4.json()["error"]["codigo_pasaporte"] == s["codigo_pasaporte"]
 
@@ -148,7 +149,7 @@ def test_asignacion_y_aviso(client, operador, catalogo):
     rosa = _recolector(client, operador, catalogo["gremios:ASORESCATAR"], "coord-reciclaje")
     E["rosa"] = rosa["id"]
     url = f"/v1/ordenes/{E['orden_rec']}/asignacion"
-    cuerpo = {
+    cuerpo = {"acuerdo_canal": "llamada",
         "version_esperada": 99,
         "recolector_id": rosa["id"],
         "inicio": "2026-11-20T16:00:00-05:00",
@@ -168,7 +169,7 @@ def test_asignacion_y_aviso(client, operador, catalogo):
     r = client.post(url, json={**cuerpo, "version_esperada": 1}, headers=operador("coord-reciclaje"))
     assert r.status_code == 200, r.text
     o = r.json()["data"]
-    assert o["estado"] == "asignada" and o["version"] == 2 and o["asignacion"]["recolector_nombre"] == rosa["nombre"]
+    assert o["estado"] == "programada" and o["version"] == 2 and o["asignacion"]["recolector_nombre"] == rosa["nombre"]
 
     # Reasignación conserva historia.
     otro = client.get("/v1/recolectores", params={"gremio_id": catalogo["gremios:ASORESCATAR"]},
@@ -201,9 +202,9 @@ def test_bot_reserva_y_confirma_avisos(client):
     assert client.post("/v1/canal/avisos/reservas", json={}, headers={"Authorization": "Bearer x"}).status_code == 401
 
 
-def test_resultado_recogida_otorga_puntos_una_vez(client, operador):
+def test_resultado_recogida_otorga_puntos_una_vez(client, operador, catalogo):
     url = f"/v1/ordenes/{E['orden_rec']}/resultado"
-    cuerpo = {"version_esperada": 4, "resultado": "recogida", "ocurrido_at": "2026-11-17T16:30:00-05:00"}
+    cuerpo = {"materiales_confirmados": [catalogo["materiales:CARTON"]], "version_esperada": 4, "resultado": "recogida", "ocurrido_at": "2026-11-17T16:30:00-05:00"}
     r = client.post(url, json={**cuerpo, "motivo_rechazo_id": E["rosa"]}, headers=operador("coord-reciclaje"))
     assert r.status_code == 422  # una recogida no lleva motivo
     h = operador("coord-reciclaje")
@@ -225,20 +226,20 @@ def test_rechazo_con_educacion(client, operador, catalogo):
     huertero = _recolector(client, operador, catalogo["gremios:ECORAZON"], "coord-huerta")
     E["huertero"] = huertero["id"]
     url = f"/v1/ordenes/{E['orden_huerta']}"
-    r = client.post(url + "/resultado", json={"version_esperada": 1, "resultado": "rechazada", "ocurrido_at": "2026-11-17T10:00:00-05:00",
+    r = client.post(url + "/resultado", json={"materiales_confirmados": [], "version_esperada": 1, "resultado": "rechazada", "ocurrido_at": "2026-11-17T10:00:00-05:00",
                                               "motivo_rechazo_id": catalogo["motivos_rechazo:MOJADO"]}, headers=operador("coord-huerta"))
     assert r.status_code == 409  # aún no asignada
-    client.post(url + "/asignacion", json={"version_esperada": 1, "recolector_id": huertero["id"], "forma_aviso": "recado"},
+    client.post(url + "/asignacion", json={"acuerdo_canal": "llamada", "inicio": "2026-11-20T14:00:00-05:00", "fin": "2026-11-20T16:00:00-05:00", "version_esperada": 1, "recolector_id": huertero["id"], "forma_aviso": "recado"},
                 headers=operador("coord-huerta"))
-    r = client.post(url + "/resultado", json={"version_esperada": 2, "resultado": "rechazada", "ocurrido_at": "2026-11-17T10:00:00-05:00"},
+    r = client.post(url + "/resultado", json={"materiales_confirmados": [], "version_esperada": 2, "resultado": "rechazada", "ocurrido_at": "2026-11-17T10:00:00-05:00"},
                     headers=operador("coord-huerta"))
     assert r.status_code == 422  # rechazo sin motivo
-    r = client.post(url + "/resultado", json={"version_esperada": 2, "resultado": "rechazada", "ocurrido_at": "2026-11-17T10:00:00-05:00",
+    r = client.post(url + "/resultado", json={"materiales_confirmados": [], "version_esperada": 2, "resultado": "rechazada", "ocurrido_at": "2026-11-17T10:00:00-05:00",
                                               "motivo_rechazo_id": catalogo["motivos_rechazo:NO_APROVECHABLE"]}, headers=operador("coord-huerta"))
     assert r.status_code == 200 and r.json()["data"]["evaluacion_puntos"] == "no_aplica"
 
     s = client.get(f"/v1/solicitudes/{E['solicitud']['id']}", headers=bot(CARMEN, False)).json()["data"]
-    assert s["avance"]["estado_general"] == "atendida" and s["avance"]["ordenes_finalizadas"] == 2
+    assert s["avance"]["estado_general"] == "finalizada_con_novedades" and s["avance"]["ordenes_finalizadas"] == 2
 
     avisos = client.post("/v1/canal/avisos/reservas", json={"limite": 50}, headers=BOT).json()["data"]
     tipos = {a["tipo"]: a for a in avisos}
@@ -485,14 +486,15 @@ def test_concurrencia_doble_toque(client, catalogo):
     u = client.get("/v1/unidades", params={"torre_id": catalogo["torre:2"], "referencia": "301"}, headers=bot(cel, False)).json()["data"][0]
     client.post("/v1/registros", json={"nombre": "Ana", "unidad_id": u["id"],
                                        "consentimiento": {"version_politica": "2026-11", "decision": "aceptado"}}, headers=bot(cel))
-    cuerpo = {"tipo_servicio_ids": [catalogo["tipos_servicio:ORGANICOS"]]}
+    habilitar_piloto(client, cel)
+    cuerpo = {"preferencia_sin_restriccion": True, "tipo_servicio_ids": [catalogo["tipos_servicio:ORGANICOS"]]}
     h = bot(cel)
     with ThreadPoolExecutor(4) as ex:
         rs = list(ex.map(lambda _: client.post("/v1/solicitudes", json=cuerpo, headers=h), range(4)))
     assert {r.status_code for r in rs} == {201}
     assert len({r.json()["data"]["id"] for r in rs}) == 1
 
-    cuerpo = {"tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]}
+    cuerpo = {"preferencia_sin_restriccion": True, "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]}
     with ThreadPoolExecutor(4) as ex:
         rs = list(ex.map(lambda _: client.post("/v1/solicitudes", json=cuerpo, headers=bot(cel)), range(4)))
     codigos = sorted(r.status_code for r in rs)

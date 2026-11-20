@@ -356,3 +356,19 @@ El contrato modular 0.2 desarrolla las interfaces de identidad, entregas directa
 6. Implementar Liga, certificados y canjes solo después de acordar fórmulas, beneficiarios y evidencia disponible. Verificar que una corrección no duplique kilos ni deje un saldo injustificado.
 
 El criterio de aceptación del diseño es poder seguir un dato desde su captura y confirmación hasta su informe o incentivo, explicar qué se sabe realmente y modificar las reglas pendientes sin borrar esa historia.
+
+## 15. Esquema aplicado en EcoConecta
+
+Las migraciones `0001`–`0004` no se reescribieron. `0005`–`0010` se conservan. `0011` copia `habilitacion_piloto.vigente_desde` desde `created_at` cuando esa fecha existe, y la deja nula si no hay fecha conocida; no usa `now()` al añadir la columna. `0012` añade lo que el servicio ya escribe:
+
+| Pieza | Qué guarda | Qué no hace |
+| --- | --- | --- |
+| `solicitud.preferencia_inicio`, `preferencia_fin`, `preferencia_sin_restriccion` | Una ventana, «sin restricción» con fechas nulas, o las tres columnas nulas en historia | No acepta texto libre y ventana a la vez. `preferencia_horaria` queda como texto derivado para el panel |
+| `solicitud.tipo_generador` | `hogar` o `negocio`, copiado de `unidad.tipo` al crear; nulo en filas viejas | No se usa como permiso |
+| `asignacion.acuerdo_observacion`, `programada_por` | Nota y cuenta que programó, solo cuando hay franja | `acuerdo_canal` nulo sigue permitido en historia; si viene, es `whatsapp`, `llamada` o `presencial` |
+| `resultado_material` | PK `(resultado_orden_id, material_id)` con FK a `material`. Las escrituras nuevas insertan aquí y dejan el JSONB nulo | Copia del JSONB histórico solo los UUID que existen en `material`. No borra el JSONB viejo ni inventa materiales |
+| `habilitacion_piloto.revocada_at` | Momento en que `activo` pasa a falso; se limpia si se reactiva | Una habilitación vencida, revocada o ausente no se hereda por torre |
+| `contenido_educativo.tema`, `vigente_desde`, `vigente_hasta`, `gremio_id` | Tema visible, vigencia opcional y gremio opcional | `activo = false` también retira la publicación. `0010` dejó el contenido histórico desconocido en `separacion` y `publicado = true`; esa decisión ya estaba aplicada y no se reescribe |
+| `fk_cuenta_operadora_trabajador_id_recolector` | El nombre de la FK queda alineado con el modelo | Sustituye el nombre anterior `fk_cuenta_trabajador` |
+
+`0005` clasifica como `huertero` a los trabajadores de demostración del gremio de orgánicos. Es un supuesto de la semilla ya confirmado, no una evidencia histórica nueva. La cuenta del trabajador sigue siendo opcional: la coordinación puede registrar el resultado de quien no tiene teléfono. Los kilos no salen de `resultado_material`; siguen en `linea_pesaje`.

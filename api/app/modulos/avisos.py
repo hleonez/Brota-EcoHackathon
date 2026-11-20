@@ -89,6 +89,8 @@ class ResultadoAvisoIn(Entrada):
 
 class ContenidoOut(Salida):
     id: uuid.UUID
+    tema: str
+    version: int
     titulo: str
     tipo: str
     recurso: str | None
@@ -241,13 +243,21 @@ def get_avisos_orden(
 
 @router.get("/contenidos-educativos")
 def get_contenidos(
+    tema: Literal["separacion", "huerta", "horarios_rutas", "servicio"] | None = Query(None),
     material_id: uuid.UUID | None = Query(None),
     motivo_rechazo_id: uuid.UUID | None = Query(None),
     actor: Actor = Depends(get_actor),
     pag: Paginacion = Depends(paginacion),
     db: Session = Depends(get_db),
 ):
-    stmt = select(ContenidoEducativo).where(ContenidoEducativo.activo.is_(True))
+    stmt = select(ContenidoEducativo).where(
+        ContenidoEducativo.activo.is_(True),
+        ContenidoEducativo.publicado.is_(True),
+        or_(ContenidoEducativo.vigente_desde.is_(None), ContenidoEducativo.vigente_desde <= ahora()),
+        or_(ContenidoEducativo.vigente_hasta.is_(None), ContenidoEducativo.vigente_hasta > ahora()),
+    )
+    if tema:
+        stmt = stmt.where(ContenidoEducativo.tema == tema)
     if motivo_rechazo_id:
         stmt = stmt.where(
             or_(

@@ -102,6 +102,7 @@ def acreditar(
             unidad_id=unidad_id,
             torre_id=torre_id,
             delta=puntos,
+            detalle_calculo={"modalidad": modalidad, "cantidad": "1", "puntos_por_entrega": str(puntos), "total": str(puntos), "regla_codigo": regla.codigo, "regla_id": str(regla.id), "nota": "Regla propuesta del equipo; valores sujetos a validación FSD"},
             tipo="abono",
             version_regla_id=regla.id,
             resultado_orden_id=resultado_orden_id,
@@ -140,6 +141,7 @@ class SaldoOut(Salida):
 
 
 class MovimientoOut(Salida):
+    detalle_calculo: dict | None = None
     id: uuid.UUID
     delta: PuntosSalida
     tipo: str
@@ -185,6 +187,7 @@ def get_mis_movimientos(
         return MovimientoOut(
             id=m.id,
             delta=m.delta,
+            detalle_calculo=m.detalle_calculo,
             tipo=m.tipo,
             regla_codigo=regla,
             codigo_pasaporte=pasaporte,

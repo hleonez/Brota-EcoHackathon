@@ -21,6 +21,7 @@ from app.models import (
     CapacidadTorre,
     Conjunto,
     Gremio,
+    Huerta,
     Material,
     MotivoRechazo,
     PuntoRecepcion,
@@ -92,12 +93,15 @@ class EquivalenciaItem(Salida):
 
 
 class RecolectorIn(Entrada):
+    huerta_id: uuid.UUID | None = None
+    tipo: Literal["reciclador", "huertero"] = "reciclador"
     gremio_id: uuid.UUID
     nombre: str = Field(min_length=1, max_length=120)
     telefono_contacto: str | None = Field(default=None, max_length=30)
 
 
 class RecolectorPatch(Entrada):
+    huerta_id: uuid.UUID | None = None
     version_esperada: int
     nombre: str | None = Field(default=None, min_length=1, max_length=120)
     telefono_contacto: str | None = Field(default=None, max_length=30)
@@ -105,6 +109,8 @@ class RecolectorPatch(Entrada):
 
 
 class RecolectorOut(Salida):
+    huerta_id: uuid.UUID | None = None
+    tipo: Literal["reciclador", "huertero"]
     id: uuid.UUID
     gremio_id: uuid.UUID
     nombre: str
@@ -170,6 +176,10 @@ def get_unidades(
 ):
     """Operadores: búsqueda con filtros. Bot/residente: solo coincidencia exacta torre + referencia."""
     stmt = select(Unidad).where(Unidad.activo.is_(True))
+    if actor.trabajador_id is not None:
+        raise prohibido("Consulta la ubicación desde tus asignaciones.")
+    if actor.es_operador and not actor.gremios_coordinados:
+        raise prohibido("El directorio de unidades es para la coordinación.")
     if not actor.es_operador:
         if (torre_id is None and tipo != "negocio") or not referencia:
             raise AppError(
@@ -261,11 +271,14 @@ def get_catalogos(
 
 def _exigir_gestion(actor: Actor, gremio_id: uuid.UUID) -> None:
     if not (actor.es_admin or actor.coordina(gremio_id)):
-        raise prohibido("Solo coordinación del gremio o administración gestiona recolectores.")
+        raise prohibido("Solo coordinación del gremio o administración gestiona recicladores y huerteros.")
 
 
-@router.get("/recolectores")
+@router.get("/recicladores")
+@router.get("/huerteros")
+@router.get("/recolectores", deprecated=True)
 def get_recolectores(
+    request: Request,
     gremio_id: uuid.UUID | None = Query(None),
     activo: bool | None = Query(None),
     actor: Actor = Depends(actor_operador),
@@ -273,6 +286,10 @@ def get_recolectores(
     db: Session = Depends(get_db),
 ):
     stmt = select(Recolector)
+    if request.url.path.endswith("/huerteros"):
+        stmt = stmt.where(Recolector.tipo == "huertero")
+    elif request.url.path.endswith("/recicladores"):
+        stmt = stmt.where(Recolector.tipo == "reciclador")
     if not actor.es_admin:
         alcance = actor.gremios_coordinados
         if gremio_id is not None and gremio_id not in alcance:
@@ -286,14 +303,27 @@ def get_recolectores(
     return paginar(db, stmt, pag, lambda r: RecolectorOut.model_validate(r).model_dump(mode="json"))
 
 
-@router.post("/recolectores", status_code=201)
+@router.post("/recicladores", status_code=201)
+@router.post("/huerteros", status_code=201)
+@router.post("/recolectores", status_code=201, deprecated=True)
 def post_recolector(
     datos: RecolectorIn, request: Request, actor: Actor = Depends(actor_operador), db: Session = Depends(get_db)
 ):
     def _fn() -> RecolectorOut:
         _exigir_gestion(actor, datos.gremio_id)
         referencia_activa(db, Gremio, datos.gremio_id, "gremio_id", "Gremio")
-        r = Recolector(**datos.model_dump())
+        valores = datos.model_dump()
+        if request.url.path.endswith("/huerteros"):
+            valores["tipo"] = "huertero"
+        elif request.url.path.endswith("/recicladores"):
+            valores["tipo"] = "reciclador"
+        if valores["huerta_id"] is not None:
+            huerta = referencia_activa(db, Huerta, valores["huerta_id"], "huerta_id", "Huerta")
+            if valores["tipo"] != "huertero" or huerta.gremio_id != datos.gremio_id:
+                raise invalido({"huerta_id": "La huerta debe pertenecer al gremio del huertero"})
+        elif valores["tipo"] == "huertero":
+            raise invalido({"huerta_id": "Selecciona la huerta del huertero"})
+        r = Recolector(**valores)
         db.add(r)
         db.flush()
         db.refresh(r)
@@ -303,7 +333,9 @@ def post_recolector(
     return escritura(request, db, actor, datos, _fn, status=201)
 
 
-@router.patch("/recolectores/{recolector_id}")
+@router.patch("/recicladores/{recolector_id}")
+@router.patch("/huerteros/{recolector_id}")
+@router.patch("/recolectores/{recolector_id}", deprecated=True)
 def patch_recolector(
     recolector_id: uuid.UUID,
     datos: RecolectorPatch,
@@ -315,6 +347,11 @@ def patch_recolector(
         r = obtener(db, Recolector, recolector_id, "recolector", bloquear=True)
         _exigir_gestion(actor, r.gremio_id)
         verificar_version(datos.version_esperada, r.version)
+        if "huerta_id" in datos.model_fields_set:
+            h = referencia_activa(db, Huerta, datos.huerta_id, "huerta_id", "Huerta")
+            if r.tipo != "huertero" or h.gremio_id != r.gremio_id:
+                raise invalido({"huerta_id": "La huerta debe corresponder al gremio del huertero"})
+            r.huerta_id = h.id
         for campo in ("nombre", "telefono_contacto", "activo"):
             if campo in datos.model_fields_set:
                 valor = getattr(datos, campo)
@@ -328,3 +365,56 @@ def patch_recolector(
     return escritura(request, db, actor, datos, _fn)
 
 
+
+
+class HuertaIn(Entrada):
+    nombre: str = Field(min_length=1, max_length=120)
+    ubicacion: str = Field(min_length=1, max_length=200)
+    gremio_id: uuid.UUID
+
+class HuertaOut(Salida):
+    id: uuid.UUID
+    nombre: str
+    ubicacion: str
+    gremio_id: uuid.UUID
+    activo: bool
+    version: int
+
+class HuertaPatch(Entrada):
+    version_esperada: int
+    nombre: str | None = Field(default=None, min_length=1, max_length=120)
+    ubicacion: str | None = Field(default=None, min_length=1, max_length=200)
+    activo: bool | None = None
+
+@router.get("/huertas")
+def listar_huertas(actor: Actor = Depends(actor_operador), db: Session = Depends(get_db), pag: Paginacion = Depends(paginacion)):
+    stmt = select(Huerta)
+    if not actor.es_admin:
+        stmt = stmt.where(Huerta.gremio_id.in_(actor.gremios_coordinados))
+    return paginar(db, stmt.order_by(Huerta.nombre, Huerta.id), pag, lambda h: HuertaOut.model_validate(h).model_dump(mode="json"))
+
+@router.post("/huertas", status_code=201)
+def crear_huerta(datos: HuertaIn, request: Request, actor: Actor = Depends(actor_admin), db: Session = Depends(get_db)):
+    def ejecutar():
+        referencia_activa(db, Gremio, datos.gremio_id, "gremio_id", "Gremio")
+        h = Huerta(**datos.model_dump())
+        db.add(h)
+        db.flush()
+        return HuertaOut.model_validate(h)
+    return escritura(request, db, actor, datos, ejecutar, status=201)
+
+@router.patch("/huertas/{id}")
+def actualizar_huerta(id: uuid.UUID, datos: HuertaPatch, request: Request, actor: Actor = Depends(actor_admin), db: Session = Depends(get_db)):
+    def ejecutar():
+        h = obtener(db, Huerta, id, "huerta", bloquear=True)
+        verificar_version(datos.version_esperada, h.version)
+        for campo in ("nombre", "ubicacion", "activo"):
+            if campo in datos.model_fields_set:
+                valor = getattr(datos, campo)
+                if valor is None:
+                    raise invalido({campo: "No admite null"})
+                setattr(h, campo, valor)
+        h.version += 1
+        db.flush()
+        return HuertaOut.model_validate(h)
+    return escritura(request, db, actor, datos, ejecutar)

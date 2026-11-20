@@ -41,7 +41,7 @@ from app.modulos.comun import obtener
 
 router = APIRouter(tags=["liga y reportes"])
 
-ESTADOS = ("nueva", "asignada", "recogida", "rechazada")
+ESTADOS = ("nueva", "asignada", "programada", "recogida", "rechazada", "cancelada")
 FORMULA_LIGA = "participacion_hogares_v1"
 
 

@@ -5,7 +5,7 @@ Corre después de test_recorrido_coordinacion.py: la coordinación de reciclaje 
 
 from __future__ import annotations
 
-from tests.conftest import BOT, bot
+from tests.conftest import BOT, bot, habilitar_piloto
 
 VECINO = "573150000005"
 
@@ -20,11 +20,12 @@ def _registrar(client, catalogo) -> None:
     r = client.post("/v1/registros", json={"nombre": "Paola", "unidad_id": u["id"],
                     "consentimiento": {"version_politica": "2026-11", "decision": "aceptado"}}, headers=bot(VECINO))
     assert r.status_code == 201, r.text
+    habilitar_piloto(client, VECINO)
 
 
 def test_casos_llegan_a_la_coordinacion_y_la_respuesta_al_vecino(client, catalogo, operador):
     _registrar(client, catalogo)
-    s = client.post("/v1/solicitudes", json={"tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]},
+    s = client.post("/v1/solicitudes", json={"preferencia_sin_restriccion": True, "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]},
                     headers=bot(VECINO)).json()["data"]
     _avisos(client)
 
@@ -78,6 +79,6 @@ def test_el_vecino_cancela_y_puede_volver_a_pedir(client, catalogo, operador):
                             headers=operador("coord-reciclaje", False)).json()["data"]
     assert s["codigo_pasaporte"] in {o["codigo_pasaporte"] for o in canceladas}
     # Ya no está abierta: puede volver a pedir el mismo servicio.
-    nueva = client.post("/v1/solicitudes", json={"tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]},
+    nueva = client.post("/v1/solicitudes", json={"preferencia_sin_restriccion": True, "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]},
                         headers=bot(VECINO))
     assert nueva.status_code == 201

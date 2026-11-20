@@ -31,9 +31,12 @@ from app.models import (
     ContenidoEducativo,
     ContenidoMotivo,
     Gremio,
+    Huerta,
     MotivoRechazo,
+    Material,
     Orden,
     Recolector,
+    ResultadoMaterial,
     ResultadoOrden,
     Solicitud,
     Torre,
@@ -59,6 +62,8 @@ class AsignacionIn(Entrada):
     inicio: InstanteEntrada | None = None
     fin: InstanteEntrada | None = None
     forma_aviso: Literal["llamada", "recado"]
+    acuerdo_canal: Literal["whatsapp", "llamada", "presencial"] | None = None
+    acuerdo_observacion: str | None = Field(default=None, max_length=300)
 
     @model_validator(mode="after")
     def _horario(self) -> AsignacionIn:
@@ -66,10 +71,13 @@ class AsignacionIn(Entrada):
             raise ValueError("Envía inicio y fin juntos, o ninguno")
         if self.inicio is not None and self.fin is not None and self.fin <= self.inicio:
             raise ValueError("fin debe ser posterior a inicio")
+        if self.inicio is not None and self.acuerdo_canal is None:
+            raise ValueError("Registra cómo se acordó el horario")
         return self
 
 
 class ResultadoIn(Entrada):
+    materiales_confirmados: list[uuid.UUID] = Field(max_length=50)
     version_esperada: int
     resultado: Literal["recogida", "rechazada"]
     ocurrido_at: InstanteEntrada
@@ -91,7 +99,7 @@ def _cargar_orden(db: Session, orden_id: uuid.UUID, bloquear: bool = False) -> O
         .where(Orden.id == orden_id)
         .options(
             selectinload(Orden.asignaciones).selectinload(Asignacion.recolector),
-            selectinload(Orden.resultado),
+            selectinload(Orden.resultado).selectinload(ResultadoOrden.materiales),
             selectinload(Orden.solicitud).selectinload(Solicitud.servicios),
             selectinload(Orden.solicitud).selectinload(Solicitud.unidad),
         )
@@ -107,17 +115,24 @@ def _cargar_orden(db: Session, orden_id: uuid.UUID, bloquear: bool = False) -> O
 
 def orden_de_coordinacion(db: Session, actor: Actor, orden_id: uuid.UUID, bloquear: bool = False) -> Orden:
     o = _cargar_orden(db, orden_id, bloquear)
-    if not actor.coordina(o.gremio_id):
+    propia = actor.trabajador_id is not None and any(
+        a.vigente_hasta is None and a.recolector_id == actor.trabajador_id for a in o.asignaciones)
+    if not actor.coordina(o.gremio_id) and not propia:
         raise no_encontrado("orden")
     return o
 
 
 def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn) -> OrdenBandejaOut:
     o = orden_de_coordinacion(db, actor, orden_id, bloquear=True)
+    actor.exigir_coordinacion(o.gremio_id)
     verificar_version(datos.version_esperada, o.version)
-    if o.estado not in ("nueva", "asignada"):
+    if o.estado not in ("nueva", "asignada", "programada"):
         raise transicion_invalida(f"La orden está {o.estado}; ya no se puede asignar.")
     r = referencia_activa(db, Recolector, datos.recolector_id, "recolector_id", "Recolector")
+    if r.tipo == "huertero":
+        if r.huerta_id is None:
+            raise invalido({"recolector_id": "Vincula el huertero a su huerta antes de asignar"})
+        referencia_activa(db, Huerta, r.huerta_id, "huerta_id", "Huerta")
     if r.gremio_id != o.gremio_id:
         raise invalido({"recolector_id": "El recolector no pertenece al gremio de la orden"})
     t = ahora()
@@ -125,6 +140,8 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
     if anterior is not None:
         anterior.vigente_hasta = t
         db.flush()
+    cambio_persona = anterior is not None and anterior.recolector_id != r.id
+    con_horario = datos.inicio is not None
     db.add(
         Asignacion(
             orden_id=o.id,
@@ -133,19 +150,35 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
             fin=datos.fin,
             forma_aviso=datos.forma_aviso,
             registrada_por=actor.cuenta_id,
+            acuerdo_canal=datos.acuerdo_canal if con_horario else None,
+            acuerdo_observacion=datos.acuerdo_observacion if con_horario else None,
+            programada_por=actor.cuenta_id if con_horario else None,
             vigente_desde=t,
         )
     )
-    o.estado = "asignada"
+    o.estado = "programada" if con_horario else "asignada"
     o.version += 1
-    registrar_evento(
-        db,
-        "orden_reasignada" if anterior else "orden_asignada",
-        actor,
-        solicitud_id=o.solicitud_id,
-        orden_id=o.id,
-        datos={"recolector_id": str(r.id), "forma_aviso": datos.forma_aviso},
-    )
+    detalle = {
+        "recolector_id": str(r.id),
+        "forma_aviso": datos.forma_aviso,
+        "acuerdo_canal": datos.acuerdo_canal if con_horario else None,
+        "inicio": datos.inicio.isoformat() if datos.inicio else None,
+        "fin": datos.fin.isoformat() if datos.fin else None,
+    }
+    if anterior is None:
+        registrar_evento(db, "orden_asignada", actor, solicitud_id=o.solicitud_id, orden_id=o.id, datos=detalle)
+    elif cambio_persona:
+        registrar_evento(db, "orden_reasignada", actor, solicitud_id=o.solicitud_id, orden_id=o.id, datos=detalle)
+    if con_horario:
+        ya_habia_horario = anterior is not None and anterior.recolector_id == r.id and anterior.inicio is not None
+        registrar_evento(
+            db,
+            "orden_reprogramada" if ya_habia_horario else "orden_programada",
+            actor,
+            solicitud_id=o.solicitud_id,
+            orden_id=o.id,
+            datos=detalle,
+        )
     gremio = db.get(Gremio, o.gremio_id)
     franja = franja_texto(datos.inicio, datos.fin)
     # franja termina en "p. m." / "a. m.": no repetir el punto.
@@ -163,7 +196,7 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
             "inicio": datos.inicio.isoformat() if datos.inicio else None,
             "fin": datos.fin.isoformat() if datos.fin else None,
             "franja_texto": franja,
-            "reasignacion": anterior is not None,
+            "reasignacion": cambio_persona,
             "texto_sugerido": texto,
         },
         solicitud_id=o.solicitud_id,
@@ -177,14 +210,14 @@ def _contenido_para(db: Session, motivo_id: uuid.UUID) -> ContenidoEducativo | N
     c = db.execute(
         select(ContenidoEducativo)
         .join(ContenidoMotivo, ContenidoMotivo.contenido_id == ContenidoEducativo.id)
-        .where(ContenidoMotivo.motivo_rechazo_id == motivo_id, ContenidoEducativo.activo.is_(True))
+        .where(ContenidoMotivo.motivo_rechazo_id == motivo_id, ContenidoEducativo.activo.is_(True), ContenidoEducativo.publicado.is_(True))
         .order_by(ContenidoEducativo.created_at.desc())
         .limit(1)
     ).scalar_one_or_none()
     if c is None:
         c = db.execute(
             select(ContenidoEducativo)
-            .where(ContenidoEducativo.general.is_(True), ContenidoEducativo.activo.is_(True))
+            .where(ContenidoEducativo.general.is_(True), ContenidoEducativo.activo.is_(True), ContenidoEducativo.publicado.is_(True))
             .order_by(ContenidoEducativo.created_at.desc())
             .limit(1)
         ).scalar_one_or_none()
@@ -194,9 +227,10 @@ def _contenido_para(db: Session, motivo_id: uuid.UUID) -> ContenidoEducativo | N
 def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: ResultadoIn) -> OrdenResultadoOut:
     o = orden_de_coordinacion(db, actor, orden_id, bloquear=True)
     verificar_version(datos.version_esperada, o.version)
-    if o.estado != "asignada":
+    if o.estado != "programada":
         raise transicion_invalida(
-            "Solo se registra el resultado de una orden asignada." if o.estado == "nueva"
+            "Programa la visita antes de registrar el resultado."
+            if o.estado in ("nueva", "asignada")
             else f"La orden ya está {o.estado}."
         )
     if datos.ocurrido_at > ahora() + timedelta(minutes=5):
@@ -211,7 +245,22 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
     elif datos.motivo_rechazo_id is not None:
         raise invalido({"motivo_rechazo_id": "Una recogida no lleva motivo de rechazo"})
 
+    if datos.materiales_confirmados is not None:
+        if len(set(datos.materiales_confirmados)) != len(datos.materiales_confirmados):
+            raise invalido({"materiales_confirmados": "Materiales repetidos"})
+        if datos.resultado == "recogida" and not datos.materiales_confirmados:
+            raise invalido({"materiales_confirmados": "Confirma al menos un material"})
+        if datos.resultado == "rechazada" and datos.materiales_confirmados:
+            raise invalido({"materiales_confirmados": "Un rechazo no confirma materiales aceptados"})
+        for mid in datos.materiales_confirmados:
+            material = referencia_activa(db, Material, mid, "materiales_confirmados", "Material")
+            if material.gremio_id != o.gremio_id:
+                raise invalido({"materiales_confirmados": "Material de otro gremio"})
+
     res = ResultadoOrden(
+        trabajador_id=next(a.recolector_id for a in o.asignaciones if a.vigente_hasta is None),
+        asignacion_id=next(a.id for a in o.asignaciones if a.vigente_hasta is None),
+        materiales_confirmados=None,
         orden_id=o.id,
         resultado=datos.resultado,
         motivo_rechazo_id=datos.motivo_rechazo_id,
@@ -220,6 +269,9 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
         ocurrido_at=datos.ocurrido_at,
     )
     db.add(res)
+    db.flush()
+    for mid in datos.materiales_confirmados:
+        db.add(ResultadoMaterial(resultado_orden_id=res.id, material_id=mid))
     o.estado = datos.resultado
     o.version += 1
     db.flush()
@@ -300,7 +352,7 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
 @router.get("/ordenes")
 def get_ordenes(
     gremio_id: uuid.UUID | None = Query(None),
-    estado: Literal["nueva", "asignada", "recogida", "rechazada", "cancelada"] | None = Query(None),
+    estado: Literal["nueva", "asignada", "programada", "recogida", "rechazada", "cancelada"] | None = Query(None),
     recolector_id: uuid.UUID | None = Query(None),
     desde: InstanteEntrada | None = Query(None),
     hasta: InstanteEntrada | None = Query(None),
@@ -309,11 +361,16 @@ def get_ordenes(
     db: Session = Depends(get_db),
 ):
     alcance = actor.gremios_coordinados
-    if not alcance:
+    if not alcance and actor.trabajador_id is None:
         raise prohibido("La bandeja es para coordinación.")
-    if gremio_id is not None and gremio_id not in alcance:
+    if gremio_id is not None and gremio_id not in alcance and not any(g == gremio_id and r in ("huertero", "reciclador") for r, g in actor.permisos):
         raise prohibido("Fuera de tu gremio.")
-    stmt = select(Orden.id).where(Orden.gremio_id.in_([gremio_id] if gremio_id else alcance))
+    stmt = select(Orden.id)
+    if actor.trabajador_id is not None:
+        stmt = stmt.where(exists().where(Asignacion.orden_id == Orden.id,
+            Asignacion.recolector_id == actor.trabajador_id, Asignacion.vigente_hasta.is_(None)))
+    else:
+        stmt = stmt.where(Orden.gremio_id.in_([gremio_id] if gremio_id else alcance))
     if estado:
         stmt = stmt.where(Orden.estado == estado)
     if recolector_id:
@@ -363,3 +420,36 @@ def post_resultado(
     return escritura(request, db, actor, datos, lambda: registrar_resultado(db, actor, orden_id, datos))
 
 
+
+
+class ProgramacionIn(Entrada):
+    acuerdo_canal: Literal["whatsapp", "llamada", "presencial"]
+    acuerdo_observacion: str | None = Field(default=None, max_length=300)
+    version_esperada: int
+    inicio: InstanteEntrada
+    fin: InstanteEntrada
+
+    @model_validator(mode="after")
+    def validar_franja(self):
+        if self.fin <= self.inicio:
+            raise ValueError("fin debe ser posterior a inicio")
+        return self
+
+
+def programar(db, actor, orden_id, datos):
+    o = orden_de_coordinacion(db, actor, orden_id, bloquear=True)
+    actor.exigir_coordinacion(o.gremio_id)
+    verificar_version(datos.version_esperada, o.version)
+    vigente = next((a for a in o.asignaciones if a.vigente_hasta is None), None)
+    if vigente is None or o.estado not in ("asignada", "programada"):
+        raise transicion_invalida("Asigna un responsable antes de programar.")
+    return asignar(db, actor, orden_id, AsignacionIn(
+        version_esperada=datos.version_esperada, recolector_id=vigente.recolector_id,
+        inicio=datos.inicio, fin=datos.fin, forma_aviso=vigente.forma_aviso,
+        acuerdo_canal=datos.acuerdo_canal, acuerdo_observacion=datos.acuerdo_observacion))
+
+
+@router.post("/ordenes/{orden_id}/programacion")
+def post_programacion(orden_id: uuid.UUID, datos: ProgramacionIn, request: Request,
+    actor: Actor = Depends(actor_operador), db: Session = Depends(get_db)):
+    return escritura(request, db, actor, datos, lambda: programar(db, actor, orden_id, datos))

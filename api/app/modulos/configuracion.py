@@ -123,6 +123,8 @@ class MotivoOut(Salida):
 
 
 class ContenidoIn(Entrada):
+    tema: Literal["separacion", "huerta", "horarios_rutas", "servicio"] = "separacion"
+    publicado: bool = True
     titulo: str = Field(min_length=1, max_length=160)
     tipo: Literal["video", "imagen", "texto"]
     recurso: str | None = Field(default=None, max_length=500, pattern=r"^https://")
@@ -133,12 +135,19 @@ class ContenidoIn(Entrada):
 
 
 class ContenidoOut(Salida):
+    tema: str
+    publicado: bool
+    activo: bool
+    version: int
     id: uuid.UUID
     titulo: str
     tipo: str
     recurso: str | None
     texto: str | None
     general: bool
+    gremio_id: uuid.UUID | None = None
+    vigente_desde: Instante | None = None
+    vigente_hasta: Instante | None = None
 
 
 def _crear_catalogo(db: Session, obj) -> None:
@@ -204,6 +213,7 @@ def post_contenido(datos: ContenidoIn, request: Request, actor: Actor = Depends(
         for i, mid in enumerate(datos.motivo_rechazo_ids):
             referencia_activa(db, MotivoRechazo, mid, f"motivo_rechazo_ids.{i}", "Motivo")
         c = ContenidoEducativo(
+            tema=datos.tema, publicado=datos.publicado,
             titulo=datos.titulo, tipo=datos.tipo, recurso=datos.recurso, texto=datos.texto, general=datos.general
         )
         db.add(c)
@@ -406,3 +416,73 @@ def get_configuracion(
     if fecha is not None:
         stmt = stmt.where(modelo.vigente_desde <= fecha, or_(modelo.vigente_hasta.is_(None), modelo.vigente_hasta > fecha))
     return {"data": [salida.model_validate(v).model_dump(mode="json") for v in db.execute(stmt).scalars()]}
+
+
+class PublicacionIn(Entrada):
+    version_esperada: int
+    publicado: bool
+
+
+class ContenidoPatch(Entrada):
+    version_esperada: int
+    titulo: str | None = Field(default=None, min_length=1, max_length=160)
+    texto: str | None = Field(default=None, max_length=2000)
+    tema: Literal["separacion", "huerta", "horarios_rutas", "servicio"] | None = None
+    publicado: bool | None = None
+    activo: bool | None = None
+    gremio_id: uuid.UUID | None = None
+    vigente_desde: InstanteEntrada | None = None
+    vigente_hasta: InstanteEntrada | None = None
+
+
+@router.patch("/contenidos-educativos/{contenido_id}")
+def editar_contenido(contenido_id: uuid.UUID, datos: ContenidoPatch, request: Request,
+    actor: Actor = Depends(actor_admin), db: Session = Depends(get_db)):
+    def ejecutar():
+        c = obtener(db, ContenidoEducativo, contenido_id, "contenido", bloquear=True)
+        verificar_version(datos.version_esperada, c.version)
+        if datos.titulo is not None:
+            c.titulo = datos.titulo
+        if datos.texto is not None:
+            c.texto = datos.texto
+        if datos.tema is not None:
+            c.tema = datos.tema
+        if "gremio_id" in datos.model_fields_set:
+            if datos.gremio_id is not None:
+                referencia_activa(db, Gremio, datos.gremio_id, "gremio_id", "Gremio")
+            c.gremio_id = datos.gremio_id
+        if "vigente_desde" in datos.model_fields_set:
+            c.vigente_desde = datos.vigente_desde
+        if "vigente_hasta" in datos.model_fields_set:
+            c.vigente_hasta = datos.vigente_hasta
+        if datos.activo is False:
+            c.activo = False
+            c.publicado = False
+        else:
+            if datos.activo is True:
+                c.activo = True
+            if datos.publicado is True and not c.activo:
+                raise invalido({"publicado": "Un contenido retirado no se publica"})
+            if datos.publicado is not None:
+                c.publicado = datos.publicado
+        if c.vigente_desde is None and c.vigente_hasta is not None:
+            raise invalido({"vigente_hasta": "Indica vigente_desde"})
+        if c.vigente_desde is not None and c.vigente_hasta is not None and c.vigente_hasta <= c.vigente_desde:
+            raise invalido({"vigente_hasta": "Debe ser posterior al inicio"})
+        c.version += 1
+        db.flush()
+        return ContenidoOut.model_validate(c)
+    return escritura(request, db, actor, datos, ejecutar)
+
+
+@router.patch("/contenidos-educativos/{contenido_id}/publicacion")
+def publicar_contenido(contenido_id: uuid.UUID, datos: PublicacionIn, request: Request,
+    actor: Actor = Depends(actor_admin), db: Session = Depends(get_db)):
+    def ejecutar():
+        c = obtener(db, ContenidoEducativo, contenido_id, "contenido", bloquear=True)
+        verificar_version(datos.version_esperada, c.version)
+        c.publicado = datos.publicado
+        c.version += 1
+        db.flush()
+        return ContenidoOut.model_validate(c)
+    return escritura(request, db, actor, datos, ejecutar)
