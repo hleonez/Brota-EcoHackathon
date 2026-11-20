@@ -178,6 +178,8 @@ def get_unidades(
     stmt = select(Unidad).where(Unidad.activo.is_(True))
     if actor.trabajador_id is not None:
         raise prohibido("Consulta la ubicación desde tus asignaciones.")
+    if actor.es_operador and not actor.gremios_coordinados:
+        raise prohibido("El directorio de unidades es para la coordinación.")
     if not actor.es_operador:
         if (torre_id is None and tipo != "negocio") or not referencia:
             raise AppError(

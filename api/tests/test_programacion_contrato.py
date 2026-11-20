@@ -31,11 +31,14 @@ def test_programacion_no_admite_orden_sin_responsable(monkeypatch):
 
 
 def test_preferencia_y_estados_en_contrato():
-    datos = SolicitudIn(tipo_servicio_ids=[uuid.uuid4()], preferencia_horaria="Mañana después de las 2")
-    assert datos.preferencia_horaria == "Mañana después de las 2"
+    datos = SolicitudIn(tipo_servicio_ids=[uuid.uuid4()], preferencia_sin_restriccion=True)
+    assert datos.preferencia_sin_restriccion is True
     assert "programada" in ABIERTAS and "programada" in ESTADOS and "cancelada" in ESTADOS
     with pytest.raises(ValidationError):
-        SolicitudIn(tipo_servicio_ids=[uuid.uuid4()], preferencia_horaria="")
+        SolicitudIn(tipo_servicio_ids=[uuid.uuid4()])
+    inicio = datetime.now(timezone.utc)
+    with pytest.raises(ValidationError):
+        SolicitudIn(tipo_servicio_ids=[uuid.uuid4()], preferencia_sin_restriccion=True, preferencia_inicio=inicio, preferencia_fin=inicio)
 
 
 def test_openapi_publica_nuevas_operaciones():

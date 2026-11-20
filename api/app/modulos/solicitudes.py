@@ -18,7 +18,7 @@ from app.core.errores import AppError, invalido, no_encontrado, prohibido, trans
 from app.core.idempotencia import escritura
 from app.core.paginacion import Paginacion, paginacion, paginar
 from app.core.seguridad import Actor, actor_participante, get_actor
-from app.core.tipos import Entrada, Instante, PuntosSalida, Salida, ahora
+from app.core.tipos import Entrada, Instante, InstanteEntrada, PuntosSalida, Salida, ahora
 from app.db import get_db
 from app.models import (
     Asignacion,
@@ -44,6 +44,7 @@ from app.modulos.comun import (
     encolar_aviso_coordinacion,
     etiqueta_unidad,
     exigir_consentimiento,
+    franja_texto,
     registrar_evento,
     unidades_vigentes,
 )
@@ -63,7 +64,9 @@ FINALES = ("recogida", "rechazada", "cancelada")
 
 
 class SolicitudIn(Entrada):
-    preferencia_horaria: str = Field(min_length=1, max_length=300)
+    preferencia_sin_restriccion: bool = False
+    preferencia_inicio: InstanteEntrada | None = None
+    preferencia_fin: InstanteEntrada | None = None
     unidad_id: uuid.UUID | None = Field(
         default=None, description="Opcional si el participante tiene exactamente una unidad vinculada"
     )
@@ -76,6 +79,17 @@ class SolicitudIn(Entrada):
     observacion: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
+    def _preferencia(self) -> SolicitudIn:
+        if self.preferencia_sin_restriccion:
+            if self.preferencia_inicio is not None or self.preferencia_fin is not None:
+                raise ValueError("Sin restricción no lleva una ventana horaria")
+        elif self.preferencia_inicio is None or self.preferencia_fin is None:
+            raise ValueError("Indica preferencia_inicio y preferencia_fin, o preferencia_sin_restriccion")
+        elif self.preferencia_fin <= self.preferencia_inicio:
+            raise ValueError("La preferencia debe terminar después de empezar")
+        return self
+
+    @model_validator(mode="after")
     def _algo_que_recoger(self) -> SolicitudIn:
         if not self.tipo_servicio_ids and not self.residuos:
             raise ValueError("Envía tipo_servicio_ids o residuos")
@@ -84,6 +98,8 @@ class SolicitudIn(Entrada):
 
 class AsignacionOut(Salida):
     acuerdo_canal: str | None = None
+    acuerdo_observacion: str | None = None
+    programada_por: uuid.UUID | None = None
     recolector_id: uuid.UUID
     recolector_nombre: str
     inicio: Instante | None
@@ -123,6 +139,10 @@ class OrdenOut(Salida):
 
 class OrdenBandejaOut(OrdenOut):
     preferencia_horaria: str | None = None
+    preferencia_sin_restriccion: bool | None = None
+    preferencia_inicio: Instante | None = None
+    preferencia_fin: Instante | None = None
+    tipo_generador: str | None = None
     """Vista de coordinación: datos mínimos para prestar el servicio."""
 
     unidad_id: uuid.UUID
@@ -141,6 +161,10 @@ class AvanceOut(Salida):
 
 class SolicitudOut(Salida):
     preferencia_horaria: str | None = None
+    preferencia_sin_restriccion: bool | None = None
+    preferencia_inicio: Instante | None = None
+    preferencia_fin: Instante | None = None
+    tipo_generador: str | None = None
     id: uuid.UUID
     created_at: Instante
     version: int
@@ -191,6 +215,25 @@ def _gremio_nombres(db: Session) -> dict[uuid.UUID, str]:
     return {g.id: g.nombre for g in db.execute(select(Gremio)).scalars()}
 
 
+def materiales_visibles(r: ResultadoOrden) -> list[str] | None:
+    """La tabla es la fuente nueva. El JSONB solo conserva listas históricas; un nulo no se inventa."""
+    if r.materiales:
+        return [str(m.material_id) for m in r.materiales]
+    if r.materiales_confirmados is not None:
+        return list(r.materiales_confirmados)
+    if r.resultado == "recogida":
+        return None
+    return []
+
+
+def texto_preferencia(sin_restriccion: bool | None, inicio, fin) -> str | None:
+    if sin_restriccion is True:
+        return "Sin restricción"
+    if inicio is not None and fin is not None:
+        return franja_texto(inicio, fin)
+    return None
+
+
 def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None, bandeja: bool = False) -> OrdenOut:
     gremios = gremios or _gremio_nombres(db)
     vigente = next((a for a in o.asignaciones if a.vigente_hasta is None), None)
@@ -199,6 +242,8 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
         asign = AsignacionOut(
             recolector_id=vigente.recolector_id,
             acuerdo_canal=vigente.acuerdo_canal,
+            acuerdo_observacion=vigente.acuerdo_observacion,
+            programada_por=vigente.programada_por,
             recolector_nombre=vigente.recolector.nombre,
             inicio=vigente.inicio,
             fin=vigente.fin,
@@ -214,7 +259,7 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
             trabajador_id=r.trabajador_id,
             registrado_por=r.confirmado_por,
             asignacion_id=r.asignacion_id,
-            materiales_confirmados=r.materiales_confirmados,
+            materiales_confirmados=materiales_visibles(r),
             motivo_rechazo_id=r.motivo_rechazo_id,
             motivo_rechazo_nombre=motivo.nombre if motivo else None,
             observacion=r.observacion,
@@ -253,6 +298,10 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
         contacto_nombre=contacto.nombre if contacto and contacto.estado != "eliminado" else None,
         observacion=s.observacion,
         preferencia_horaria=s.preferencia_horaria,
+        preferencia_sin_restriccion=s.preferencia_sin_restriccion,
+        preferencia_inicio=s.preferencia_inicio,
+        preferencia_fin=s.preferencia_fin,
+        tipo_generador=s.tipo_generador,
     )
 
 
@@ -286,6 +335,10 @@ def solicitud_out(db: Session, s: Solicitud, actor: Actor) -> SolicitudOut:
         canal_origen=s.canal_origen,
         observacion=s.observacion,
         preferencia_horaria=s.preferencia_horaria,
+        preferencia_sin_restriccion=s.preferencia_sin_restriccion,
+        preferencia_inicio=s.preferencia_inicio,
+        preferencia_fin=s.preferencia_fin,
+        tipo_generador=s.tipo_generador,
         tipo_servicio_ids=[x.tipo_servicio_id for x in s.servicios],
         avance=AvanceOut(
             ordenes_totales=len(visibles),
@@ -300,7 +353,7 @@ def solicitud_out(db: Session, s: Solicitud, actor: Actor) -> SolicitudOut:
 def _opciones_carga():
     return (
         selectinload(Solicitud.ordenes).selectinload(Orden.asignaciones).selectinload(Asignacion.recolector),
-        selectinload(Solicitud.ordenes).selectinload(Orden.resultado),
+        selectinload(Solicitud.ordenes).selectinload(Orden.resultado).selectinload(ResultadoOrden.materiales),
         selectinload(Solicitud.servicios),
         selectinload(Solicitud.residuos).selectinload(SolicitudResiduo.residuo),
     )
@@ -383,7 +436,13 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
         participante_id=actor.participante_id,
         canal_origen=actor.canal,
         observacion=datos.observacion,
-        preferencia_horaria=datos.preferencia_horaria,
+        preferencia_sin_restriccion=True if datos.preferencia_sin_restriccion else False,
+        preferencia_inicio=None if datos.preferencia_sin_restriccion else datos.preferencia_inicio,
+        preferencia_fin=None if datos.preferencia_sin_restriccion else datos.preferencia_fin,
+        preferencia_horaria=texto_preferencia(
+            datos.preferencia_sin_restriccion, datos.preferencia_inicio, datos.preferencia_fin
+        ),
+        tipo_generador=unidad.tipo if unidad.tipo in ("hogar", "negocio") else None,
         ubicacion_operativa=etiqueta_unidad(unidad),
     )
     db.add(s)
@@ -415,6 +474,8 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
         lineas = [f"🆕 Nueva solicitud {s.codigo_pasaporte}", f"📍 {s.ubicacion_operativa}", detalle or " · ".join(servicios)]
         if actor.nombre:
             lineas.append(f"👤 {actor.nombre}")
+        if s.preferencia_horaria:
+            lineas.append(f"🕒 Preferencia: {s.preferencia_horaria}")
         if datos.observacion:
             lineas.append(f"📝 {datos.observacion}")
         encolar_aviso_coordinacion(

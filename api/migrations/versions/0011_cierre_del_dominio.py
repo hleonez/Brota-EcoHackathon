@@ -20,7 +20,10 @@ def upgrade():
         op.add_column(table, sa.Column(column, sa.Uuid(), nullable=True))
         op.create_foreign_key(f"fk_{table}_{column}_{target}", table, target, [column], ["id"])
     op.add_column("asignacion", sa.Column("acuerdo_canal", sa.String(20), nullable=True))
-    op.add_column("habilitacion_piloto", sa.Column("vigente_desde", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()))
+    # Sin default en el ADD: now() reescribiría el inicio de filas ya existentes.
+    op.add_column("habilitacion_piloto", sa.Column("vigente_desde", sa.DateTime(timezone=True), nullable=True))
+    op.execute("UPDATE habilitacion_piloto SET vigente_desde = created_at WHERE created_at IS NOT NULL")
+    op.alter_column("habilitacion_piloto", "vigente_desde", existing_type=sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())
     op.add_column("habilitacion_piloto", sa.Column("vigente_hasta", sa.DateTime(timezone=True), nullable=True))
     op.create_check_constraint(op.f("ck_habilitacion_piloto_vigencia"), "habilitacion_piloto", "vigente_hasta IS NULL OR vigente_hasta > vigente_desde")
 

@@ -73,10 +73,11 @@ PUNTOS = [("ACOPIO_ASORESCATAR", "Punto de acopio Asorescatar", "ASORESCATAR"), 
 RECOLECTORES = {"ASORESCATAR": ["Rosa (demo)", "Jairo (demo)", "Marta (demo)"], "ECORAZON": ["Huertero demo 1", "Huertero demo 2"]}
 TORRES = [("1", 110), ("2", 110), ("3", 110), ("4", 110), ("5", 110)]  # ≈550 viviendas (ejemplo)
 CONTENIDOS = [
-    ("Cómo entregar el cartón", "Entrégalo seco, doblado y sin grasa. Si se moja, déjalo secar antes de pedir.", ["MOJADO"], ["CARTON"], False),
-    ("Separa bien tus reciclables", "Plástico, papel, vidrio y metal limpios y secos; sin restos de comida.", ["MEZCLADO", "CONTAMINADO"], [], False),
-    ("Qué va a la huerta", "Cáscaras, restos de frutas y verduras, café y poda. Sin bolsas plásticas ni carne.", ["NO_APROVECHABLE"], ["ORGANICOS"], False),
-    ("Consejo de Brisa", "Separa en casa: reciclable limpio y seco por un lado, orgánico por otro. ¡Así todo brota!", [], [], True),
+    ("Cómo entregar el cartón", "Entrégalo seco, doblado y sin grasa. Si se moja, déjalo secar antes de pedir.", ["MOJADO"], ["CARTON"], False, "separacion"),
+    ("Separa bien tus reciclables", "Plástico, papel, vidrio y metal limpios y secos; sin restos de comida.", ["MEZCLADO", "CONTAMINADO"], [], False, "separacion"),
+    ("Qué va a la huerta", "Cáscaras, restos de frutas y verduras, café y poda. Sin bolsas plásticas ni carne.", ["NO_APROVECHABLE"], ["ORGANICOS"], False, "huerta"),
+    ("Consejo de Brisa", "Separa en casa: reciclable limpio y seco por un lado, orgánico por otro. ¡Así todo brota!", [], [], True, "servicio"),
+    ("Horarios y rutas del piloto", "Ejemplo del piloto: la coordinación acuerda el día y la hora. La preferencia del solicitante no programa la visita. Las rutas de demostración cubren el conjunto y el corredor comercial.", [], [], False, "horarios_rutas"),
 ]
 CUENTAS = [
     ("coord-reciclaje", "Coordinación Asorescatar", [("coordinacion", "ASORESCATAR")]),
@@ -173,10 +174,13 @@ def sembrar(db: Session) -> dict[str, str]:
             )
     db.flush()
 
-    for titulo, texto, motivos, materiales, general in CONTENIDOS:
-        if _uno(db, ContenidoEducativo, titulo=titulo):
+    for titulo, texto, motivos, materiales, general, tema in CONTENIDOS:
+        existente = _uno(db, ContenidoEducativo, titulo=titulo)
+        if existente:
+            if existente.tema != tema:
+                existente.tema = tema
             continue
-        c = ContenidoEducativo(titulo=titulo, tipo="texto", texto=texto, general=general)
+        c = ContenidoEducativo(titulo=titulo, tipo="texto", texto=texto, general=general, tema=tema, publicado=True)
         db.add(c)
         db.flush()
         for mc in motivos:

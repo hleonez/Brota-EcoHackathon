@@ -7,7 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -24,12 +24,13 @@ from app.core.seguridad import (
     hash_pin,
     normalizar_celular,
 )
-from app.core.tipos import Entrada, Instante, Salida
+from app.core.tipos import Entrada, Instante, Salida, ahora
 from app.db import get_db
 from app.models import (
     Consentimiento,
     CuentaOperadora,
     Gremio,
+    HabilitacionPiloto,
     Recolector,
     Participante,
     PermisoOperador,
@@ -100,6 +101,15 @@ class PermisoOut(Salida):
     gremio_id: uuid.UUID | None
 
 
+class HabilitacionResumen(Salida):
+    id: uuid.UUID
+    unidad_id: uuid.UUID
+    activo: bool
+    vigente_desde: Instante
+    vigente_hasta: Instante | None
+    revocada_at: Instante | None = None
+
+
 class MeOut(Salida):
     trabajador_id: uuid.UUID | None = None
     tipo_actor: str
@@ -112,6 +122,7 @@ class MeOut(Salida):
     politica_datos_version: str
     permisos: list[PermisoOut] = []
     capacidades: list[str] = []
+    habilitaciones: list[HabilitacionResumen] = []
 
 
 class SolicitudEliminacionIn(Entrada):
@@ -274,6 +285,15 @@ def me(db: Session, actor: Actor) -> MeOut:
         base.nombre = actor.nombre
         base.unidades = [unidad_resumen(u) for u in unidades_vigentes(db, actor.participante_id)]
         base.consentimiento_vigente = ConsentimientoOut.model_validate(c) if c else None
+        vigentes = db.execute(
+            select(HabilitacionPiloto).where(
+                HabilitacionPiloto.participante_id == actor.participante_id,
+                HabilitacionPiloto.activo.is_(True),
+                HabilitacionPiloto.vigente_desde <= ahora(),
+                or_(HabilitacionPiloto.vigente_hasta.is_(None), HabilitacionPiloto.vigente_hasta > ahora()),
+            )
+        ).scalars()
+        base.habilitaciones = [HabilitacionResumen.model_validate(h) for h in vigentes]
     elif actor.es_operador:
         base.cuenta_operadora_id = actor.cuenta_id
         base.trabajador_id = actor.trabajador_id

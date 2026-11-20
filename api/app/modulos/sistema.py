@@ -15,7 +15,7 @@ from app.core.tipos import Entrada
 from app.db import get_db, get_engine
 from app.models import CuentaOperadora
 
-CONTRATO_VERSION = "0.3-ecoconecta.1"
+CONTRATO_VERSION = "0.3-ecoconecta.2"
 
 salud = APIRouter(tags=["salud"])
 router = APIRouter(tags=["sistema"])
@@ -78,6 +78,9 @@ def capacidades() -> dict:
             "registro": {"politica_datos_version": s.politica_datos_version, "canal": "whatsapp"},
             "reglas": {"solicitud_abierta_unica": s.regla_solicitud_abierta},
             "zona_horaria": s.zona_horaria,
+            "piloto": "restringido",
+            "ia_disponible": False,
+            "estados_orden": ["nueva", "asignada", "programada", "recogida", "rechazada", "cancelada"],
         }
     }
 

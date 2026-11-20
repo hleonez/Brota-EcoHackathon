@@ -48,11 +48,11 @@ def test_solicitud_con_residuos_declarados(client, catalogo, operador):
     habilitar_piloto(client, VECINO)
 
     # Lo que no se recibe nunca entra a la ruta, ni una respuesta que la ficha no tiene.
-    pilas = client.post("/v1/solicitudes", json={"preferencia_horaria": "Sin restricción", "residuos": [{"residuo_id": f["PILAS"]["id"]}]}, headers=bot(VECINO))
+    pilas = client.post("/v1/solicitudes", json={"preferencia_sin_restriccion": True, "residuos": [{"residuo_id": f["PILAS"]["id"]}]}, headers=bot(VECINO))
     assert pilas.status_code == 422 and "no se recibe" in pilas.json()["error"]["fields"]["residuos"]
     rara = client.post(
         "/v1/solicitudes",
-        json={"preferencia_horaria": "Sin restricción", "residuos": [{"residuo_id": f["CARTON"]["id"], "respuestas": {"seco": "quizas"}}]},
+        json={"preferencia_sin_restriccion": True, "residuos": [{"residuo_id": f["CARTON"]["id"], "respuestas": {"seco": "quizas"}}]},
         headers=bot(VECINO),
     )
     assert rara.status_code == 422
@@ -61,7 +61,7 @@ def test_solicitud_con_residuos_declarados(client, catalogo, operador):
     # Sin tipo_servicio_ids: los servicios salen de los gremios de los residuos (una orden por gremio).
     r = client.post(
         "/v1/solicitudes",
-        json={"preferencia_horaria": "Sin restricción", "residuos": [
+        json={"preferencia_sin_restriccion": True, "residuos": [
             {"residuo_id": f["CARTON"]["id"], "respuestas": {"seco": "si"}, "fuente": "lista"},
             {"residuo_id": f["PET"]["id"], "respuestas": {"vacias": "si", "quimicos": "no"}, "fuente": "texto"},
             {"residuo_id": f["FRUVER"]["id"], "estado": "revision", "respuestas": {"separados": "duda"}},

@@ -1,10 +1,9 @@
-> Actualización EcoConecta: contrato `0.3-ecoconecta.1`. Los cambios obligatorios y nuevas rutas se detallan en [estado de API](avance-api-ecoconecta.md). Preferencia, acuerdo horario y materiales al cierre son obligatorios en nuevas escrituras. Gemini está desactivado. Las secciones anteriores a esta actualización describen la base 0.2 y deben interpretarse con estas modificaciones.
+> Contrato vigente: `0.3-ecoconecta.2`. La entrada de preferencia cambió y ya no acepta el texto libre obligatorio de `0.3-ecoconecta.1`. El detalle de reglas, la matriz RN y lo que deben enviar el bot y el panel está en [estado de API](avance-api-ecoconecta.md). Gemini sigue desactivado. Donde una sección 0.2 contradiga este aviso o la sección 5, manda `0.3-ecoconecta.2`.
 
 # Contrato de API · Brota
 
-Estado: **0.2-brota.1, implementado** en `api/` (FastAPI). Parte del contrato modular 0.2
-(18-nov-2026) y del diseño de base de datos; reemplaza el borrador 0.1. Los esquemas exactos
-de entrada y salida se publican en OpenAPI: `GET /docs` y `GET /openapi.json` en la API.
+Estado: **0.3-ecoconecta.2, implementado** en `api/` (FastAPI), sobre la base 0.2-brota.1.
+Los esquemas exactos de entrada y salida se publican en OpenAPI: `GET /docs` y `GET /openapi.json`.
 Si este documento y OpenAPI discrepan, manda OpenAPI y se corrige este archivo.
 
 Integración del bot de WhatsApp: [integracion-bot.md](integracion-bot.md).
@@ -31,7 +30,7 @@ Códigos: `200`, `201`, `202`, `400`, `401`, `403`, `404` (inexistente o fuera d
 `422`, `503`. Códigos de error de dominio: `VALIDATION_ERROR`, `VERSION_CONFLICT`,
 `INVALID_TRANSITION`, `OPEN_REQUEST_EXISTS`, `IDEMPOTENCY_CONFLICT`, `CONSENT_REQUIRED`,
 `NOT_REGISTERED`, `CONTACT_ALREADY_REGISTERED`, `LIGA_NOT_CONFIGURED`, `VIGENCIA_SOLAPADA`,
-`DEPENDENCY_PENDING`, `OPERATION_TOO_OLD`, `DUPLICATE`, `INVALID_CREDENTIALS`.
+`DEPENDENCY_PENDING`, `OPERATION_TOO_OLD`, `DUPLICATE`, `INVALID_CREDENTIALS`, `PILOT_NOT_ENABLED`.
 
 ## 2. Actores y autenticación
 
@@ -46,8 +45,9 @@ Códigos: `200`, `201`, `202`, `400`, `401`, `403`, `404` (inexistente o fuera d
 | Fundación | JWT, rol `fundacion` | Reportes agregados y Liga |
 | Administración | JWT, rol `admin` | Catálogos, configuración y cuentas |
 
-El recolector no tiene cuenta: la coordinación registra por él. El rol `admin` no concede
-bandeja ni datos personales de residentes.
+Reciclador y huertero pueden tener cuenta y atender solo su asignación vigente. La coordinación
+sigue pudiendo registrar el resultado de quien no tiene teléfono. `admin` no concede bandeja,
+directorio de unidades ni datos personales. Fundación ve reportes agregados, sin dirección ni celular.
 
 ## 3. Endpoints
 
@@ -63,7 +63,7 @@ bandeja ni datos personales de residentes.
 ### M01 · Identidad
 | | Ruta | Notas |
 | --- | --- | --- |
-| ● | `GET /v1/me` | `tipo_actor`, `registrado`, unidades, consentimiento vigente, permisos, capacidades |
+| ● | `GET /v1/me` | `tipo_actor`, `registrado`, unidades, consentimiento, permisos, capacidades y `habilitaciones` vigentes del participante |
 | ● | `POST /v1/registros` | Canal: `{nombre, unidad_id, consentimiento}`; exige `aceptado` |
 | ● | `POST /v1/registros/asistidos` | Coordinación/admin; puede quedar `incompleto` |
 | ● | `POST /v1/me/consentimientos` | `aceptado` / `retirado` con versión vigente |
@@ -74,7 +74,7 @@ bandeja ni datos personales de residentes.
 | | Ruta | Notas |
 | --- | --- | --- |
 | ● | `GET /v1/conjuntos`, `GET /v1/conjuntos/{id}/torres` | Torres con `numero_viviendas` vigente |
-| ● | `GET /v1/unidades` | Canal: solo coincidencia exacta `torre_id` + `referencia`; operadores: búsqueda |
+| ● | `GET /v1/unidades` | Canal: coincidencia exacta `torre_id` + `referencia`. Directorio filtrado: solo coordinación de su gremio. Admin, fundación y trabajador reciben `403` |
 | ● | `POST /v1/unidades` | Admin |
 | ● | `GET /v1/catalogos` | Gremios, tipos de servicio, materiales, motivos, puntos de recepción, equivalencias vigentes |
 | ● | `GET`, `POST /v1/recolectores`, `PATCH /v1/recolectores/{id}` | Coordinación del gremio o admin |
@@ -83,9 +83,9 @@ bandeja ni datos personales de residentes.
 | | Ruta | Notas |
 | --- | --- | --- |
 | ● | `GET /v1/residuos` | Fichas: si se recibe (`acepta`: si/no/revision), gremio, sinónimos, preparación, qué evitar, alternativa y `verificaciones` (preguntas con opciones y resultado) |
-| ● | `POST /v1/solicitudes` | Residente. Una orden por gremio, atómico. `unidad_id` opcional con una sola unidad. Con `residuos` (lo declarado y sus respuestas) los servicios se deducen; un residuo con `acepta: no` → 422 |
+| ● | `POST /v1/solicitudes` | Residente con habilitación vigente (`403 PILOT_NOT_ENABLED` si falta, venció o está revocada; no se hereda por torre). Preferencia exclusiva: ventana `preferencia_inicio`/`preferencia_fin` o `preferencia_sin_restriccion: true` con fechas nulas. La respuesta incluye `preferencia_horaria` derivada y `tipo_generador` copiado de la unidad. Una orden por gremio. `unidad_id` opcional con una sola unidad. Residuo con `acepta: no` → 422 |
 | ● | `GET /v1/solicitudes` | `unidad_id?`, `abiertas?`. Residente: sus unidades; coordinación: su gremio |
-| ● | `GET /v1/solicitudes/{id}` | `avance` con `estado_general`: `pendiente`, `en_curso`, `parcial`, `atendida` |
+| ● | `GET /v1/solicitudes/{id}` | `avance.estado_general`: `pendiente`, `en_curso`, `parcial`, `atendida`, `cancelada`, `rechazada`, `finalizada_con_novedades` |
 | ● | `GET /v1/solicitudes/{id}/pasaporte` | Eventos, pesajes de procedencia (sin reparto de kg) y puntos |
 
 Cada orden trae `residuos` (los de su gremio) con `estado` (`listo`/`revision`) y `chequeos` legibles, para la
@@ -109,8 +109,9 @@ Regla de solicitud abierta (configurable, `REGLA_SOLICITUD_ABIERTA`): un servici
 | --- | --- | --- |
 | ● | `GET /v1/ordenes` | Bandeja: `gremio_id?`, `estado?`, `recolector_id?`, `desde?`, `hasta?` |
 | ● | `GET /v1/ordenes/{id}` | Ubicación, contacto (nombre), asignación vigente, reasignaciones, resultado |
-| ● | `POST /v1/ordenes/{id}/asignacion` | `{version_esperada, recolector_id, inicio?, fin?, forma_aviso}`; reasigna conservando historia; aviso `asignacion` |
-| ● | `POST /v1/ordenes/{id}/resultado` | `{version_esperada, resultado, ocurrido_at, motivo_rechazo_id?, observacion?}` → `evaluacion_puntos`, `puntos_otorgados` |
+| ● | `POST /v1/ordenes/{id}/asignacion` | `{version_esperada, recolector_id, inicio?, fin?, forma_aviso, acuerdo_canal?, acuerdo_observacion?}`. Sin franja queda `asignada` y no copia el horario anterior. `orden_reasignada` solo si cambia la persona. Con franja exige `acuerdo_canal` (`whatsapp`, `llamada`, `presencial`) y pasa a `programada` |
+| ● | `POST /v1/ordenes/{id}/programacion` | Misma regla que asignar con franja. No emite un segundo evento si ya lo registró la asignación. Reprogramar a la misma persona emite `orden_reprogramada` |
+| ● | `POST /v1/ordenes/{id}/resultado` | Solo si está `programada`. `{version_esperada, resultado, ocurrido_at, materiales_confirmados, motivo_rechazo_id?, observacion?}`. Recogida: UUID existentes del mismo gremio. Rechazo: lista vacía y motivo. `ocurrido_at` no puede estar en el futuro. Repetir el cierre no duplica puntos |
 
 ### M05 · Pesajes y entregas directas
 | | Ruta | Notas |
@@ -140,7 +141,7 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 ### M08 · Educación y avisos
 | | Ruta | Notas |
 | --- | --- | --- |
-| ● | `GET /v1/contenidos-educativos` | Por `motivo_rechazo_id` / `material_id`, más los generales |
+| ● | `GET /v1/contenidos-educativos` | Público: `tema` (`separacion`, `huerta`, `horarios_rutas`, `servicio`), `version`, vigencia y publicación. Filtro `tema`. Admin: `PATCH /v1/contenidos-educativos/{id}` edita título, texto, tema, publicación, activo, gremio y vigencia |
 | ● | `GET /v1/ordenes/{id}/avisos` | Estado de avisos de una orden (coordinación) |
 | ● | `POST /v1/canal/avisos/reservas`, `POST /v1/canal/avisos/{id}/resultado`, `GET /v1/canal/avisos` | Bot (modo pull). Modo webhook: ver integracion-bot.md |
 
@@ -161,8 +162,11 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 ### M11 · Sincronización offline
 ● `POST /v1/sync` `{dispositivo_id, operaciones[]}`. Acciones: `crear_pesaje`,
 `actualizar_borrador_pesaje`, `confirmar_pesaje`, `registrar_entrega_directa`, `asignar_orden`,
-`registrar_resultado_orden`. Estados por operación: `aplicada`, `repetida`, `conflicto`,
-`rechazada`, `bloqueada`; `referencias` mapea IDs locales a IDs del servidor.
+`programar_orden`, `registrar_resultado_orden`. El actor tiene que coordinar o ser el trabajador
+de la operación; un trabajador solo puede `registrar_resultado_orden`. Cada operación usa las
+mismas reglas que su ruta HTTP. Estados: `aplicada`, `repetida`, `conflicto`, `rechazada`,
+`bloqueada`; `referencias` mapea IDs locales a IDs del servidor. Un aviso `pendiente` no es un
+envío de WhatsApp.
 
 ## 4. Diferencias respecto del contrato 0.2
 
@@ -176,4 +180,18 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
   del gremio; los avisos indican `destino.tipo` (`participante` u `operador`).
 - La Liga usa una fórmula fija identificada (`participacion_hogares_v1`) y el número de viviendas
   vigente al cierre del periodo; `version_regla_liga` queda para cuando se apruebe otra fórmula.
-- No implementados todavía: archivos e IA (M06), canjes, exportaciones, certificados, hojas de ruta.
+- No implementados todavía: archivos, canjes, exportaciones, certificados y hojas de ruta.
+- `POST /v1/ia/interpretar` responde `503` y no llama a Gemini. `GET /v1/capacidades` informa `ia_disponible: false` y `piloto: restringido`.
+
+## 5. Cambios incompatibles de `0.3-ecoconecta.2`
+
+El bot y el panel tienen que dejar de enviar `preferencia_horaria` como campo de entrada.
+
+- Enviar una sola alternativa: `preferencia_sin_restriccion: true` sin fechas, o `preferencia_inicio` y `preferencia_fin` con `fin` posterior. Las dos juntas, o ninguna, responden `422`.
+- Leer `preferencia_horaria` solo como texto derivado (`Sin restricción` o la franja en `America/Bogota`). Filas anteriores a esta versión pueden venir con preferencia nula: no fue capturada.
+- `tipo_generador` (`hogar` o `negocio`) es de salida. Se copia de la unidad y no otorga permisos.
+- Programar exige `acuerdo_canal`. `acuerdo_observacion` es opcional. La respuesta de la asignación puede incluir `programada_por`.
+- El cierre envía `materiales_confirmados` como lista de UUID del catálogo `material`. Un UUID desconocido no se guarda ni se inventa. Los kilos siguen saliendo del pesaje.
+- Tratar `programada` como estado propio. `cancelada` y `rechazada` no son recogidas. Una recogida junto con un rechazo es `finalizada_con_novedades`, no `atendida`.
+- Mostrar `tema` en educación y las `habilitaciones` de `GET /v1/me`.
+- No usar el directorio `GET /v1/unidades` desde admin, fundación o la cuenta del trabajador.

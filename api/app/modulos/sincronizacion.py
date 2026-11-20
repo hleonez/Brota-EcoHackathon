@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.core.errores import AppError
+from app.core.errores import AppError, prohibido
 from app.core.idempotencia import ejecutar_idempotente
 from app.core.seguridad import Actor, actor_operador
 from app.core.tipos import Entrada, InstanteEntrada, ahora
@@ -114,6 +114,8 @@ def _resolver(db: Session, ambito: str, valor: str | None, locales: dict[str, uu
 
 
 def sincronizar(db: Session, actor: Actor, lote: SyncIn) -> dict[str, Any]:
+    if not actor.gremios_coordinados and actor.trabajador_id is None:
+        raise prohibido("La sincronización operativa es para coordinación o para el trabajador asignado.")
     s = get_settings()
     if len(lote.operaciones) > s.sync_max_operaciones:
         raise AppError(400, "BAD_REQUEST", f"Máximo {s.sync_max_operaciones} operaciones por lote.")
@@ -137,6 +139,8 @@ def sincronizar(db: Session, actor: Actor, lote: SyncIn) -> dict[str, Any]:
         else:
             modelo, crea, fn = _ACCIONES[op.accion]
             try:
+                if actor.trabajador_id is not None and not actor.gremios_coordinados and op.accion != "registrar_resultado_orden":
+                    raise prohibido("El trabajador solo registra el resultado de su asignación.")
                 datos = TypeAdapter(modelo).validate_python(op.datos)
                 recurso = None if crea else _resolver(db, ambito, op.recurso_id, locales)
                 if not crea and recurso is None:

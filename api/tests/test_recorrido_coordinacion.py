@@ -46,7 +46,7 @@ def test_coordinacion_por_whatsapp(client, operador, catalogo):
     habilitar_piloto(client, VECINA)
     s = client.post(
         "/v1/solicitudes",
-        json={"preferencia_horaria": "Sin restricción", "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"], catalogo["tipos_servicio:ORGANICOS"]],
+        json={"preferencia_sin_restriccion": True, "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"], catalogo["tipos_servicio:ORGANICOS"]],
               "observacion": "Cajas en la portería"},
         headers=bot(VECINA),
     ).json()["data"]

@@ -33,6 +33,7 @@ class HabilitacionOut(Salida):
     version: int
     vigente_desde: Instante
     vigente_hasta: Instante | None
+    revocada_at: Instante | None = None
     created_at: Instante
 
 @router.get("/piloto/habilitaciones")
@@ -72,6 +73,10 @@ def actualizar(id: uuid.UUID, datos: HabilitacionPatch, request: Request, actor:
             if datos.vigente_hasta is not None and datos.vigente_hasta <= h.vigente_desde:
                 raise invalido({"vigente_hasta": "Debe ser posterior al inicio"})
             h.vigente_hasta = datos.vigente_hasta
+        if datos.activo:
+            h.revocada_at = None
+        elif h.revocada_at is None:
+            h.revocada_at = ahora()
         h.activo = datos.activo
         h.version += 1
         registrar_evento(db, "piloto_actualizado", actor, datos={"habilitacion_id": str(h.id), "activo": h.activo})

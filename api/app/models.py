@@ -269,7 +269,7 @@ class TipoServicio(Base):
 
 
 class Recolector(Base):
-    """Persona recolectora. No tiene cuenta ni credenciales: la coordinación registra por ella."""
+    """Reciclador o huertero. La cuenta es opcional: sin teléfono, la coordinación registra por esa persona."""
 
     __tablename__ = "recolector"
     huerta_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("huerta.id"))
@@ -355,7 +355,21 @@ class Solicitud(Base):
 
     __tablename__ = "solicitud"
     preferencia_horaria: Mapped[str | None] = mapped_column(String(300))
-    __table_args__ = (Index("ix_solicitud_unidad_creacion", "unidad_id", "created_at", "id"),)
+    preferencia_inicio: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    preferencia_fin: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    preferencia_sin_restriccion: Mapped[bool | None] = mapped_column(Boolean)
+    tipo_generador: Mapped[str | None] = mapped_column(String(20))
+    __table_args__ = (
+        Index("ix_solicitud_unidad_creacion", "unidad_id", "created_at", "id"),
+        CheckConstraint(
+            "(preferencia_inicio IS NULL AND preferencia_fin IS NULL AND preferencia_sin_restriccion IS NULL) OR "
+            "(preferencia_sin_restriccion IS TRUE AND preferencia_inicio IS NULL AND preferencia_fin IS NULL) OR "
+            "(preferencia_sin_restriccion IS FALSE AND preferencia_inicio IS NOT NULL AND preferencia_fin IS NOT NULL "
+            "AND preferencia_fin > preferencia_inicio)",
+            name="preferencia",
+        ),
+        CheckConstraint("tipo_generador IS NULL OR tipo_generador IN ('hogar','negocio')", name="tipo_generador"),
+    )
     id: Mapped[uuid.UUID] = _pk()
     codigo_pasaporte: Mapped[str] = mapped_column(String(20), unique=True)
     unidad_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("unidad.id"))
@@ -437,7 +451,7 @@ class SolicitudServicio(Base):
 
 
 class Orden(Base):
-    """Trabajo de un gremio dentro de una solicitud. nueva → asignada → recogida | rechazada."""
+    """Trabajo de un gremio. nueva → asignada → programada → recogida | rechazada, o cancelada."""
 
     __tablename__ = "orden"
     __table_args__ = (
@@ -463,10 +477,16 @@ class Orden(Base):
 class Asignacion(Base):
     __tablename__ = "asignacion"
     acuerdo_canal: Mapped[str | None] = mapped_column(String(20))
+    acuerdo_observacion: Mapped[str | None] = mapped_column(String(300))
+    programada_por: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cuenta_operadora.id"))
     __table_args__ = (
         CheckConstraint("forma_aviso IN ('llamada','recado')", name="forma_aviso"),
         CheckConstraint("(inicio IS NULL) = (fin IS NULL)", name="horario_completo"),
         CheckConstraint("fin IS NULL OR fin > inicio", name="horario_orden"),
+        CheckConstraint(
+            "acuerdo_canal IS NULL OR acuerdo_canal IN ('whatsapp','llamada','presencial')",
+            name="acuerdo_canal",
+        ),
         Index("uq_asignacion_vigente", "orden_id", unique=True, postgresql_where=text("vigente_hasta IS NULL")),
     )
     id: Mapped[uuid.UUID] = _pk()
@@ -503,6 +523,17 @@ class ResultadoOrden(Base):
     confirmado_por: Mapped[uuid.UUID] = mapped_column(ForeignKey("cuenta_operadora.id"))
     ocurrido_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     confirmado_at: Mapped[datetime] = _ts_now()
+    materiales: Mapped[list[ResultadoMaterial]] = relationship(back_populates="resultado")
+
+
+class ResultadoMaterial(Base):
+    """Material aceptado al cerrar. No guarda kilos: el pesaje sigue siendo la medición."""
+
+    __tablename__ = "resultado_material"
+    __table_args__ = (PrimaryKeyConstraint("resultado_orden_id", "material_id"),)
+    resultado_orden_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("resultado_orden.id", ondelete="CASCADE"))
+    material_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("material.id"), index=True)
+    resultado: Mapped[ResultadoOrden] = relationship(back_populates="materiales")
 
 
 # --------------------------------------------------------------------------- pesaje
@@ -653,7 +684,18 @@ class ContenidoEducativo(Base):
     tema: Mapped[str] = mapped_column(String(30), default="separacion", server_default="separacion")
     publicado: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
-    __table_args__ = (CheckConstraint("tipo IN ('video','imagen','texto')", name="tipo"),)
+    gremio_id: Mapped[uuid.UUID | None] = _fk("gremio.id", nullable=True)
+    vigente_desde: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    vigente_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint("tipo IN ('video','imagen','texto')", name="tipo"),
+        CheckConstraint("tema IN ('separacion','huerta','horarios_rutas','servicio')", name="tema"),
+        CheckConstraint(
+            "(vigente_desde IS NULL AND vigente_hasta IS NULL) OR "
+            "(vigente_desde IS NOT NULL AND (vigente_hasta IS NULL OR vigente_hasta > vigente_desde))",
+            name="vigencia",
+        ),
+    )
     id: Mapped[uuid.UUID] = _pk()
     titulo: Mapped[str] = mapped_column(String(160))
     tipo: Mapped[str] = mapped_column(String(20))
@@ -792,6 +834,7 @@ class HabilitacionPiloto(Base):
     __tablename__ = "habilitacion_piloto"
     vigente_desde: Mapped[datetime] = _ts_now()
     vigente_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revocada_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (UniqueConstraint("participante_id", "unidad_id"), CheckConstraint("vigente_hasta IS NULL OR vigente_hasta > vigente_desde", name="vigencia"))
     id: Mapped[uuid.UUID] = _pk()
     participante_id: Mapped[uuid.UUID] = _fk("participante.id")

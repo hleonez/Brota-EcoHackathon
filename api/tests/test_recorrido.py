@@ -84,7 +84,7 @@ def test_registro_sin_consentimiento_rechazado(client, catalogo):
 
 
 def test_solicitud_mixta_e_idempotencia(client, catalogo):
-    cuerpo = {"preferencia_horaria": "Sin restricción",
+    cuerpo = {"preferencia_sin_restriccion": True,
         "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"], catalogo["tipos_servicio:ORGANICOS"]],
         "observacion": "Cartón y restos de cocina",
     }
@@ -114,7 +114,7 @@ def test_solicitud_mixta_e_idempotencia(client, catalogo):
     assert r3.status_code == 409 and _err(r3) == "IDEMPOTENCY_CONFLICT"
 
     # Otra solicitud del mismo servicio con una abierta → regla de solicitud abierta.
-    r4 = client.post("/v1/solicitudes", json={"preferencia_horaria": "Sin restricción", "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]}, headers=bot(CARMEN))
+    r4 = client.post("/v1/solicitudes", json={"preferencia_sin_restriccion": True, "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]}, headers=bot(CARMEN))
     assert r4.status_code == 409 and _err(r4) == "OPEN_REQUEST_EXISTS"
     assert r4.json()["error"]["codigo_pasaporte"] == s["codigo_pasaporte"]
 
@@ -239,7 +239,7 @@ def test_rechazo_con_educacion(client, operador, catalogo):
     assert r.status_code == 200 and r.json()["data"]["evaluacion_puntos"] == "no_aplica"
 
     s = client.get(f"/v1/solicitudes/{E['solicitud']['id']}", headers=bot(CARMEN, False)).json()["data"]
-    assert s["avance"]["estado_general"] == "atendida" and s["avance"]["ordenes_finalizadas"] == 2
+    assert s["avance"]["estado_general"] == "finalizada_con_novedades" and s["avance"]["ordenes_finalizadas"] == 2
 
     avisos = client.post("/v1/canal/avisos/reservas", json={"limite": 50}, headers=BOT).json()["data"]
     tipos = {a["tipo"]: a for a in avisos}
@@ -487,14 +487,14 @@ def test_concurrencia_doble_toque(client, catalogo):
     client.post("/v1/registros", json={"nombre": "Ana", "unidad_id": u["id"],
                                        "consentimiento": {"version_politica": "2026-11", "decision": "aceptado"}}, headers=bot(cel))
     habilitar_piloto(client, cel)
-    cuerpo = {"preferencia_horaria": "Sin restricción", "tipo_servicio_ids": [catalogo["tipos_servicio:ORGANICOS"]]}
+    cuerpo = {"preferencia_sin_restriccion": True, "tipo_servicio_ids": [catalogo["tipos_servicio:ORGANICOS"]]}
     h = bot(cel)
     with ThreadPoolExecutor(4) as ex:
         rs = list(ex.map(lambda _: client.post("/v1/solicitudes", json=cuerpo, headers=h), range(4)))
     assert {r.status_code for r in rs} == {201}
     assert len({r.json()["data"]["id"] for r in rs}) == 1
 
-    cuerpo = {"preferencia_horaria": "Sin restricción", "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]}
+    cuerpo = {"preferencia_sin_restriccion": True, "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"]]}
     with ThreadPoolExecutor(4) as ex:
         rs = list(ex.map(lambda _: client.post("/v1/solicitudes", json=cuerpo, headers=bot(cel)), range(4)))
     codigos = sorted(r.status_code for r in rs)

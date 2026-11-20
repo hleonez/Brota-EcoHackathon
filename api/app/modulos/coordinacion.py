@@ -36,6 +36,7 @@ from app.models import (
     Material,
     Orden,
     Recolector,
+    ResultadoMaterial,
     ResultadoOrden,
     Solicitud,
     Torre,
@@ -62,6 +63,7 @@ class AsignacionIn(Entrada):
     fin: InstanteEntrada | None = None
     forma_aviso: Literal["llamada", "recado"]
     acuerdo_canal: Literal["whatsapp", "llamada", "presencial"] | None = None
+    acuerdo_observacion: str | None = Field(default=None, max_length=300)
 
     @model_validator(mode="after")
     def _horario(self) -> AsignacionIn:
@@ -97,7 +99,7 @@ def _cargar_orden(db: Session, orden_id: uuid.UUID, bloquear: bool = False) -> O
         .where(Orden.id == orden_id)
         .options(
             selectinload(Orden.asignaciones).selectinload(Asignacion.recolector),
-            selectinload(Orden.resultado),
+            selectinload(Orden.resultado).selectinload(ResultadoOrden.materiales),
             selectinload(Orden.solicitud).selectinload(Solicitud.servicios),
             selectinload(Orden.solicitud).selectinload(Solicitud.unidad),
         )
@@ -138,6 +140,8 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
     if anterior is not None:
         anterior.vigente_hasta = t
         db.flush()
+    cambio_persona = anterior is not None and anterior.recolector_id != r.id
+    con_horario = datos.inicio is not None
     db.add(
         Asignacion(
             orden_id=o.id,
@@ -146,20 +150,35 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
             fin=datos.fin,
             forma_aviso=datos.forma_aviso,
             registrada_por=actor.cuenta_id,
-            acuerdo_canal=datos.acuerdo_canal,
+            acuerdo_canal=datos.acuerdo_canal if con_horario else None,
+            acuerdo_observacion=datos.acuerdo_observacion if con_horario else None,
+            programada_por=actor.cuenta_id if con_horario else None,
             vigente_desde=t,
         )
     )
-    o.estado = "programada" if datos.inicio is not None else "asignada"
+    o.estado = "programada" if con_horario else "asignada"
     o.version += 1
-    registrar_evento(
-        db,
-        "orden_reasignada" if anterior else "orden_asignada",
-        actor,
-        solicitud_id=o.solicitud_id,
-        orden_id=o.id,
-        datos={"recolector_id": str(r.id), "forma_aviso": datos.forma_aviso, "acuerdo_canal": datos.acuerdo_canal, "inicio": datos.inicio.isoformat() if datos.inicio else None, "fin": datos.fin.isoformat() if datos.fin else None},
-    )
+    detalle = {
+        "recolector_id": str(r.id),
+        "forma_aviso": datos.forma_aviso,
+        "acuerdo_canal": datos.acuerdo_canal if con_horario else None,
+        "inicio": datos.inicio.isoformat() if datos.inicio else None,
+        "fin": datos.fin.isoformat() if datos.fin else None,
+    }
+    if anterior is None:
+        registrar_evento(db, "orden_asignada", actor, solicitud_id=o.solicitud_id, orden_id=o.id, datos=detalle)
+    elif cambio_persona:
+        registrar_evento(db, "orden_reasignada", actor, solicitud_id=o.solicitud_id, orden_id=o.id, datos=detalle)
+    if con_horario:
+        ya_habia_horario = anterior is not None and anterior.recolector_id == r.id and anterior.inicio is not None
+        registrar_evento(
+            db,
+            "orden_reprogramada" if ya_habia_horario else "orden_programada",
+            actor,
+            solicitud_id=o.solicitud_id,
+            orden_id=o.id,
+            datos=detalle,
+        )
     gremio = db.get(Gremio, o.gremio_id)
     franja = franja_texto(datos.inicio, datos.fin)
     # franja termina en "p. m." / "a. m.": no repetir el punto.
@@ -177,7 +196,7 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
             "inicio": datos.inicio.isoformat() if datos.inicio else None,
             "fin": datos.fin.isoformat() if datos.fin else None,
             "franja_texto": franja,
-            "reasignacion": anterior is not None,
+            "reasignacion": cambio_persona,
             "texto_sugerido": texto,
         },
         solicitud_id=o.solicitud_id,
@@ -210,7 +229,8 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
     verificar_version(datos.version_esperada, o.version)
     if o.estado != "programada":
         raise transicion_invalida(
-            "Solo se registra el resultado de una orden asignada." if o.estado == "nueva"
+            "Programa la visita antes de registrar el resultado."
+            if o.estado in ("nueva", "asignada")
             else f"La orden ya está {o.estado}."
         )
     if datos.ocurrido_at > ahora() + timedelta(minutes=5):
@@ -240,7 +260,7 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
     res = ResultadoOrden(
         trabajador_id=next(a.recolector_id for a in o.asignaciones if a.vigente_hasta is None),
         asignacion_id=next(a.id for a in o.asignaciones if a.vigente_hasta is None),
-        materiales_confirmados=[str(m) for m in datos.materiales_confirmados] if datos.materiales_confirmados is not None else None,
+        materiales_confirmados=None,
         orden_id=o.id,
         resultado=datos.resultado,
         motivo_rechazo_id=datos.motivo_rechazo_id,
@@ -249,6 +269,9 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
         ocurrido_at=datos.ocurrido_at,
     )
     db.add(res)
+    db.flush()
+    for mid in datos.materiales_confirmados:
+        db.add(ResultadoMaterial(resultado_orden_id=res.id, material_id=mid))
     o.estado = datos.resultado
     o.version += 1
     db.flush()
@@ -401,6 +424,7 @@ def post_resultado(
 
 class ProgramacionIn(Entrada):
     acuerdo_canal: Literal["whatsapp", "llamada", "presencial"]
+    acuerdo_observacion: str | None = Field(default=None, max_length=300)
     version_esperada: int
     inicio: InstanteEntrada
     fin: InstanteEntrada
@@ -419,12 +443,10 @@ def programar(db, actor, orden_id, datos):
     vigente = next((a for a in o.asignaciones if a.vigente_hasta is None), None)
     if vigente is None or o.estado not in ("asignada", "programada"):
         raise transicion_invalida("Asigna un responsable antes de programar.")
-    resultado = asignar(db, actor, orden_id, AsignacionIn(
+    return asignar(db, actor, orden_id, AsignacionIn(
         version_esperada=datos.version_esperada, recolector_id=vigente.recolector_id,
-        inicio=datos.inicio, fin=datos.fin, forma_aviso=vigente.forma_aviso, acuerdo_canal=datos.acuerdo_canal))
-    registrar_evento(db, "orden_programada", actor, solicitud_id=o.solicitud_id, orden_id=o.id,
-        datos={"inicio": datos.inicio.isoformat(), "fin": datos.fin.isoformat()})
-    return resultado
+        inicio=datos.inicio, fin=datos.fin, forma_aviso=vigente.forma_aviso,
+        acuerdo_canal=datos.acuerdo_canal, acuerdo_observacion=datos.acuerdo_observacion))
 
 
 @router.post("/ordenes/{orden_id}/programacion")
