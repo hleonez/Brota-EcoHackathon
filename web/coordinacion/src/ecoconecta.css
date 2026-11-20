@@ -113,24 +113,6 @@ td {
 }
 
 
-.inicio-colectivo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: clamp(16px, 3vw, 32px);
-  border: 1px solid #b8d3c2;
-  border-left: 5px solid var(--verde-eco);
-  border-radius: var(--radio);
-  background: var(--marca-suave);
-}
-.inicio-colectivo h2,
-.inicio-colectivo p { margin: 0 0 4px; overflow-wrap: anywhere; }
-.inicio-colectivo img {
-  width: clamp(64px, 17%, 130px);
-  max-height: 120px;
-  object-fit: contain;
-}
 .resumen-operativo,
 .resumen-impacto {
   display: grid;

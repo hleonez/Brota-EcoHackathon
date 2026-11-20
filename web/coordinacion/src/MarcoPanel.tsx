@@ -162,6 +162,61 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
   );
 }
 
+/** Greeting band used on each profile's home, mirroring the approved mockups. */
+export function Portada({ saludo, texto, imagen, children }: {
+  saludo: string;
+  texto: string;
+  imagen?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="portada">
+      <div className="portada-texto">
+        <p className="portada-saludo">{saludo}</p>
+        <p className="portada-descripcion">{texto}</p>
+      </div>
+      {imagen && <img className="portada-imagen" src={imagen} alt="" />}
+      {children && <div className="portada-acciones">{children}</div>}
+    </section>
+  );
+}
+
+/** Featured task card (organic-flow mockup). Informational: the actions sit next to it. */
+export function TareaPrincipal({ icono, titulo, texto }: { icono: string; titulo: string; texto: string }) {
+  return (
+    <div className="tarea-principal">
+      <span className="tarea-principal-icono"><Icono nombre={icono} /></span>
+      <div className="tarea-principal-texto">
+        <span className="tarea-principal-etiqueta"><Icono nombre="hoja" />Tarea principal de hoy</span>
+        <strong>{titulo}</strong>
+        <p>{texto}</p>
+      </div>
+    </div>
+  );
+}
+
+/** Tones map to manual colors: leaf tint, solar-yellow tint, teal tint, or solid Verde Eco. */
+export type TonoAccion = "verde" | "amarillo" | "turquesa" | "solido";
+
+export function TarjetaAccion({ icono, titulo, texto, tono = "verde", onClick }: {
+  icono: string;
+  titulo: string;
+  texto?: string;
+  tono?: TonoAccion;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className={"tarjeta-accion tono-" + tono} onClick={onClick}>
+      <span className="tarjeta-accion-icono"><Icono nombre={icono} /></span>
+      <span className="tarjeta-accion-texto">
+        <strong>{titulo}</strong>
+        {texto && <span>{texto}</span>}
+      </span>
+      <span className="tarjeta-accion-flecha"><Icono nombre="flecha" /></span>
+    </button>
+  );
+}
+
 function MiCuenta({ cuenta }: { cuenta: CuentaPanel }) {
   return (
     <section className="eco-tarjeta cuenta-detalle" aria-label="Datos de la sesión">

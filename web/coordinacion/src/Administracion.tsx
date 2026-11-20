@@ -1,4 +1,4 @@
-import { MarcoPanel, enlaceCuenta, type CuentaPanel } from "./MarcoPanel";
+import { MarcoPanel, Portada, TarjetaAccion, enlaceCuenta, type CuentaPanel } from "./MarcoPanel";
 import { useState } from "react";
 import { Campo, Formulario, type Operacion, type Valores } from "./Formulario";
 import { Espera, fechaBogota, useDatos } from "./portal";
@@ -336,7 +336,8 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
   return (
     <MarcoPanel grupos={secciones} activo={cuentaActiva ? enlaceCuenta.id : vista}
       titulo={cuentaActiva ? enlaceCuenta.texto : vista === "Inicio" ? "Administración" : vista}
-      contexto="Administración de EcoConecta" cuenta={cuentaSesion} navegar={navegar}>
+      contexto="Administración de EcoConecta" cuenta={cuentaSesion} navegar={navegar}
+      portada={!cuentaActiva && vista === "Inicio"}>
       {conflicto && (
         <p role="alert">Este registro cambió. Vuelve a seleccionarlo para revisar la versión actual.</p>
       )}
@@ -354,14 +355,12 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
           )}
         </section>
       ) : vista === "Inicio" ? (
-        <section className="eco-tarjeta">
-          <h2>Administración de EcoConecta</h2>
-          <p>Gestiona accesos, unidades y configuración del programa.</p>
-          <div className="acciones">
-            <button className="btn primario" onClick={() => navegar("Piloto")}>Revisar habilitaciones</button>
-            <button className="btn" onClick={() => navegar("Cuentas")}>Crear cuenta</button>
-          </div>
-        </section>
+        <Portada saludo={`¡Hola, ${cuentaSesion.nombre.trim().split(/\s+/)[0] || cuentaSesion.nombre}!`}
+          texto="Gestiona accesos, unidades y configuración del programa EcoConecta." imagen="/marca/administracion.png">
+          <TarjetaAccion icono="piloto" titulo="Revisar habilitaciones" onClick={() => navegar("Piloto")} />
+          <TarjetaAccion icono="cuentas" titulo="Crear cuenta" tono="turquesa" onClick={() => navegar("Cuentas")} />
+          <TarjetaAccion icono="educación" titulo="Contenido educativo" tono="amarillo" onClick={() => navegar("Educación")} />
+        </Portada>
       ) : vista === "Piloto" && !lista.datos ? (
         <section className="eco-tarjeta">
           <h2>Habilitaciones del piloto</h2>
