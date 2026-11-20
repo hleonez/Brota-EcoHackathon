@@ -21,6 +21,8 @@ COORD = "573110000001"
 ORDEN = "0b6f0000-0000-4000-8000-000000000001"
 REC = "0b6f0000-0000-4000-8000-0000000000aa"
 MOTIVO = "0b6f0000-0000-4000-8000-0000000000bb"
+PAPEL = "0b6f0000-0000-4000-8000-0000000000cc"
+CARTON = "0b6f0000-0000-4000-8000-0000000000dd"
 GREMIO = "g-asorescatar"
 
 
@@ -47,7 +49,11 @@ class APICoordinacion:
         if p == "/v1/recolectores":
             return _ok([{"id": REC, "nombre": "Rosa (demo)", "telefono_contacto": "3001234567", "gremio_id": GREMIO}])
         if p == "/v1/catalogos":
-            return _ok({"tipos_servicio": [], "motivos_rechazo": [
+            return _ok({"tipos_servicio": [], "materiales": [
+                {"id": PAPEL, "codigo": "PAPEL", "nombre": "Papel", "gremio_id": GREMIO},
+                {"id": CARTON, "codigo": "CARTON", "nombre": "Cartón", "gremio_id": GREMIO},
+                {"id": "otro", "codigo": "ORG", "nombre": "Orgánicos", "gremio_id": "g-huerta"},
+            ], "motivos_rechazo": [
                 {"id": MOTIVO, "codigo": "MOJADO", "nombre": "Material mojado", "gremio_id": None},
                 {"id": "otro", "codigo": "X", "nombre": "De la huerta", "gremio_id": "g-huerta"},
             ]})
@@ -55,12 +61,16 @@ class APICoordinacion:
         if p == f"/v1/ordenes/{ORDEN}/asignacion" and m == "POST":
             assert cuerpo["version_esperada"] == self.orden["version"]
             self.escrituras.append(("asignacion", cuerpo, req.headers["Idempotency-Key"]))
-            self.orden |= {"estado": "asignada", "version": self.orden["version"] + 1,
+            con_horario = "inicio" in cuerpo
+            assert ("acuerdo_canal" in cuerpo) == con_horario
+            self.orden |= {"estado": "programada" if con_horario else "asignada", "version": self.orden["version"] + 1,
                            "asignacion": {"recolector_id": REC, "recolector_nombre": "Rosa (demo)"}}
             return _ok(self.orden)
         if p == f"/v1/ordenes/{ORDEN}/resultado" and m == "POST":
-            if self.orden["estado"] != "asignada":
+            if self.orden["estado"] != "programada":
                 return httpx.Response(409, json={"error": {"code": "INVALID_TRANSITION", "message": "x"}})
+            assert bool(cuerpo["materiales_confirmados"]) == (cuerpo["resultado"] == "recogida")
+            assert cuerpo["version_esperada"] == self.orden["version"]
             self.escrituras.append(("resultado", cuerpo, req.headers["Idempotency-Key"]))
             self.orden |= {"estado": cuerpo["resultado"], "version": self.orden["version"] + 1}
             extra = {"puntos_otorgados": "10.00"} if cuerpo["resultado"] == "recogida" else {}
@@ -92,7 +102,7 @@ def test_menu_de_coordinacion(coord):
     c, _ = coord
     r = enviar(c, "hola", de=COORD)
     assert "Tienes 1 solicitud nueva" in _texto(r[0])
-    assert _botones(r[0]) == ["C_BANDEJA", "C_ASIGNADAS"]
+    assert _botones(r[0]) == ["C_BANDEJA", "C_ASIGNADAS", "C_PROGRAMADAS"]
     lista = enviar(c, boton="C_BANDEJA", de=COORD)[0]
     assert _filas(lista)[0] == {"id": f"C_ASG:{ORDEN}", "title": "BR-00002 T2 · 403", "description": "Jeremy"}
 
@@ -104,15 +114,24 @@ def test_asignar_y_cerrar_como_recogida(coord):
     fr = _filas(enviar(c, lista=rec[0]["id"], de=COORD)[0])
     assert fr[-1]["id"] == f"C_FRA:{ORDEN}:{REC}:SIN" and fr[-1]["title"] == "Sin hora fija"
 
-    r = enviar(c, lista=fr[0]["id"], de=COORD, wamid="wamid.asignar")
+    canales = _botones(enviar(c, lista=fr[0]["id"], de=COORD)[0])
+    assert not api.escrituras
+    r = enviar(c, boton=canales[1], de=COORD, wamid="wamid.asignar")
     tipo, cuerpo, clave = api.escrituras[0]
     assert tipo == "asignacion" and clave == "wamid.asignar" and cuerpo["forma_aviso"] == "llamada"
     assert cuerpo["inicio"] < cuerpo["fin"]
+    assert cuerpo["acuerdo_canal"] == "llamada"
     assert "asignada a Rosa (demo)" in _texto(r[0]) and "3001234567" in _texto(r[0])
     assert _botones(r[1]) == [f"C_OK:{ORDEN}", f"C_NO:{ORDEN}"]
 
-    r = enviar(c, boton=f"C_OK:{ORDEN}", de=COORD)
+    instrucciones = enviar(c, boton=f"C_OK:{ORDEN}", de=COORD)
+    assert "PAPEL · Papel" in _texto(instrucciones[1]) and "ORG" not in _texto(instrucciones[1])
+    assert len(api.escrituras) == 1
+    enviar(c, f"RECOGIDA {ORDEN} 2 PAPEL,ORG", de=COORD)
+    assert len(api.escrituras) == 1
+    r = enviar(c, f"RECOGIDA {ORDEN} 2 PAPEL,CARTON", de=COORD)
     assert api.escrituras[1][1]["resultado"] == "recogida"
+    assert api.escrituras[1][1]["materiales_confirmados"] == [PAPEL, CARTON]
     assert "recogida" in _texto(r[0]) and "+10 puntos" in _texto(r[0])
 
     # Tocar otra vez un botón viejo no rompe nada.
@@ -124,10 +143,21 @@ def test_rechazo_con_motivo_del_gremio(coord):
     c, api = coord
     enviar(c, lista=f"C_FRA:{ORDEN}:{REC}:SIN", de=COORD)
     assert "inicio" not in api.escrituras[0][1]
+    assert "ya cambió" in _texto(enviar(c, boton=f"C_NO:{ORDEN}", de=COORD)[0])
+    asignadas = _filas(enviar(c, "asignadas", de=COORD)[0])
+    franjas_asignadas = _filas(enviar(c, lista=asignadas[0]["id"], de=COORD)[0])
+    assert all(not f["id"].endswith(":SIN") for f in franjas_asignadas)
+    canales = _botones(enviar(c, lista=franjas_asignadas[0]["id"], de=COORD)[0])
+    enviar(c, boton=canales[0], de=COORD)
+    programadas = _filas(enviar(c, "programadas", de=COORD)[0])
+    assert programadas[0]["id"] == f"C_CER:{ORDEN}"
     motivos = _filas(enviar(c, boton=f"C_NO:{ORDEN}", de=COORD)[0])
     assert [f["title"] for f in motivos] == ["Material mojado"]  # el de la huerta no aparece
     r = enviar(c, lista=motivos[0]["id"], de=COORD)
-    assert api.escrituras[1][1] == {**api.escrituras[1][1], "resultado": "rechazada", "motivo_rechazo_id": MOTIVO}
+    cierre = api.escrituras[2][1]
+    assert cierre["resultado"] == "rechazada"
+    assert cierre["motivo_rechazo_id"] == MOTIVO
+    assert cierre["materiales_confirmados"] == []
     assert "no se pudo recoger" in _texto(r[0])
 
 

@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ErrorApi } from "./api";
-import { DialogoAsignar, DialogoCierre, Modal } from "./Dialogos";
+import { DialogoAsignar, DialogoCierre, DialogoProgramar, Modal } from "./Dialogos";
 import type { Caso, Catalogo, Orden, Recolector, Sesion } from "./tipos";
 import Indicadores from "./Indicadores";
 import { Pesajes } from "./Operacion";
 import { Marca } from "./portal";
 import { hace } from "./util";
-import { DetalleSolicitud, VistaBandeja, VistaHistorial, VistaReportes, VistaRutas } from "./Vistas";
+import { DetalleSolicitud, VistaBandeja, VistaHistorial, VistaMisOrdenes, VistaReportes, VistaRutas } from "./Vistas";
 
 type Vista = "inicio" | "equipo" | "pesajes" | "indicadores" | "bandeja" | "rutas" | "reportes" | "historial";
 export type Accion = { tipo: "detalle" | "asignar" | "programar" | "reasignar" | "recogida" | "rechazada" | "cancelar"; orden: Orden };
 
 const CADA = 15_000; // la bandeja se actualiza sola
 
-export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: () => void }) {
-  const gremioId = sesion.cuenta.permisos.find((p) => p.rol === "coordinacion")?.gremio_id ?? null;
+export default function Panel({ sesion, rol, onSalir }: { sesion: Sesion; rol: string; onSalir: () => void }) {
+  const campo = rol === "huertero" || rol === "reciclador"; // el servidor limita `GET /v1/ordenes` a sus órdenes
+  const gremioId = sesion.cuenta.permisos.find((p) => p.rol === rol)?.gremio_id ?? null;
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [casos, setCasos] = useState<Caso[]>([]);
   const casosConocidos = useRef<Set<string> | null>(null);
@@ -40,7 +41,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
   const cargarOrdenes = useCallback(async () => {
     try {
       if (!gremioId) return;
-      const [lista, reportes] = await Promise.all([api.ordenes(gremioId), api.casos()]);
+      const [lista, reportes] = await Promise.all([api.ordenes(gremioId), campo ? Promise.resolve([]) : api.casos()]);
       setOrdenes(lista);
       setCasos(reportes.filter(c=>c.gremio_id===gremioId));
       if (casosConocidos.current) {
@@ -64,12 +65,12 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
     } finally {
       setCargado(true);
     }
-  }, [mostrar,gremioId]);
+  }, [mostrar, gremioId, campo]);
 
   useEffect(() => {
     if (!gremioId) return;
     let vivo = true;
-    Promise.all([api.catalogo(gremioId), api.recolectores(gremioId)])
+    Promise.all([api.catalogo(gremioId), campo ? Promise.resolve([]) : api.recolectores(gremioId)])
       .then(([c, r]) => {
         if (!vivo) return;
         setCatalogo(c);
@@ -87,7 +88,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
       window.clearInterval(reloj);
       document.removeEventListener("visibilitychange", alVolver);
     };
-  }, [gremioId, cargarOrdenes]);
+  }, [gremioId, campo, cargarOrdenes]);
 
   const servicios = useMemo(
     () => new Map((catalogo?.tipos_servicio ?? []).map((t) => [t.id, t])),
@@ -101,6 +102,8 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
   const imagenColectivo=/huert|orgán/i.test(nombreGremio)?"huerta":"reciclaje";
   const nuevas = ordenes.filter((o) => o.estado === "nueva");
   const asignadas = ordenes.filter((o) => o.estado === "asignada");
+  const programadas = ordenes.filter((o) => o.estado === "programada");
+  const abiertas = [...asignadas, ...programadas];
 
   function listo(o: Orden, texto: string) {
     setOrdenes((l) => l.map((x) => (x.id === o.id ? o : x)));
@@ -119,7 +122,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
     return (
       <main className="login">
         <div className="login-caja">
-          <h1>Esta cuenta no coordina un gremio</h1>
+          <h1>Esta cuenta no tiene un gremio asignado</h1>
           <p className="tenue">El panel de coordinación es para las cuentas de Asorescatar o de la huerta.</p>
           <button className="btn grande" onClick={onSalir}>Salir</button>
         </div>
@@ -127,7 +130,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
     );
   }
 
-  const comunes = { servicios, recientes, onAccion: setAccion };
+  const comunes = { servicios, recientes, onAccion: setAccion, campo };
 
   return (
     <div className="app">
@@ -143,35 +146,47 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
 
       <nav className="pestanas" aria-label="Secciones">
         <Pestana activa={vista === "inicio"} onClick={()=>setVista("inicio")}>Inicio</Pestana>
-        <Pestana activa={vista === "bandeja"} onClick={() => setVista("bandeja")} cuenta={nuevas.length} alerta>
-          Bandeja
-        </Pestana>
-        <Pestana activa={vista === "rutas"} onClick={() => setVista("rutas")} cuenta={asignadas.length}>
-          Rutas de hoy
-        </Pestana>
-        <Pestana activa={vista === "reportes"} onClick={() => setVista("reportes")}
-          cuenta={casos.filter((c) => c.estado === "abierto").length} alerta>
-          Reportes
-        </Pestana>
+        {campo ? (
+          <Pestana activa={vista === "bandeja"} onClick={() => setVista("bandeja")} cuenta={programadas.length} alerta>
+            Mis órdenes
+          </Pestana>
+        ) : (
+          <>
+            <Pestana activa={vista === "bandeja"} onClick={() => setVista("bandeja")} cuenta={nuevas.length} alerta>
+              Bandeja
+            </Pestana>
+            <Pestana activa={vista === "rutas"} onClick={() => setVista("rutas")} cuenta={abiertas.length}>
+              Rutas de hoy
+            </Pestana>
+            <Pestana activa={vista === "reportes"} onClick={() => setVista("reportes")}
+              cuenta={casos.filter((c) => c.estado === "abierto").length} alerta>
+              Reportes
+            </Pestana>
+          </>
+        )}
         <Pestana activa={vista === "historial"} onClick={() => setVista("historial")}>
           Historial
         </Pestana>
-        <Pestana activa={vista==="pesajes"} onClick={()=>setVista("pesajes")}>Baldes y pesajes</Pestana>
-        <Pestana activa={vista==="indicadores"} onClick={()=>setVista("indicadores")}>Indicadores</Pestana>
-        <Pestana activa={vista==="equipo"} onClick={()=>setVista("equipo")}>Equipo</Pestana>
+        {!campo && <>
+          <Pestana activa={vista==="pesajes"} onClick={()=>setVista("pesajes")}>Baldes y pesajes</Pestana>
+          <Pestana activa={vista==="indicadores"} onClick={()=>setVista("indicadores")}>Indicadores</Pestana>
+          <Pestana activa={vista==="equipo"} onClick={()=>setVista("equipo")}>Equipo</Pestana>
+        </>}
       </nav>
 
       <main className="contenido">
         {!cargado ? (
           <p className="tenue centro">Cargando solicitudes…</p>
-        ) : vista==="inicio" ? (<section className="bienvenida"><img className="personaje" alt="" src={"/marca/"+imagenColectivo+".png"}/><h1>¡Hola, {sesion.cuenta.nombre}!</h1><p>{nombreGremio}</p>{error?<p role="alert">Los indicadores están pendientes de actualización.</p>:<><h2>{nuevas.length} solicitudes por asignar</h2><p>{asignadas.filter(o=>!o.asignacion?.inicio).length} asignadas sin horario · {asignadas.filter(o=>o.asignacion?.inicio && o.asignacion.fin).length} programadas</p></>}<button className="btn primario grande" onClick={()=>setVista("bandeja")}>Ver solicitudes</button></section>)
+        ) : vista==="inicio" ? (<section className="bienvenida"><img className="personaje" alt="" src={"/marca/"+imagenColectivo+".png"}/><h1>¡Hola, {sesion.cuenta.nombre}!</h1><p>{nombreGremio}</p>{error?<p role="alert">Los indicadores están pendientes de actualización.</p>:<>{campo?<h2>{programadas.length} por recoger · {asignadas.length} esperando horario</h2>:<><h2>{nuevas.length} solicitudes por asignar</h2><p>{asignadas.length} asignadas sin horario · {programadas.length} programadas</p></>}</>}<button className="btn primario grande" onClick={()=>setVista("bandeja")}>{campo?"Ver mis órdenes":"Ver solicitudes"}</button></section>)
         : vista==="indicadores" ? <Indicadores gremioId={gremioId}/>
         : vista==="pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores}/>
-        : vista==="equipo" ? <section className="eco-tarjeta"><h1>Equipo de {nombreGremio}</h1><ul className="registros">{recolectores.map(r=><li key={r.id}><strong>{r.nombre}</strong><span>{asignadas.filter(o=>o.asignacion?.recolector_id===r.id).length} asignaciones vigentes</span>{r.telefono_contacto&&<a className="btn" href={"tel:"+r.telefono_contacto}>Llamar a {r.nombre}</a>}</li>)}</ul></section>
-        : vista === "bandeja" ? (
-          <VistaBandeja nuevas={nuevas} asignadas={asignadas} {...comunes} />
+        : vista==="equipo" ? <section className="eco-tarjeta"><h1>Equipo de {nombreGremio}</h1><ul className="registros">{recolectores.map(r=><li key={r.id}><strong>{r.nombre}</strong><span>{abiertas.filter(o=>o.asignacion?.recolector_id===r.id).length} asignaciones vigentes</span>{r.telefono_contacto&&<a className="btn" href={"tel:"+r.telefono_contacto}>Llamar a {r.nombre}</a>}</li>)}</ul></section>
+        : vista === "bandeja" && campo ? (
+          <VistaMisOrdenes ordenes={ordenes} {...comunes} />
+        ) : vista === "bandeja" ? (
+          <VistaBandeja nuevas={nuevas} asignadas={asignadas} programadas={programadas} {...comunes} />
         ) : vista === "rutas" ? (
-          <VistaRutas asignadas={asignadas} recolectores={recolectores} {...comunes} />
+          <VistaRutas asignadas={abiertas} recolectores={recolectores} {...comunes} />
         ) : vista === "reportes" ? (
           <VistaReportes
             casos={casos}
@@ -194,11 +209,19 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
         <p>La cancelación desde coordinación aún no está habilitada.</p>
         <button className="btn" onClick={() => setAccion(null)}>Volver</button>
       </Modal>}
-      {(accion?.tipo === "asignar" || accion?.tipo === "programar" || accion?.tipo === "reasignar") && (
+      {!campo && (accion?.tipo === "asignar" || accion?.tipo === "reasignar") && (
         <DialogoAsignar
           modo={accion.tipo}
           orden={accion.orden}
           recolectores={recolectores}
+          onListo={listo}
+          onConflicto={conflicto}
+          onCerrar={() => setAccion(null)}
+        />
+      )}
+      {!campo && accion?.tipo === "programar" && (
+        <DialogoProgramar
+          orden={accion.orden}
           onListo={listo}
           onConflicto={conflicto}
           onCerrar={() => setAccion(null)}

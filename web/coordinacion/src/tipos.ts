@@ -1,6 +1,8 @@
 // Formas de la API de Brota que usa el panel (ver docs/contrato-api.md).
 
-export type EstadoOrden = "nueva" | "asignada" | "recogida" | "rechazada" | "cancelada";
+export type EstadoOrden = "nueva" | "asignada" | "programada" | "recogida" | "rechazada" | "cancelada";
+
+export type AcuerdoCanal = "whatsapp" | "llamada" | "presencial";
 
 export interface Asignacion {
   recolector_id: string;
@@ -8,6 +10,8 @@ export interface Asignacion {
   inicio: string | null;
   fin: string | null;
   forma_aviso: "llamada" | "recado";
+  acuerdo_canal: AcuerdoCanal | null;
+  acuerdo_observacion: string | null;
   vigente_desde: string;
 }
 
@@ -15,6 +19,7 @@ export interface Resultado {
   resultado: "recogida" | "rechazada";
   motivo_rechazo_id: string | null;
   motivo_rechazo_nombre: string | null;
+  materiales_confirmados: string[] | null;
   observacion: string | null;
   ocurrido_at: string;
   confirmado_at: string;
@@ -49,6 +54,8 @@ export interface Orden {
   torre_id: string | null;
   contacto_nombre: string | null;
   observacion: string | null;
+  preferencia_horaria: string | null;
+  tipo_generador: "hogar" | "negocio" | null;
   residuos: ResiduoDeclarado[];
 }
 

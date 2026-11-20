@@ -57,7 +57,7 @@ export default function App() {
   const actual = roles.includes(perfil) ? perfil : roles[0];
   const salir = () => cambiar(null);
   const nombre = sesion.cuenta.nombre;
-  if (!actual || !["admin", "coordinacion", "fundacion"].includes(actual))
+  if (!actual || !["admin", "coordinacion", "fundacion", "huertero", "reciclador"].includes(actual))
     return <EstadoAcceso titulo="Acceso restringido" accion="Volver al inicio" volver={salir}>
       Consulta con administración para habilitar el acceso de tu cuenta.
     </EstadoAcceso>;
@@ -94,7 +94,7 @@ export default function App() {
           <Administracion />
         </Marco>
       ) : (
-        <Panel sesion={sesion} onSalir={salir} />
+        <Panel sesion={sesion} rol={actual} onSalir={salir} />
       )}
     </>
   );
