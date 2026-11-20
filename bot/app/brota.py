@@ -94,6 +94,9 @@ class Brota:
     async def puntos(self, celular: str) -> dict[str, Any]:
         return (await self._pedir("GET", "/v1/me/puntos", celular))["data"]
 
+    async def movimientos_puntos(self, celular: str) -> list[dict[str, Any]]:
+        return (await self._pedir("GET", "/v1/me/movimientos-puntos", celular))["data"]
+
     async def solicitudes_abiertas(self, celular: str) -> list[dict[str, Any]]:
         return (await self._pedir("GET", "/v1/solicitudes", celular, params={"abiertas": "true", "limit": 5}))["data"]
 

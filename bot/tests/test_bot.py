@@ -46,6 +46,8 @@ class APIFalsa:
         self.cuerpos_ia: list[dict] = []
         self.casos: list[dict] = []
         self.solicitudes: list[dict] = []  # abiertas, para ESTADO y CANCELAR
+        self.movimientos_puntos: list[dict] = []
+        self.piloto_habilitado = True
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.llamadas.append(req)
@@ -97,6 +99,11 @@ class APIFalsa:
         if p == "/v1/catalogos":
             return _ok({"tipos_servicio": [{"id": "s-rec", "codigo": "RECICLABLES"}, {"id": "s-org", "codigo": "ORGANICOS"}]})
         if p == "/v1/solicitudes" and m == "POST":
+            if not self.piloto_habilitado:
+                return httpx.Response(403, json={"error": {
+                    "code": "PILOT_NOT_ENABLED",
+                    "message": "Esta unidad aún no está habilitada para solicitar en el piloto.",
+                }})
             clave = req.headers["Idempotency-Key"]
             if clave in self.claves_solicitud:
                 return _ok(self.claves_solicitud[clave], 201)
@@ -113,6 +120,8 @@ class APIFalsa:
             return _ok(s, 201)
         if p == "/v1/me/puntos":
             return _ok({"saldo": "25.00", "movimientos": 2})
+        if p == "/v1/me/movimientos-puntos":
+            return _ok(self.movimientos_puntos)
         if p == "/v1/canal/avisos/reservas":
             lote, self.avisos = self.avisos, []
             return _ok(lote)
@@ -244,6 +253,32 @@ def test_puntos_y_menu_por_defecto(entorno):
     assert "Tienes 25 puntos" in _texto(enviar(c, "PUNTOS")[0])
     r = enviar(c, "hola")
     assert r[0]["interactive"]["type"] == "list" and "Carmen" in _texto(r[0])
+
+
+def test_mis_puntos_muestra_detalle_y_sin_movimientos_solo_el_saldo(entorno):
+    from app import textos as T
+
+    c, api = entorno
+    api.registrados[CEL] = "Carmen"
+    solo = _texto(enviar(c, lista="M_PUNTOS")[0])
+    assert solo == T.PUNTOS.format(saldo="25")
+    assert "puntos por entrega" not in solo
+
+    api.movimientos_puntos = [{
+        "detalle_calculo": {
+            "modalidad": "entrega_valida",
+            "cantidad": "1",
+            "puntos_por_entrega": "10.00",
+            "total": "10",
+            "nota": "Regla propuesta del equipo; valores sujetos a validación FSD",
+        }
+    }]
+    texto = _texto(enviar(c, "mis puntos")[0])
+    assert "Tienes 25 puntos" in texto
+    assert "entrega_valida" in texto
+    assert "10 puntos por entrega" in texto
+    assert "total 10" in texto
+    assert "propuesta del equipo" in texto
 
 
 def _graph(respuestas: list[httpx.Response], enviados: list[dict]):

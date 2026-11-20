@@ -139,6 +139,19 @@ def test_el_menu_conserva_el_pedido(entorno):
     assert "¿Tu cartón está limpio y seco?" in _texto(r[0])
 
 
+def test_piloto_apagado_ofrece_la_guia(entorno):
+    c, api = _registrada(entorno)
+    api.piloto_habilitado = False
+    enviar(c, lista="P_ADD:FRUVER")
+    enviar(c, boton="P_LISTO")
+    enviar(c, boton="P_SIN")
+    r = enviar(c, boton="P_ENVIAR")
+    assert "piloto todavía no está habilitado" in _texto(r[0])
+    assert _botones(r[0]) == ["M_DUDA"]
+    assert api.cuerpos_solicitud == []
+    assert "qué material tienes" in _texto(enviar(c, boton="M_DUDA")[0])
+
+
 def test_solicitud_abierta(entorno):
     c, api = _registrada(entorno)
     for _ in range(2):

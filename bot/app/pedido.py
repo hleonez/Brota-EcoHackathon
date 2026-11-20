@@ -478,6 +478,10 @@ class Pedido:
                 detalle = (err.datos.get("fields") or {}).get("residuos") or err.mensaje
                 await self.wa.texto(m.de, T.P_INVALIDO.format(mensaje=detalle))
                 return
+            if err.codigo == "PILOT_NOT_ENABLED":
+                # Si sube a atender, el vecino solo vería el fallo genérico.
+                await self.wa.botones(m.de, T.PILOTO_NO, [Boton("M_DUDA", "📘 Ver la guía")])
+                return
             raise
         self.borradores.borrar(m.de)
         await self.wa.texto(m.de, T.P_ENVIADA.format(nombre=me.get("nombre") or "vecino", codigo=s["codigo_pasaporte"]))

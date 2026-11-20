@@ -28,6 +28,11 @@ MENU_PIE = "Escribe PUNTOS, ESTADO o LIGA"
 SOLICITUD_CREADA = "¡Recibido, {nombre}! 💚 Tu recolección de {servicios} quedó registrada ({codigo}). Te aviso quién pasa."
 SOLICITUD_ABIERTA = "Ya tienes una solicitud en camino ({codigo}) 🚲 Te aviso cuando sepamos quién pasa."
 PUNTOS = "⭐ Tienes {saldo} puntos. Ganas puntos cada vez que tu material llega bien separado."
+PUNTOS_DETALLE = "• {modalidad} · {puntos_por_entrega} puntos por entrega · total {total}"
+PILOTO_NO = (
+    "El piloto todavía no está habilitado para tu unidad 🌱 "
+    "Mientras tanto te explico qué se recicla y cómo prepararlo."
+)
 SIN_SOLICITUDES = "No tienes recolecciones pendientes 🙂 Escribe «hola» para pedir una."
 LIGA_POSICION = "🏆 {torre} va de {posicion}.ª en la Liga de Torres este mes ({porcentaje} % de los hogares participan)."
 LIGA_NO_DISPONIBLE = "🏆 La Liga de Torres todavía no está disponible. ¡Pronto!"
