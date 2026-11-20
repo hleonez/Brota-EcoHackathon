@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.core.seguridad import hash_pin
+from app.core.seguridad import hash_pin, normalizar_celular
 from app.db import get_sessionmaker
 from app.models import (
     CapacidadTorre,
@@ -120,13 +120,23 @@ def _sembrar_participantes(db: Session, conjunto_id) -> str:
     unidades = {"hogar": hogar, "negocio": negocio}
     for celular, nombre, clave, habilitar in PARTICIPANTES:
         unidad = unidades[clave]
+        normalizado = normalizar_celular(celular)
         p = db.execute(
             select(Participante).where(
-                Participante.celular_normalizado == celular, Participante.estado != "eliminado"
+                Participante.celular_normalizado == normalizado, Participante.estado != "eliminado"
             )
         ).scalar_one_or_none()
+        if p is None and normalizado != celular:
+            # Corridas anteriores guardaron el wa_id sin «+». Se reescribe para no duplicar.
+            p = db.execute(
+                select(Participante).where(
+                    Participante.celular_normalizado == celular, Participante.estado != "eliminado"
+                )
+            ).scalar_one_or_none()
+            if p is not None:
+                p.celular_normalizado = normalizado
         if p is None:
-            p = Participante(nombre=nombre, celular_normalizado=celular, estado="activo")
+            p = Participante(nombre=nombre, celular_normalizado=normalizado, estado="activo")
             db.add(p)
             db.flush()
         ultimo = db.execute(

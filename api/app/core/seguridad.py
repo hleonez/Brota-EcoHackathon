@@ -152,6 +152,13 @@ def _bearer(request: Request) -> str:
     return auth[7:].strip()
 
 
+def get_actor_opcional(request: Request, db: Session = Depends(get_db)) -> Actor | None:
+    """Sin cabecera Authorization no exige sesión. Si la cabecera viene, se valida como get_actor."""
+    if request.headers.get("authorization") is None:
+        return None
+    return get_actor(request, db)
+
+
 def get_actor(request: Request, db: Session = Depends(get_db)) -> Actor:
     token = _bearer(request)
     s = get_settings()

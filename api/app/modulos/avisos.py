@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.core.errores import no_encontrado, transicion_invalida
 from app.core.paginacion import Paginacion, paginacion, paginar
-from app.core.seguridad import Actor, actor_bot, actor_operador, get_actor
+from app.core.seguridad import Actor, actor_bot, actor_operador, get_actor_opcional
 from app.core.tipos import Entrada, Instante, Salida, ahora
 from app.db import get_db
 from app.models import (
@@ -246,7 +246,7 @@ def get_contenidos(
     tema: Literal["separacion", "huerta", "horarios_rutas", "servicio"] | None = Query(None),
     material_id: uuid.UUID | None = Query(None),
     motivo_rechazo_id: uuid.UUID | None = Query(None),
-    actor: Actor = Depends(get_actor),
+    _actor: Actor | None = Depends(get_actor_opcional),
     pag: Paginacion = Depends(paginacion),
     db: Session = Depends(get_db),
 ):

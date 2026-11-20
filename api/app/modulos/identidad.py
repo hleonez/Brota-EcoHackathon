@@ -169,6 +169,18 @@ class CuentaOut(Salida):
     created_at: Instante
 
 
+class UnidadVinculadaOut(Salida):
+    id: uuid.UUID
+    tipo: str
+    etiqueta: str
+
+
+class ParticipanteListaOut(Salida):
+    id: uuid.UUID
+    nombre: str
+    unidades: list[UnidadVinculadaOut]
+
+
 # --------------------------------------------------------------------------- servicio
 
 
@@ -406,6 +418,29 @@ def get_solicitudes_eliminacion(
         .order_by(SolicitudEliminacion.created_at.desc(), SolicitudEliminacion.id.desc())
     )
     return paginar(db, stmt, pag, lambda s: SolicitudEliminacionOut.model_validate(s).model_dump(mode="json"))
+
+
+def _participante_lista(db: Session, participante: Participante) -> dict:
+    unidades = [
+        UnidadVinculadaOut(id=u.id, tipo=u.tipo, etiqueta=etiqueta_unidad(u))
+        for u in unidades_vigentes(db, participante.id)
+    ]
+    return ParticipanteListaOut(
+        id=participante.id, nombre=participante.nombre, unidades=unidades
+    ).model_dump(mode="json")
+
+
+@router.get("/participantes")
+def get_participantes(
+    actor: Actor = Depends(actor_admin), pag: Paginacion = Depends(paginacion), db: Session = Depends(get_db)
+):
+    """Personas vigentes, con o sin habilitación. La habilitación sigue en /v1/piloto/habilitaciones."""
+    stmt = (
+        select(Participante)
+        .where(Participante.estado != "eliminado")
+        .order_by(Participante.created_at.desc(), Participante.id.desc())
+    )
+    return paginar(db, stmt, pag, lambda p: _participante_lista(db, p))
 
 
 @router.get("/cuentas-operadoras")

@@ -69,6 +69,7 @@ directorio de unidades ni datos personales. Fundación ve reportes agregados, si
 | ● | `POST /v1/me/consentimientos` | `aceptado` / `retirado` con versión vigente |
 | ● | `POST`, `GET /v1/me/solicitudes-eliminacion` | `202` con seguimiento |
 | ● | `GET`, `POST /v1/cuentas-operadoras`, `PATCH /v1/cuentas-operadoras/{id}` | Admin; PIN hasheado (scrypt); `celular` opcional para operar por WhatsApp (único) |
+| ● | `GET /v1/participantes` | Solo admin. `id`, `nombre` y unidades con vínculo vigente (`id`, `tipo`, `etiqueta`). Excluye `eliminado`; incluye a quien aún no tiene habilitación. Coordinación y fundación reciben `403` |
 
 ### M02 · Territorio y catálogos
 | | Ruta | Notas |
@@ -141,7 +142,7 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 ### M08 · Educación y avisos
 | | Ruta | Notas |
 | --- | --- | --- |
-| ● | `GET /v1/contenidos-educativos` | Público: `tema` (`separacion`, `huerta`, `horarios_rutas`, `servicio`), `version`, vigencia y publicación. Filtro `tema`. Admin: `PATCH /v1/contenidos-educativos/{id}` edita título, texto, tema, publicación, activo, gremio y vigencia |
+| ● | `GET /v1/contenidos-educativos` | Se lee sin sesión. Público: `tema` (`separacion`, `huerta`, `horarios_rutas`, `servicio`), `version`, vigencia y publicación. Filtro `tema`. Borradores (`publicado` falso) y retirados (`activo` falso o fuera de vigencia) no aparecen; un Bearer inválido sigue en `401`. Admin: `PATCH /v1/contenidos-educativos/{id}` edita título, texto, tema, publicación, activo, gremio y vigencia |
 | ● | `GET /v1/ordenes/{id}/avisos` | Estado de avisos de una orden (coordinación) |
 | ● | `POST /v1/canal/avisos/reservas`, `POST /v1/canal/avisos/{id}/resultado`, `GET /v1/canal/avisos` | Bot (modo pull). Modo webhook: ver integracion-bot.md |
 
