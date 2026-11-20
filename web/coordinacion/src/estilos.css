@@ -100,7 +100,7 @@ input, textarea {
 .insignia { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--linea); color: var(--tinta); font-size: 13px; display: inline-grid; place-items: center; font-weight: 600; }
 .insignia.alerta { background: var(--nueva); color: #fff; }
 .contenido { padding: 20px; max-width: 1400px; margin: 0 auto; }
-.columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.columnas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; align-items: start; }
 .columnas h2, .rutas h3 { font-size: 18px; margin: 0 0 12px; }
 @media (max-width: 860px) {
   .columnas { grid-template-columns: 1fr; }
@@ -115,9 +115,7 @@ input, textarea {
 }
 .tarjeta.estado-nueva { border-left-color: var(--nueva); }
 .tarjeta.estado-asignada { border-left-color: var(--asignada); }
-.tarjeta.reciente { animation: llegada 2.4s ease-out 2; }
-@keyframes llegada { 0% { box-shadow: 0 0 0 4px var(--nueva); } 100% { box-shadow: var(--sombra); } }
-@media (prefers-reduced-motion: reduce) { .tarjeta.reciente { animation: none; outline: 3px solid var(--nueva); } }
+.tarjeta.estado-programada { border-left-color: var(--exito, var(--marca)); }
 .tarjeta-cabeza { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
 .codigo { font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 .ubicacion { font-size: 19px; font-weight: 600; }
@@ -199,7 +197,7 @@ legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 140%); max-width: min(640px, calc(100% - 32px));
   background: var(--tinta); color: var(--fondo); padding: 14px 20px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
-  transition: transform 0.25s ease, visibility 0.25s; z-index: 30; font-size: 16px; visibility: hidden;
+   z-index: 30; font-size: 16px; visibility: hidden;
 }
 .toast.visible { transform: translate(-50%, 0); visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }

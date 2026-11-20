@@ -3,8 +3,9 @@ import { api, cuandoExpire, ErrorApi, fijarToken } from "./api";
 import Indicadores from "./Indicadores";
 import Administracion from "./Administracion";
 import Comunidad from "./Comunidad";
-import { Aliados, Marca, Marco } from "./portal";
+import { Aliados, Marca } from "./portal";
 import Panel from "./Panel";
+import { MarcoPanel, enlaceCuenta, nombresPerfil, type CuentaPanel } from "./MarcoPanel";
 import type { Sesion } from "./tipos";
 import { guardarSesion, leerSesion } from "./util";
 
@@ -12,7 +13,7 @@ export default function App() {
   const [sesion, setSesion] = useState<Sesion | null>(() => leerSesion());
   const [comunidad, setComunidad] = useState(false);
   const [perfil, setPerfil] = useState("");
-  const [pagina, setPagina] = useState<"cuenta" | "vencida" | null>(() => {
+  const [pagina, setPagina] = useState<"vencida" | null>(() => {
     const guardada = leerSesion(true);
     return guardada && guardada.expira <= Date.now() ? "vencida" : null;
   });
@@ -57,46 +58,37 @@ export default function App() {
   const actual = roles.includes(perfil) ? perfil : roles[0];
   const salir = () => cambiar(null);
   const nombre = sesion.cuenta.nombre;
-  if (!actual || !["admin", "coordinacion", "fundacion"].includes(actual))
+  if (!actual || !["admin", "coordinacion", "fundacion", "huertero", "reciclador"].includes(actual))
     return <EstadoAcceso titulo="Acceso restringido" accion="Volver al inicio" volver={salir}>
       Consulta con administración para habilitar el acceso de tu cuenta.
     </EstadoAcceso>;
-  if (pagina === "cuenta")
-    return <Marco titulo="Mi cuenta" nombre={nombre} salir={salir}>
-      <section className="eco-tarjeta">
-        <dl><dt>Nombre</dt><dd>{nombre}</dd><dt>Perfil activo</dt><dd>{actual}</dd></dl>
-        <button className="btn primario" onClick={() => setPagina(null)}>Volver al panel</button>
-      </section>
-    </Marco>;
+  const cuenta: CuentaPanel = {
+    nombre,
+    rol: actual,
+    salir,
+    cambioPerfil: roles.length > 1 && (
+      <label className="panel-perfil">
+        Trabajar como
+        <select value={actual} onChange={(e) => setPerfil(e.target.value)}>
+          {roles.map((r) => <option value={r} key={r}>{nombresPerfil[r] ?? r}</option>)}
+        </select>
+      </label>
+    ),
+  };
+  if (actual === "admin") return <Administracion cuenta={cuenta} />;
+  if (actual === "fundacion") return <Fundacion cuenta={cuenta} />;
+  return <Panel key={actual} sesion={sesion} cuenta={cuenta} />;
+}
+
+const seccionesFundacion = [{ enlaces: [{ id: "impacto", texto: "Impacto del programa" }] }];
+
+function Fundacion({ cuenta }: { cuenta: CuentaPanel }) {
+  const [activo, navegar] = useState("impacto");
   return (
-    <>
-      <div className="cuenta-barra"><button className="btn" onClick={() => setPagina("cuenta")}>Mi cuenta</button></div>
-      {roles.length > 1 && (
-        <label className="campos">
-          Trabajar como
-          <select value={actual} onChange={(e) => setPerfil(e.target.value)}>
-            {roles.map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
-        </label>
-      )}
-      {actual === "fundacion" ? (
-        <Marco titulo="Impacto del programa" nombre={nombre} salir={salir}>
-          <Indicadores />
-        </Marco>
-      ) : actual === "admin" ? (
-        <Marco
-          titulo={`Hola, ${nombre.split(" ")[0]}`}
-          nombre={nombre}
-          salir={salir}
-        >
-          <Administracion />
-        </Marco>
-      ) : (
-        <Panel sesion={sesion} onSalir={salir} />
-      )}
-    </>
+    <MarcoPanel grupos={seccionesFundacion} activo={activo} navegar={navegar} cuenta={cuenta}
+      contexto="Fundación Santo Domingo" titulo={activo === enlaceCuenta.id ? enlaceCuenta.texto : "Impacto del programa"}>
+      <Indicadores />
+    </MarcoPanel>
   );
 }
 
@@ -156,12 +148,12 @@ function Login({
       <header className="acceso-cabecera">
         <Marca />
         <h1>Entra a Brota</h1>
-        <p className="tenue">Acceso para coordinación, administración y Fundación.</p>
+        <p className="tenue">Ingresa con la cuenta que te asignó el equipo de EcoConecta.</p>
       </header>
       <div className="acceso-columnas">
         <section className="acceso-ilustracion">
-          <p>Villas de San Pablo</p>
-          <h2>Lo que separas, brota.</h2>
+          <h2>Recolección comunitaria</h2>
+          <p>Organiza las solicitudes y el aprovechamiento de materiales en Villas de San Pablo.</p>
           <img src="/marca/huerta.png" alt="" />
         </section>
         <form className="login-caja" onSubmit={entrar}>
@@ -199,7 +191,7 @@ function Login({
           )}
         </div>
         {error && (
-          <p className="error" role="alert">
+          <p className="aviso aviso-error" data-motion="notice" role="alert">
             {error}
           </p>
         )}

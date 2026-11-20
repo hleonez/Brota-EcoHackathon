@@ -1,4 +1,5 @@
 import type {
+  AcuerdoCanal,
   Caso,
   Catalogo,
   Orden,
@@ -133,28 +134,35 @@ export const api = {
     pedir<Recolector[]>("GET", "/v1/recolectores", {
       params: { gremio_id: gremioId, activo: "true", limit: 100 },
     }),
+  /** Asigna o reasigna sin horario: nunca envía `inicio` ni `fin`. */
   asignar: (
     o: Orden,
+    datos: { recolector_id: string; forma_aviso: "llamada" | "recado" },
+    clave: string,
+  ) =>
+    pedir<Orden>("POST", `/v1/ordenes/${o.id}/asignacion`, {
+      cuerpo: {
+        version_esperada: o.version,
+        recolector_id: datos.recolector_id,
+        forma_aviso: datos.forma_aviso,
+      },
+      clave,
+    }),
+  /** Programa o reprograma; el responsable ya está asignado. */
+  programar: (
+    o: Orden,
     datos: {
-      recolector_id: string;
-      inicio: string | null;
-      fin: string | null;
-      forma_aviso: "llamada" | "recado";
+      inicio: string;
+      fin: string;
+      acuerdo_canal: AcuerdoCanal;
+      acuerdo_observacion?: string;
     },
     clave: string,
-  ) => {
-    const cuerpo: Record<string, unknown> = {
-      version_esperada: o.version,
-      recolector_id: datos.recolector_id,
-      forma_aviso: datos.forma_aviso,
-    };
-    if (datos.inicio && datos.fin)
-      Object.assign(cuerpo, { inicio: datos.inicio, fin: datos.fin });
-    return pedir<Orden>("POST", `/v1/ordenes/${o.id}/asignacion`, {
-      cuerpo,
+  ) =>
+    pedir<Orden>("POST", `/v1/ordenes/${o.id}/programacion`, {
+      cuerpo: { version_esperada: o.version, ...datos },
       clave,
-    });
-  },
+    }),
   casos: () => pedir<Caso[]>("GET", "/v1/casos", { params: { limit: 100 } }),
   responderCaso: (c: Caso, respuesta: string, clave: string) =>
     pedir<Caso>("POST", `/v1/casos/${c.id}/atencion`, {
@@ -165,6 +173,7 @@ export const api = {
     o: Orden,
     datos: {
       resultado: "recogida" | "rechazada";
+      materiales_confirmados: string[];
       motivo_rechazo_id?: string;
       observacion?: string;
       ocurrido_at: string;

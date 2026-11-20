@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ErrorApi } from "./api";
-import type { ItemCatalogo, Orden, Recolector } from "./tipos";
+import type { AcuerdoCanal, ItemCatalogo, Orden, Recolector } from "./tipos";
 import { claveParaEnvio, franjas, puntos, textoFranja } from "./util";
 
 interface Base {
@@ -10,20 +10,50 @@ interface Base {
   onCerrar: () => void;
 }
 
+const CierreModal = createContext<() => void>(() => {});
+
+function CancelarModal() {
+  const cerrar = useContext(CierreModal);
+  return <button type="button" className="btn grande" onClick={cerrar}>Cancelar</button>;
+}
+
 export function Modal({ titulo, onCerrar, children }: { titulo: string; onCerrar: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const [cerrando, setCerrando] = useState(false);
+  const temporizador = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function cerrar() {
+    if (cerrando) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      onCerrar();
+      return;
+    }
+    setCerrando(true);
+    temporizador.current = setTimeout(onCerrar, 240);
+  }
   useEffect(() => {
     const dialog = ref.current!;
+    const origen = document.activeElement;
     dialog.showModal();
-    return () => dialog.close();
+    return () => {
+      clearTimeout(temporizador.current);
+      dialog.close();
+      if (origen instanceof HTMLElement && origen.isConnected) origen.focus();
+    };
   }, []);
   return (
-    <dialog className="modal" ref={ref} onCancel={onCerrar} aria-label={titulo}>
+    <dialog className="modal" ref={ref} data-motion="dialog" data-state={cerrando ? "closed" : "open"}
+      onTransitionEnd={(e) => {
+        if (cerrando && e.target === e.currentTarget && e.propertyName === "opacity") {
+          clearTimeout(temporizador.current);
+          onCerrar();
+        }
+      }}
+      onCancel={(e) => { e.preventDefault(); cerrar(); }} aria-label={titulo}>
         <header>
           <h2>{titulo}</h2>
-          <button className="btn icono" onClick={onCerrar} aria-label="Cerrar">✕</button>
+          <button className="btn icono" onClick={cerrar} aria-label="Cerrar">✕</button>
         </header>
-        {children}
+        <CierreModal.Provider value={cerrar}>{children}</CierreModal.Provider>
     </dialog>
   );
 }
@@ -55,44 +85,33 @@ function useEnvio(onConflicto: (e: ErrorApi) => void) {
   return { enviando, error, enviar };
 }
 
-// ------------------------------------------------------------------ asignar
+// ------------------------------------------------------------------ asignar / reasignar (sin horario)
 
-export function DialogoAsignar({ orden, recolectores, modo, onListo, onConflicto, onCerrar }: Base & { recolectores: Recolector[]; modo: "asignar" | "programar" | "reasignar" }) {
+export function DialogoAsignar({ orden, recolectores, modo, onListo, onConflicto, onCerrar }: Base & { recolectores: Recolector[]; modo: "asignar" | "reasignar" }) {
   const actual = orden.asignacion;
-  const opciones = useMemo(() => {
-    const disponibles = franjas().filter((f) => modo !== "programar" || f.id !== "SIN");
-    if (!actual?.inicio || !actual.fin) return disponibles;
-    const inicio = Date.parse(actual.inicio);
-    const fin = Date.parse(actual.fin);
-    const alternativas = disponibles.filter((f) => !f.inicio || !f.fin || Date.parse(f.inicio) !== inicio || Date.parse(f.fin) !== fin);
-    if (modo === "programar") return alternativas;
-    return [{ id: "ACTUAL", titulo: textoFranja(actual.inicio, actual.fin), inicio: actual.inicio, fin: actual.fin }, ...alternativas];
-  }, [actual, modo]);
-  const [recolector, setRecolector] = useState<string | null>(orden.asignacion?.recolector_id ?? null);
-  const [franja, setFranja] = useState(modo === "programar" ? "" : actual?.inicio && actual.fin ? "ACTUAL" : "SIN");
+  const [recolector, setRecolector] = useState<string | null>(actual?.recolector_id ?? null);
   const [forma, setForma] = useState<"llamada" | "recado">(actual?.forma_aviso ?? "llamada");
   const clave = useRef(claveParaEnvio()).current;
   const { enviando, error, enviar } = useEnvio(onConflicto);
-  const verbo = { asignar: "Asignar", programar: "Programar", reasignar: "Reasignar" }[modo];
+  const verbo = modo === "asignar" ? "Asignar" : "Reasignar";
 
   function confirmar(e: FormEvent) {
     e.preventDefault();
     const r = recolectores.find((x) => x.id === recolector);
-    const f = opciones.find((x) => x.id === franja);
-    if (!r || !f) return;
-    const datos = { recolector_id: r.id, inicio: f.inicio, fin: f.fin, forma_aviso: forma };
+    if (!r) return;
+    const datos = { recolector_id: r.id, forma_aviso: forma };
     enviar(async () => {
       const o = await api.asignar(orden, datos, clave({ orden: orden.id, version: orden.version, ...datos }));
       const llamar = r.telefono_contacto ? ` Llama a ${r.nombre}: ${r.telefono_contacto}.` : "";
-      onListo(o, `✅ ${orden.codigo_pasaporte} asignada a ${r.nombre} (${f.titulo}). Consulta el estado del aviso de WhatsApp.${llamar}`);
+      onListo(o, `✅ ${orden.codigo_pasaporte} asignada a ${r.nombre}. Falta programar el horario.${llamar}`);
     });
   }
 
   return (
-    <Modal titulo={{ asignar: "¿Quién la recoge?", programar: "Programar recolección", reasignar: "Reasignar responsable" }[modo]} onCerrar={onCerrar}>
+    <Modal titulo={modo === "asignar" ? "¿Quién la recoge?" : "Reasignar responsable"} onCerrar={onCerrar}>
       <form onSubmit={confirmar}>
         <Resumen orden={orden} />
-        {modo !== "programar" && <fieldset>
+        <fieldset>
           <legend>¿Quién la recoge?</legend>
           <div className="opciones">
             {recolectores.length === 0 && <p className="tenue">No hay recolectores activos en tu gremio.</p>}
@@ -104,19 +123,7 @@ export function DialogoAsignar({ orden, recolectores, modo, onListo, onConflicto
               </label>
             ))}
           </div>
-        </fieldset>}
-        {modo !== "reasignar" && <fieldset>
-          <legend>Horario acordado con el vecino</legend>
-          {modo === "programar" && actual?.inicio && actual.fin && <p className="tenue">Horario actual: {textoFranja(actual.inicio, actual.fin)}</p>}
-          <div className="opciones compactas">
-            {opciones.map((f) => (
-              <label key={f.id} className={`opcion ${franja === f.id ? "elegida" : ""}`}>
-                <input type="radio" name="franja" value={f.id} checked={franja === f.id} onChange={() => setFranja(f.id)} />
-                <span className="opcion-titulo">{f.titulo}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>}
+        </fieldset>
         <fieldset>
           <legend>¿Cómo le avisas al recolector?</legend>
           <div className="opciones compactas">
@@ -128,12 +135,86 @@ export function DialogoAsignar({ orden, recolectores, modo, onListo, onConflicto
             ))}
           </div>
         </fieldset>
-        {modo === "reasignar" && <p className="tenue">Horario actual: {textoFranja(actual?.inicio ?? null, actual?.fin ?? null)}</p>}
+        {modo === "reasignar" && orden.estado === "programada" && <p className="tenue">Al reasignar se pierde el horario ({textoFranja(actual?.inicio ?? null, actual?.fin ?? null)}). Tendrás que programar de nuevo.</p>}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="pie-modal">
-          <button type="button" className="btn grande" onClick={onCerrar}>Cancelar</button>
-          <button className="btn primario grande" disabled={!recolector || !franja || enviando || (modo === "reasignar" && recolector === actual?.recolector_id)}>
+          <CancelarModal />
+          <button className="btn primario grande" disabled={!recolector || enviando || (modo === "reasignar" && recolector === actual?.recolector_id)}>
             {enviando ? "Guardando…" : verbo}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ------------------------------------------------------------------ programar / reprogramar
+
+export function DialogoProgramar({ orden, onListo, onConflicto, onCerrar }: Base) {
+  const actual = orden.asignacion;
+  const opciones = useMemo(() => {
+    const todas = franjas().filter((f) => f.inicio && f.fin);
+    if (!actual?.inicio || !actual.fin) return todas;
+    const i = Date.parse(actual.inicio);
+    const f = Date.parse(actual.fin);
+    return todas.filter((x) => Date.parse(x.inicio!) !== i || Date.parse(x.fin!) !== f);
+  }, [actual]);
+  const [franja, setFranja] = useState("");
+  const [canal, setCanal] = useState<AcuerdoCanal | "">("");
+  const [observacion, setObservacion] = useState("");
+  const clave = useRef(claveParaEnvio()).current;
+  const { enviando, error, enviar } = useEnvio(onConflicto);
+  const reprograma = orden.estado === "programada";
+
+  function confirmar(e: FormEvent) {
+    e.preventDefault();
+    const f = opciones.find((x) => x.id === franja);
+    if (!f?.inicio || !f.fin || !canal) return;
+    const nota = observacion.trim();
+    const datos = { inicio: f.inicio, fin: f.fin, acuerdo_canal: canal, ...(nota ? { acuerdo_observacion: nota } : {}) };
+    enviar(async () => {
+      const o = await api.programar(orden, datos, clave({ orden: orden.id, version: orden.version, ...datos }));
+      onListo(o, `✅ ${orden.codigo_pasaporte} ${reprograma ? "reprogramada" : "programada"}: ${f.titulo}. Consulta el estado del aviso de WhatsApp.`);
+    });
+  }
+
+  return (
+    <Modal titulo={reprograma ? "Reprogramar recolección" : "Programar recolección"} onCerrar={onCerrar}>
+      <form onSubmit={confirmar}>
+        <Resumen orden={orden} />
+        {actual && <p className="tenue">🚲 {actual.recolector_nombre}{reprograma && ` · horario actual: ${textoFranja(actual.inicio, actual.fin)}`}</p>}
+        {orden.preferencia_horaria && <p className="tenue">🕒 Preferencia del vecino: {orden.preferencia_horaria}</p>}
+        <fieldset>
+          <legend>Horario acordado con el vecino</legend>
+          <div className="opciones compactas">
+            {opciones.map((f) => (
+              <label key={f.id} className={`opcion ${franja === f.id ? "elegida" : ""}`}>
+                <input type="radio" name="franja" value={f.id} checked={franja === f.id} onChange={() => setFranja(f.id)} />
+                <span className="opcion-titulo">{f.titulo}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>¿Cómo se acordó?</legend>
+          <div className="opciones compactas">
+            {([["whatsapp", "💬 WhatsApp"], ["llamada", "📞 Llamada"], ["presencial", "🤝 Presencial"]] as const).map(([k, t]) => (
+              <label key={k} className={`opcion ${canal === k ? "elegida" : ""}`}>
+                <input type="radio" name="canal" value={k} checked={canal === k} onChange={() => setCanal(k)} />
+                <span className="opcion-titulo">{t}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label className="campo">
+          Observación del acuerdo (opcional)
+          <textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} maxLength={300} rows={2} />
+        </label>
+        {error && <p className="error" role="alert">{error}</p>}
+        <div className="pie-modal">
+          <CancelarModal />
+          <button className="btn primario grande" disabled={!franja || !canal || enviando}>
+            {enviando ? "Guardando…" : reprograma ? "Reprogramar" : "Programar"}
           </button>
         </div>
       </form>
@@ -162,10 +243,11 @@ export function DialogoCierre({
 
   function confirmar(e: FormEvent) {
     e.preventDefault();
-    if (!orden.asignacion?.inicio || !orden.asignacion.fin || (rechazo ? !motivo : !aceptados.length)) return;
-    const nota=[!rechazo ? "Materiales aceptados: "+aceptados.join(", ") : "",observacion.trim()].filter(Boolean).join(". ");
+    if (orden.estado !== "programada" || (rechazo ? !motivo : !aceptados.length)) return;
+    const nota = observacion.trim();
     const datos = {
       resultado: tipo,
+      materiales_confirmados: rechazo ? [] : aceptados, // UUID del catálogo del gremio
       ...(rechazo && motivo ? { motivo_rechazo_id: motivo } : {}),
       ...(nota ? { observacion: nota } : {}),
     };
@@ -190,7 +272,7 @@ export function DialogoCierre({
       <form onSubmit={confirmar}>
         <Resumen orden={orden} />
         {orden.asignacion && <p className="tenue">🚲 {orden.asignacion.recolector_nombre}</p>}
-        {!rechazo && <fieldset><legend>Materiales aceptados</legend>{materiales.map(m=><label className="opcion" key={m.id}><input type="checkbox" checked={aceptados.includes(m.nombre)} onChange={e=>setAceptados(v=>e.target.checked?[...v,m.nombre]:v.filter(x=>x!==m.nombre))}/>{m.nombre}</label>)}</fieldset>}
+        {!rechazo && <fieldset><legend>Materiales aceptados</legend>{materiales.map(m=><label className="opcion" key={m.id}><input type="checkbox" checked={aceptados.includes(m.id)} onChange={e=>setAceptados(v=>e.target.checked?[...v,m.id]:v.filter(x=>x!==m.id))}/>{m.nombre}</label>)}</fieldset>}
         {rechazo && (
           <fieldset>
             <legend>¿Por qué no se pudo recoger?</legend>
@@ -206,7 +288,7 @@ export function DialogoCierre({
         )}
         <label className="campo">
           Observación (opcional)
-          <textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} maxLength={Math.max(0,475-aceptados.join(", ").length)} rows={2} />
+          <textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} maxLength={500} rows={2} />
         </label>
         <p className="tenue">
           {rechazo
@@ -215,7 +297,7 @@ export function DialogoCierre({
         </p>
         {error && <p className="error" role="alert">{error}</p>}
         <div className="pie-modal">
-          <button type="button" className="btn grande" onClick={onCerrar}>Cancelar</button>
+          <CancelarModal />
           <button className={`btn grande ${rechazo ? "peligro" : "exito"}`} disabled={(rechazo ? !motivo : !aceptados.length) || enviando}>
             {enviando ? "Guardando…" : rechazo ? "❌ Registrar rechazo" : "✅ Confirmar recogida"}
           </button>

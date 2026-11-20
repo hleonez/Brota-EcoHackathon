@@ -11,8 +11,15 @@
 /* A desktop sidebar stays stable. React supplies inert/hidden on mobile. */
 @media (max-width: 1023px) {
   [data-motion="nav"][data-state] {
+    transition-behavior: allow-discrete;
     transition: transform var(--eco-motion-nav) var(--ease-drawer),
       opacity var(--eco-motion-nav) var(--ease-out);
+  }
+
+  .panel-nav[data-motion="nav"][data-state] {
+    transition: transform var(--eco-motion-nav) var(--ease-drawer),
+      opacity var(--eco-motion-nav) var(--ease-out),
+      display var(--eco-motion-nav) allow-discrete;
   }
 
   [data-motion="nav"][data-state="open"] {
@@ -60,6 +67,15 @@
   pointer-events: none;
 }
 
+/* Keep the existing toast horizontally centered while moving vertically. */
+.toast[data-motion="notice"][data-state="open"] {
+  transform: translate(-50%, 0);
+}
+
+.toast[data-motion="notice"][data-state="closed"] {
+  transform: translate(-50%, 4px);
+}
+
 /* Progressive enhancement. Older browsers reveal newly mounted elements instantly. */
 @starting-style {
   @media (max-width: 1023px) {
@@ -97,7 +113,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-motion][data-state] {
+  [data-motion][data-state], .panel-nav[data-motion="nav"][data-state] {
     transition: none;
     animation: none;
   }

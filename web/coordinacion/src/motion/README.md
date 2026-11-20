@@ -6,7 +6,7 @@ David's motion-only delivery starts from commit b7712cf. It uses native CSS with
 
 David owns animaciones.css. Javier owns React attributes, state, layout, colors, fonts, focus management and the final import. The stylesheet leaves the manual's logo, palette and typography to the visual layer.
 
-Javier imports ./motion/animaciones.css from src/main.tsx after the visual styles when integrating. This delivery deliberately leaves that entry point to its owner.
+The integration imports ./motion/animaciones.css from src/main.tsx after Javier's visual styles. It combines develop with PR #9.
 
 ## Attribute contract
 
@@ -44,10 +44,12 @@ Run npm run check and npm run build from web/coordinacion after the final import
 
 Check widths 390, 768 and 1440 px. Open and close the menu and dialogs rapidly and confirm the latest state wins without a flash or stale unmount. Test keyboard focus and Escape. Emulate reduced motion and confirm immediate closing, visible notices and the retained static new-item signal. Verify ordinary API refreshes do not move tables or replay arrival emphasis.
 
-The complete application behavior requires Javier's React integration. This CSS alone does not implement a menu, a dialog or their accessibility behavior.
+The integration connects MarcoPanel, Modal, notices and arrival cards. Mobile navigation uses inert while closed and retains desktop access. Native dialog X, Escape and Cancel share the exit lifecycle, with transition completion and a 240 ms fallback. Successful operations can still dismiss their parent immediately.
+
+Mobile navigation preserves Javier's display-based layout using allow-discrete for the display transition. Browsers without discrete-transition support close the menu immediately.
 
 ## Standalone verification
 
 The external local fixture loaded this exact stylesheet in the browser at 390, 768 and 1440 px. The mobile menu computed 220 ms transitions; desktop navigation computed no transition. Dialog entry computed 200 ms. Opening, closing, reopening, notice visibility and new-item arrival were exercised, and closing the dialog returned focus to its trigger. The browser parsed the reduced-motion rule and all selectors.
 
-System reduced-motion emulation and the final React lifecycle remain pending for the joint integration check. The fixture is intentionally outside this repository.
+System reduced-motion emulation and the end-to-end operational workflow remain pending. The fixture is intentionally outside this repository.
