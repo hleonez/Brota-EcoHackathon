@@ -1,3 +1,5 @@
+> Actualización EcoConecta: contrato `0.3-ecoconecta.1`. Los cambios obligatorios y nuevas rutas se detallan en [estado de API](avance-api-ecoconecta.md). Preferencia, acuerdo horario y materiales al cierre son obligatorios en nuevas escrituras. Gemini está desactivado. Las secciones anteriores a esta actualización describen la base 0.2 y deben interpretarse con estas modificaciones.
+
 # Contrato de API · Brota
 
 Estado: **0.2-brota.1, implementado** en `api/` (FastAPI). Parte del contrato modular 0.2

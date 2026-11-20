@@ -272,6 +272,7 @@ class Recolector(Base):
     """Persona recolectora. No tiene cuenta ni credenciales: la coordinación registra por ella."""
 
     __tablename__ = "recolector"
+    huerta_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("huerta.id"))
     __table_args__ = (CheckConstraint("tipo IN ('reciclador','huertero')", name="tipo"),)
     tipo: Mapped[str] = mapped_column(String(20), server_default="reciclador", default="reciclador")
     id: Mapped[uuid.UUID] = _pk()
@@ -461,6 +462,7 @@ class Orden(Base):
 
 class Asignacion(Base):
     __tablename__ = "asignacion"
+    acuerdo_canal: Mapped[str | None] = mapped_column(String(20))
     __table_args__ = (
         CheckConstraint("forma_aviso IN ('llamada','recado')", name="forma_aviso"),
         CheckConstraint("(inicio IS NULL) = (fin IS NULL)", name="horario_completo"),
@@ -482,6 +484,8 @@ class Asignacion(Base):
 
 class ResultadoOrden(Base):
     __tablename__ = "resultado_orden"
+    trabajador_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recolector.id"))
+    asignacion_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("asignacion.id"))
     materiales_confirmados: Mapped[list[str] | None] = mapped_column(JSONB)
     __table_args__ = (
         CheckConstraint("resultado IN ('recogida','rechazada')", name="resultado"),
@@ -786,11 +790,24 @@ class EventoSalida(Base):
 
 class HabilitacionPiloto(Base):
     __tablename__ = "habilitacion_piloto"
-    __table_args__ = (UniqueConstraint("participante_id", "unidad_id"),)
+    vigente_desde: Mapped[datetime] = _ts_now()
+    vigente_hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (UniqueConstraint("participante_id", "unidad_id"), CheckConstraint("vigente_hasta IS NULL OR vigente_hasta > vigente_desde", name="vigencia"))
     id: Mapped[uuid.UUID] = _pk()
     participante_id: Mapped[uuid.UUID] = _fk("participante.id")
     unidad_id: Mapped[uuid.UUID] = _fk("unidad.id")
     activo: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), default=True)
     habilitada_por: Mapped[uuid.UUID] = _fk("cuenta_operadora.id")
     version: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    created_at: Mapped[datetime] = _ts_now()
+
+
+class Huerta(Base):
+    __tablename__ = "huerta"
+    id: Mapped[uuid.UUID] = _pk()
+    nombre: Mapped[str] = mapped_column(String(120))
+    gremio_id: Mapped[uuid.UUID] = _fk("gremio.id")
+    ubicacion: Mapped[str] = mapped_column(String(200))
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = _ts_now()

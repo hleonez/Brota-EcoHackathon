@@ -15,9 +15,9 @@ def test_programacion_requiere_franja_completa_y_ordenada():
     inicio = datetime.now(timezone.utc)
     for fin in (inicio, inicio - timedelta(hours=1)):
         with pytest.raises(ValidationError):
-            ProgramacionIn(version_esperada=1, inicio=inicio, fin=fin)
+            ProgramacionIn(acuerdo_canal="llamada", version_esperada=1, inicio=inicio, fin=fin)
     with pytest.raises(ValidationError):
-        ProgramacionIn(version_esperada=1, inicio=inicio)
+        ProgramacionIn(acuerdo_canal="llamada", version_esperada=1, inicio=inicio)
 
 
 def test_programacion_no_admite_orden_sin_responsable(monkeypatch):
@@ -27,7 +27,7 @@ def test_programacion_no_admite_orden_sin_responsable(monkeypatch):
         SimpleNamespace(gremio_id=gremio, version=1, asignaciones=[], estado="nueva"))
     inicio = datetime.now(timezone.utc)
     with pytest.raises(AppError):
-        programar(None, actor, uuid.uuid4(), ProgramacionIn(version_esperada=1, inicio=inicio, fin=inicio+timedelta(hours=1)))
+        programar(None, actor, uuid.uuid4(), ProgramacionIn(acuerdo_canal="llamada", version_esperada=1, inicio=inicio, fin=inicio+timedelta(hours=1)))
 
 
 def test_preferencia_y_estados_en_contrato():

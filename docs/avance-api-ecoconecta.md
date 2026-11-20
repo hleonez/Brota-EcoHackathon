@@ -1,35 +1,32 @@
-# Avance de implementación de la API
+# Estado de la API EcoConecta
 
-## Fase 1: trabajadores y piloto
+Contrato: `0.3-ecoconecta.1`. Implementación en `feat/implementar-api-update`.
 
-Implementados los catálogos diferenciados de recicladores y huerteros (0005), habilitación explícita por participante y unidad (0006), y cuentas vinculadas a trabajadores (0007).
+## Funciones implementadas
 
-Para crear una cuenta de trabajador, administración usa `POST /v1/cuentas-operadoras` con `trabajador_id` y un único permiso cuyo rol sea `reciclador` o `huertero` y cuyo `gremio_id` coincida con el trabajador. Conserva usuario/PIN y celular opcional. `/v1/me` devuelve el vínculo y las capacidades `mis_asignaciones` y `resultado`.
+- Recicladores y huerteros diferenciados, cuentas vinculadas y acceso a asignaciones propias.
+- Catálogo de huertas: GET/POST `/v1/huertas` y PATCH `/v1/huertas/{id}`. Cada huerta tiene ubicación y gremio. Crear un huertero requiere `huerta_id`; editarlo permite vincular registros históricos.
+- Piloto por participante/unidad, con activación, revocación e intervalos `vigente_desde`/`vigente_hasta`. Crear solicitudes exige vínculo, consentimiento y habilitación vigente.
+- Solicitudes nuevas exigen `preferencia_horaria` no vacía. Puede contener la elección explícita «Sin restricción». La preferencia no programa la visita.
+- Asignación con horario exige `acuerdo_canal`: whatsapp, llamada o presencial. Sin horario queda asignada. POST `/v1/ordenes/{id}/programacion` exige inicio, fin y acuerdo; conserva historia y aviso al reprogramar.
+- Cierre exige orden programada y `materiales_confirmados`: lista no vacía de UUID de materiales para recogida; lista vacía para rechazo. Registra trabajador ejecutor, operador registrador y asignación de origen.
+- Puntos conservan cálculo, regla y versión por hecho. Los valores son propuestas del equipo sujetas a validación FSD.
+- Contenidos por tema y publicación, reportes con estados completos y resumen que distingue canceladas, rechazadas y combinaciones finales.
+- Sync incluye `programar_orden` y usa las mismas políticas y validaciones del servicio HTTP.
+- Gemini desactivado: interpretar devuelve 503 sin llamar al proveedor. Catálogo y flujo guiado siguen disponibles.
 
-La cuenta consulta `/v1/ordenes` y `/v1/ordenes/{id}`, y cierra su asignación vigente por `/v1/ordenes/{id}/resultado`. No puede asignar ni consultar el directorio de unidades. Un trabajador inactivo no puede autenticarse. La coordinación mantiene el registro asistido.
+## Migraciones
 
-Administración crea habilitaciones con `POST /v1/piloto/habilitaciones` (`participante_id`, `unidad_id`), las lista con GET y activa o revoca con PATCH `/{id}` (`version_esperada`, `activo`). El vínculo con la unidad debe existir. No hay habilitación automática ni masiva: después de migrar, autorizar expresamente a los participantes que deban crear solicitudes. El seguimiento de solicitudes anteriores se conserva.
+0005 distingue trabajadores; 0006 crea piloto; 0007 vincula cuentas; 0008 incorpora programación; 0009 conserva evidencias y cálculo; 0010 publica contenidos; 0011 añade huertas, vigencias, ejecutor, asignación y canal del acuerdo.
 
-Esta primera versión usa activación/revocación, sin fechas de caducidad. Las migraciones están preparadas, pendientes de validación integrada contra PostgreSQL y aplicación en el entorno de desarrollo. No aplicar a producción sin completar esa validación.
+Las filas históricas conservan datos desconocidos como nulos. Para asignar huerteros antiguos, administración debe crear la huerta y vincularla mediante PATCH del trabajador. No se inventa pertenencia histórica. Los materiales confirmados se conservan como JSONB de UUID validados por servicio; el pesaje sigue siendo el origen de kilos y no se deducen kilos de esa lista.
 
-## Fases pendientes
+## Integración de clientes
 
-2. Preferencia horaria, programación y reprogramación con trazabilidad.
-3. Material confirmado al cierre y explicación de puntos.
-4. Publicación de contenidos, reportes actualizados y validación completa de RN-01 a RN-08.
+Bot y panel deben enviar los nuevos campos obligatorios y aceptar los estados `programada`, `cancelada`, `rechazada` y `finalizada_con_novedades` en sus proyecciones. Actualizar los clientes antes de desplegar este contrato. Las rutas históricas `/recolectores` se mantienen deprecadas para preservar referencias técnicas.
 
-También queda pendiente retirar Gemini de la configuración de entrega o sustituirlo por un proveedor autorizado. Los clientes web y bot deben integrar las nuevas capacidades; este trabajo corresponde al backend.
+## Validación
 
+17 pruebas locales de permisos y contratos aprobadas. SQL de toda la cadena 0001–0011 generado y sintaxis Python comprobada. Hay pruebas integradas para ambos recorridos oficiales y la suite anterior fue ajustada al contrato obligatorio.
 
-## Fases 2 a 4: ampliaciones implementadas
-
-- `0008`: preferencia horaria textual en solicitudes y bandeja, estado `programada`, POST `/v1/ordenes/{id}/programacion` con inicio/fin obligatorios. Reprogramar conserva versiones de asignación y encola aviso. Asignar con fecha completa produce estado programada; sin fecha queda asignada. Cancelación y control de duplicados incluyen programadas.
-- `0009`: materiales confirmados al cerrar, con validación de existencia, actividad, duplicados y pertenencia al gremio; detalle histórico del cálculo de puntos disponible en movimientos. Los campos históricos permanecen nulos, sin inventar evidencias. La lista de materiales se almacena como JSONB de IDs validada por servicio, todavía sin tabla relacional de detalle.
-- `0010`: contenidos por tema (separación, huerta, horarios/rutas, servicio), publicación y versión. PATCH `/v1/contenidos-educativos/{id}/publicacion` publica o retira con control de versión. Consulta y avisos educativos excluyen no publicados.
-- Reportes incluyen programadas y canceladas.
-
-Validación local: ocho pruebas de permisos, validación de programación y OpenAPI aprobadas. Generación SQL de las migraciones nuevas comprobada. Falta ejecución integrada sobre PostgreSQL y aplicar las migraciones.
-
-### Brechas que siguen pendientes
-
-Por compatibilidad, preferencia horaria y materiales confirmados son opcionales; el cierre aún admite asignadas sin horario. Es necesario actualizar los clientes y endurecer estas condiciones para cumplir estrictamente el recorrido oficial. También faltan evidencia explícita del acuerdo horario, diferenciación del ejecutor histórico del cierre, vigencia del piloto, temas/contenidos reales de huertas de la zona, corrección del resumen general de solicitudes canceladas, integración offline de programación y reemplazo/desactivación de Gemini. Los cambios no constituyen todavía cumplimiento completo de RN-01 a RN-08.
+La validación integrada está bloqueada por falta de conexión/configuración PostgreSQL en este entorno: `127.0.0.1:5432` agota el tiempo de espera. No se aplicaron migraciones a una base real ni se certificó la suite completa. Pendiente: ejecutar sobre PostgreSQL de pruebas, corregir cualquier fallo y verificar actualización de una copia de la base anterior. Nube y cambios de interfaz están fuera de esta implementación de backend.

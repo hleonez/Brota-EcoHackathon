@@ -31,6 +31,7 @@ from app.models import (
     ContenidoEducativo,
     ContenidoMotivo,
     Gremio,
+    Huerta,
     MotivoRechazo,
     Material,
     Orden,
@@ -60,6 +61,7 @@ class AsignacionIn(Entrada):
     inicio: InstanteEntrada | None = None
     fin: InstanteEntrada | None = None
     forma_aviso: Literal["llamada", "recado"]
+    acuerdo_canal: Literal["whatsapp", "llamada", "presencial"] | None = None
 
     @model_validator(mode="after")
     def _horario(self) -> AsignacionIn:
@@ -67,11 +69,13 @@ class AsignacionIn(Entrada):
             raise ValueError("Envía inicio y fin juntos, o ninguno")
         if self.inicio is not None and self.fin is not None and self.fin <= self.inicio:
             raise ValueError("fin debe ser posterior a inicio")
+        if self.inicio is not None and self.acuerdo_canal is None:
+            raise ValueError("Registra cómo se acordó el horario")
         return self
 
 
 class ResultadoIn(Entrada):
-    materiales_confirmados: list[uuid.UUID] | None = Field(default=None, max_length=50)
+    materiales_confirmados: list[uuid.UUID] = Field(max_length=50)
     version_esperada: int
     resultado: Literal["recogida", "rechazada"]
     ocurrido_at: InstanteEntrada
@@ -123,6 +127,10 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
     if o.estado not in ("nueva", "asignada", "programada"):
         raise transicion_invalida(f"La orden está {o.estado}; ya no se puede asignar.")
     r = referencia_activa(db, Recolector, datos.recolector_id, "recolector_id", "Recolector")
+    if r.tipo == "huertero":
+        if r.huerta_id is None:
+            raise invalido({"recolector_id": "Vincula el huertero a su huerta antes de asignar"})
+        referencia_activa(db, Huerta, r.huerta_id, "huerta_id", "Huerta")
     if r.gremio_id != o.gremio_id:
         raise invalido({"recolector_id": "El recolector no pertenece al gremio de la orden"})
     t = ahora()
@@ -138,6 +146,7 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
             fin=datos.fin,
             forma_aviso=datos.forma_aviso,
             registrada_por=actor.cuenta_id,
+            acuerdo_canal=datos.acuerdo_canal,
             vigente_desde=t,
         )
     )
@@ -149,7 +158,7 @@ def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn)
         actor,
         solicitud_id=o.solicitud_id,
         orden_id=o.id,
-        datos={"recolector_id": str(r.id), "forma_aviso": datos.forma_aviso},
+        datos={"recolector_id": str(r.id), "forma_aviso": datos.forma_aviso, "acuerdo_canal": datos.acuerdo_canal, "inicio": datos.inicio.isoformat() if datos.inicio else None, "fin": datos.fin.isoformat() if datos.fin else None},
     )
     gremio = db.get(Gremio, o.gremio_id)
     franja = franja_texto(datos.inicio, datos.fin)
@@ -199,7 +208,7 @@ def _contenido_para(db: Session, motivo_id: uuid.UUID) -> ContenidoEducativo | N
 def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: ResultadoIn) -> OrdenResultadoOut:
     o = orden_de_coordinacion(db, actor, orden_id, bloquear=True)
     verificar_version(datos.version_esperada, o.version)
-    if o.estado not in ("asignada", "programada"):
+    if o.estado != "programada":
         raise transicion_invalida(
             "Solo se registra el resultado de una orden asignada." if o.estado == "nueva"
             else f"La orden ya está {o.estado}."
@@ -229,6 +238,8 @@ def registrar_resultado(db: Session, actor: Actor, orden_id: uuid.UUID, datos: R
                 raise invalido({"materiales_confirmados": "Material de otro gremio"})
 
     res = ResultadoOrden(
+        trabajador_id=next(a.recolector_id for a in o.asignaciones if a.vigente_hasta is None),
+        asignacion_id=next(a.id for a in o.asignaciones if a.vigente_hasta is None),
         materiales_confirmados=[str(m) for m in datos.materiales_confirmados] if datos.materiales_confirmados is not None else None,
         orden_id=o.id,
         resultado=datos.resultado,
@@ -329,7 +340,7 @@ def get_ordenes(
     alcance = actor.gremios_coordinados
     if not alcance and actor.trabajador_id is None:
         raise prohibido("La bandeja es para coordinación.")
-    if gremio_id is not None and gremio_id not in alcance:
+    if gremio_id is not None and gremio_id not in alcance and not any(g == gremio_id and r in ("huertero", "reciclador") for r, g in actor.permisos):
         raise prohibido("Fuera de tu gremio.")
     stmt = select(Orden.id)
     if actor.trabajador_id is not None:
@@ -389,6 +400,7 @@ def post_resultado(
 
 
 class ProgramacionIn(Entrada):
+    acuerdo_canal: Literal["whatsapp", "llamada", "presencial"]
     version_esperada: int
     inicio: InstanteEntrada
     fin: InstanteEntrada
@@ -409,7 +421,7 @@ def programar(db, actor, orden_id, datos):
         raise transicion_invalida("Asigna un responsable antes de programar.")
     resultado = asignar(db, actor, orden_id, AsignacionIn(
         version_esperada=datos.version_esperada, recolector_id=vigente.recolector_id,
-        inicio=datos.inicio, fin=datos.fin, forma_aviso=vigente.forma_aviso))
+        inicio=datos.inicio, fin=datos.fin, forma_aviso=vigente.forma_aviso, acuerdo_canal=datos.acuerdo_canal))
     registrar_evento(db, "orden_programada", actor, solicitud_id=o.solicitud_id, orden_id=o.id,
         datos={"inicio": datos.inicio.isoformat(), "fin": datos.fin.isoformat()})
     return resultado

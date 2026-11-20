@@ -101,3 +101,8 @@ uv export --no-dev --no-hashes --format requirements-txt -o requirements.txt
 - Rol de PostgreSQL restringido para la API (hoy, en desarrollo, se usa el administrador).
 - M06 (foto de tiquete, audio), canjes, exportaciones Excel, Certificado Verde y hoja de ruta.
 - Reemplazar los valores de ejemplo de la semilla por datos reales (viviendas, precios, balde).
+
+
+## Actualización EcoConecta
+
+Contrato `0.3-ecoconecta.1`: consultar [campos obligatorios, rutas y migraciones](../docs/avance-api-ecoconecta.md). Antes de actualizar una base existente, crear respaldo y probar migraciones sobre copia. Este cambio requiere actualizar los clientes: preferencia horaria, canal de acuerdo y materiales confirmados al cierre. Gemini está desactivado en la API. La migración vigente es 0011.

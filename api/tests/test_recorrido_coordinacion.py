@@ -46,7 +46,7 @@ def test_coordinacion_por_whatsapp(client, operador, catalogo):
     habilitar_piloto(client, VECINA)
     s = client.post(
         "/v1/solicitudes",
-        json={"tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"], catalogo["tipos_servicio:ORGANICOS"]],
+        json={"preferencia_horaria": "Sin restricción", "tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"], catalogo["tipos_servicio:ORGANICOS"]],
               "observacion": "Cajas en la portería"},
         headers=bot(VECINA),
     ).json()["data"]
@@ -64,13 +64,13 @@ def test_coordinacion_por_whatsapp(client, operador, catalogo):
     rec = client.get("/v1/recolectores", headers=bot(COORD, False)).json()["data"][0]
     r = client.post(
         f"/v1/ordenes/{orden_id}/asignacion",
-        json={"version_esperada": 1, "recolector_id": rec["id"], "forma_aviso": "llamada"},
+        json={"acuerdo_canal": "llamada", "inicio": "2026-11-20T14:00:00-05:00", "fin": "2026-11-20T16:00:00-05:00", "version_esperada": 1, "recolector_id": rec["id"], "forma_aviso": "llamada"},
         headers=bot(COORD),
     )
     assert r.status_code == 200, r.text
     r = client.post(
         f"/v1/ordenes/{orden_id}/resultado",
-        json={"version_esperada": 2, "resultado": "recogida", "ocurrido_at": "2026-11-17T10:00:00-05:00"},
+        json={"materiales_confirmados": [catalogo["materiales:CARTON"]], "version_esperada": 2, "resultado": "recogida", "ocurrido_at": "2026-11-17T10:00:00-05:00"},
         headers=bot(COORD),
     )
     assert r.json()["data"]["evaluacion_puntos"] == "acreditada"

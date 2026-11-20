@@ -15,7 +15,7 @@ from app.core.tipos import Entrada
 from app.db import get_db, get_engine
 from app.models import CuentaOperadora
 
-CONTRATO_VERSION = "0.2-brota.1"
+CONTRATO_VERSION = "0.3-ecoconecta.1"
 
 salud = APIRouter(tags=["salud"])
 router = APIRouter(tags=["sistema"])
@@ -52,7 +52,7 @@ def capacidades() -> dict:
                 "puntos": True,
                 "canjes": False,
                 "archivos_ia": False,
-                "ia_mensajes": bool(s.gemini_api_key),  # texto, audio y fotos del vecino (M06)
+                "ia_mensajes": False,  # texto, audio y fotos del vecino (M06)
                 "educacion_avisos": True,
                 "liga": True,
                 "reportes": True,
@@ -70,6 +70,7 @@ def capacidades() -> dict:
                     "confirmar_pesaje",
                     "registrar_entrega_directa",
                     "asignar_orden",
+                    "programar_orden",
                     "registrar_resultado_orden",
                 ],
             },

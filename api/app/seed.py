@@ -31,6 +31,7 @@ from app.models import (
     ContenidoMotivo,
     CuentaOperadora,
     Gremio,
+    Huerta,
     Material,
     MotivoRechazo,
     PermisoOperador,
@@ -132,10 +133,15 @@ def sembrar(db: Session) -> dict[str, str]:
                 kg_por_unidad=Decimal("8.000"), vigente_desde=INICIO,
             )
         )
+    huerta = _uno(db, Huerta, nombre="Huerta Ecorazón (demo)")
+    if huerta is None:
+        huerta = Huerta(nombre="Huerta Ecorazón (demo)", gremio_id=g["ECORAZON"].id, ubicacion="Villas de San Pablo (ejemplo)")
+        db.add(huerta)
+        db.flush()
     for gc, nombres in RECOLECTORES.items():
         for n in nombres:
             if not _uno(db, Recolector, nombre=n, gremio_id=g[gc].id):
-                db.add(Recolector(nombre=n, gremio_id=g[gc].id, tipo="huertero" if gc == "ECORAZON" else "reciclador"))
+                db.add(Recolector(nombre=n, gremio_id=g[gc].id, tipo="huertero" if gc == "ECORAZON" else "reciclador", huerta_id=huerta.id if gc == "ECORAZON" else None))
 
     conj = _uno(db, Conjunto, nombre="Brisas de San Pablo")
     if conj is None:

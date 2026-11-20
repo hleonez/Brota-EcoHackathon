@@ -34,6 +34,7 @@ Accion = Literal[
     "confirmar_pesaje",
     "registrar_entrega_directa",
     "asignar_orden",
+    "programar_orden",
     "registrar_resultado_orden",
 ]
 
@@ -55,6 +56,7 @@ class SyncIn(Entrada):
 
 # accion -> (modelo de datos, crea recurso, función)
 _ACCIONES: dict[str, tuple[type[BaseModel], bool, Callable[..., BaseModel]]] = {
+    "programar_orden": (coordinacion.ProgramacionIn, False, lambda db, a, rid, d: coordinacion.programar(db, a, rid, d)),
     "crear_pesaje": (pesajes.PesajeIn, True, lambda db, a, rid, d: pesajes.crear_pesaje(db, a, d)),
     "registrar_entrega_directa": (
         pesajes.EntregaDirectaIn, True, lambda db, a, rid, d: pesajes.registrar_entrega_directa(db, a, d)

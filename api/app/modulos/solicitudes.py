@@ -10,7 +10,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field, model_validator
-from sqlalchemy import exists, select
+from sqlalchemy import exists, select, or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
@@ -18,7 +18,7 @@ from app.core.errores import AppError, invalido, no_encontrado, prohibido, trans
 from app.core.idempotencia import escritura
 from app.core.paginacion import Paginacion, paginacion, paginar
 from app.core.seguridad import Actor, actor_participante, get_actor
-from app.core.tipos import Entrada, Instante, PuntosSalida, Salida
+from app.core.tipos import Entrada, Instante, PuntosSalida, Salida, ahora
 from app.db import get_db
 from app.models import (
     Asignacion,
@@ -63,7 +63,7 @@ FINALES = ("recogida", "rechazada", "cancelada")
 
 
 class SolicitudIn(Entrada):
-    preferencia_horaria: str | None = Field(default=None, min_length=1, max_length=300)
+    preferencia_horaria: str = Field(min_length=1, max_length=300)
     unidad_id: uuid.UUID | None = Field(
         default=None, description="Opcional si el participante tiene exactamente una unidad vinculada"
     )
@@ -83,6 +83,7 @@ class SolicitudIn(Entrada):
 
 
 class AsignacionOut(Salida):
+    acuerdo_canal: str | None = None
     recolector_id: uuid.UUID
     recolector_nombre: str
     inicio: Instante | None
@@ -92,6 +93,9 @@ class AsignacionOut(Salida):
 
 
 class ResultadoOut(Salida):
+    trabajador_id: uuid.UUID | None = None
+    registrado_por: uuid.UUID | None = None
+    asignacion_id: uuid.UUID | None = None
     materiales_confirmados: list[str] | None = None
     resultado: str
     motivo_rechazo_id: uuid.UUID | None
@@ -131,7 +135,7 @@ class OrdenBandejaOut(OrdenOut):
 class AvanceOut(Salida):
     ordenes_totales: int
     ordenes_finalizadas: int
-    estado_general: Literal["pendiente", "en_curso", "parcial", "atendida"]
+    estado_general: Literal["pendiente", "en_curso", "parcial", "atendida", "cancelada", "rechazada", "finalizada_con_novedades"]
     alcance: Literal["propio", "gremio"]
 
 
@@ -194,6 +198,7 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
     if vigente is not None:
         asign = AsignacionOut(
             recolector_id=vigente.recolector_id,
+            acuerdo_canal=vigente.acuerdo_canal,
             recolector_nombre=vigente.recolector.nombre,
             inicio=vigente.inicio,
             fin=vigente.fin,
@@ -206,6 +211,9 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
         motivo = db.get(MotivoRechazo, r.motivo_rechazo_id) if r.motivo_rechazo_id else None
         res = ResultadoOut(
             resultado=r.resultado,
+            trabajador_id=r.trabajador_id,
+            registrado_por=r.confirmado_por,
+            asignacion_id=r.asignacion_id,
             materiales_confirmados=r.materiales_confirmados,
             motivo_rechazo_id=r.motivo_rechazo_id,
             motivo_rechazo_nombre=motivo.nombre if motivo else None,
@@ -225,7 +233,7 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
         codigo_pasaporte=o.solicitud.codigo_pasaporte,
         tipo_servicio_ids=servicios,
         asignacion=asign,
-        reasignaciones=max(len(o.asignaciones) - 1, 0),
+        reasignaciones=sum(a.recolector_id != b.recolector_id for a, b in zip(o.asignaciones, o.asignaciones[1:])),
         resultado=res,
         residuos=[
             residuo_solicitud_out(sr)
@@ -251,7 +259,8 @@ def orden_out(db: Session, o: Orden, gremios: dict[uuid.UUID, str] | None = None
 def _estado_general(ordenes: list[Orden]) -> str:
     finales = sum(1 for o in ordenes if o.estado in FINALES)
     if ordenes and finales == len(ordenes):
-        return "atendida"
+        estados = {o.estado for o in ordenes}
+        return {"cancelada": "cancelada", "rechazada": "rechazada", "recogida": "atendida"}.get(next(iter(estados)), "finalizada_con_novedades") if len(estados) == 1 else "finalizada_con_novedades"
     if finales:
         return "parcial"
     if any(o.estado in ("asignada", "programada") for o in ordenes):
@@ -319,6 +328,8 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
         HabilitacionPiloto.participante_id == actor.participante_id,
         HabilitacionPiloto.unidad_id == unidad_id,
         HabilitacionPiloto.activo.is_(True),
+        HabilitacionPiloto.vigente_desde <= ahora(),
+        or_(HabilitacionPiloto.vigente_hasta.is_(None), HabilitacionPiloto.vigente_hasta > ahora()),
     ).with_for_update()).scalar_one_or_none()
     if habilitacion is None:
         raise AppError(403, "PILOT_NOT_ENABLED", "Esta unidad aún no está habilitada para solicitar en el piloto.")
