@@ -92,6 +92,7 @@ export interface ItemCatalogo {
 export interface Catalogo {
   gremios: ItemCatalogo[];
   tipos_servicio: ItemCatalogo[];
+  materiales: ItemCatalogo[];
   motivos_rechazo: ItemCatalogo[];
 }
 

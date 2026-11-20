@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ErrorApi } from "./api";
-import { DialogoAsignar, DialogoCierre } from "./Dialogos";
+import { DialogoAsignar, DialogoCierre, Modal } from "./Dialogos";
 import type { Caso, Catalogo, Orden, Recolector, Sesion } from "./tipos";
+import Indicadores from "./Indicadores";
+import { Pesajes } from "./Operacion";
+import { Marca } from "./portal";
 import { hace } from "./util";
-import { VistaBandeja, VistaHistorial, VistaReportes, VistaRutas } from "./Vistas";
+import { DetalleSolicitud, VistaBandeja, VistaHistorial, VistaReportes, VistaRutas } from "./Vistas";
 
-type Vista = "bandeja" | "rutas" | "reportes" | "historial";
-export type Accion = { tipo: "asignar" | "recogida" | "rechazada"; orden: Orden };
+type Vista = "inicio" | "equipo" | "pesajes" | "indicadores" | "bandeja" | "rutas" | "reportes" | "historial";
+export type Accion = { tipo: "detalle" | "asignar" | "programar" | "reasignar" | "recogida" | "rechazada" | "cancelar"; orden: Orden };
 
 const CADA = 15_000; // la bandeja se actualiza sola
 
@@ -20,7 +23,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
   const [cargado, setCargado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actualizado, setActualizado] = useState<number | null>(null);
-  const [vista, setVista] = useState<Vista>("bandeja");
+  const [vista, setVista] = useState<Vista>("inicio");
   const [accion, setAccion] = useState<Accion | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [recientes, setRecientes] = useState<Set<string>>(new Set());
@@ -36,9 +39,10 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
 
   const cargarOrdenes = useCallback(async () => {
     try {
-      const [lista, reportes] = await Promise.all([api.ordenes(), api.casos()]);
+      if (!gremioId) return;
+      const [lista, reportes] = await Promise.all([api.ordenes(gremioId), api.casos()]);
       setOrdenes(lista);
-      setCasos(reportes);
+      setCasos(reportes.filter(c=>c.gremio_id===gremioId));
       if (casosConocidos.current) {
         const nuevos = reportes.filter((c) => c.estado === "abierto" && !casosConocidos.current!.has(c.id));
         if (nuevos.length) mostrar(`⚠ Nuevo reporte: ${nuevos.map((c) => c.codigo).join(", ")}`);
@@ -60,7 +64,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
     } finally {
       setCargado(true);
     }
-  }, [mostrar]);
+  }, [mostrar,gremioId]);
 
   useEffect(() => {
     if (!gremioId) return;
@@ -94,6 +98,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
     [catalogo, gremioId],
   );
   const nombreGremio = catalogo?.gremios.find((g) => g.id === gremioId)?.nombre ?? "";
+  const imagenColectivo=/huert|orgán/i.test(nombreGremio)?"huerta":"reciclaje";
   const nuevas = ordenes.filter((o) => o.estado === "nueva");
   const asignadas = ordenes.filter((o) => o.estado === "asignada");
 
@@ -127,7 +132,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
   return (
     <div className="app">
       <header className="barra">
-        <div className="marca">🌱 Brota <span className="tenue">· Coordinación</span></div>
+        <Marca/>
         <div className="gremio-nombre">{nombreGremio}</div>
         <div className="estado-conexion">
           {error ? <span className="error">{error}</span> : actualizado && <span className="tenue">Actualizado {hace(new Date(actualizado).toISOString())}</span>}
@@ -137,6 +142,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
       </header>
 
       <nav className="pestanas" aria-label="Secciones">
+        <Pestana activa={vista === "inicio"} onClick={()=>setVista("inicio")}>Inicio</Pestana>
         <Pestana activa={vista === "bandeja"} onClick={() => setVista("bandeja")} cuenta={nuevas.length} alerta>
           Bandeja
         </Pestana>
@@ -150,12 +156,19 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
         <Pestana activa={vista === "historial"} onClick={() => setVista("historial")}>
           Historial
         </Pestana>
+        <Pestana activa={vista==="pesajes"} onClick={()=>setVista("pesajes")}>Baldes y pesajes</Pestana>
+        <Pestana activa={vista==="indicadores"} onClick={()=>setVista("indicadores")}>Indicadores</Pestana>
+        <Pestana activa={vista==="equipo"} onClick={()=>setVista("equipo")}>Equipo</Pestana>
       </nav>
 
       <main className="contenido">
         {!cargado ? (
           <p className="tenue centro">Cargando solicitudes…</p>
-        ) : vista === "bandeja" ? (
+        ) : vista==="inicio" ? (<section className="bienvenida"><img className="personaje" alt="" src={"/marca/"+imagenColectivo+".png"}/><h1>¡Hola, {sesion.cuenta.nombre}!</h1><p>{nombreGremio}</p>{error?<p role="alert">Los indicadores están pendientes de actualización.</p>:<><h2>{nuevas.length} solicitudes por asignar</h2><p>{asignadas.filter(o=>!o.asignacion?.inicio).length} asignadas sin horario · {asignadas.filter(o=>o.asignacion?.inicio && o.asignacion.fin).length} programadas</p></>}<button className="btn primario grande" onClick={()=>setVista("bandeja")}>Ver solicitudes</button></section>)
+        : vista==="indicadores" ? <Indicadores gremioId={gremioId}/>
+        : vista==="pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores}/>
+        : vista==="equipo" ? <section className="eco-tarjeta"><h1>Equipo de {nombreGremio}</h1><ul className="registros">{recolectores.map(r=><li key={r.id}><strong>{r.nombre}</strong><span>{asignadas.filter(o=>o.asignacion?.recolector_id===r.id).length} asignaciones vigentes</span>{r.telefono_contacto&&<a className="btn" href={"tel:"+r.telefono_contacto}>Llamar a {r.nombre}</a>}</li>)}</ul></section>
+        : vista === "bandeja" ? (
           <VistaBandeja nuevas={nuevas} asignadas={asignadas} {...comunes} />
         ) : vista === "rutas" ? (
           <VistaRutas asignadas={asignadas} recolectores={recolectores} {...comunes} />
@@ -164,7 +177,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
             casos={casos}
             onRespondido={(c) => {
               setCasos((l) => l.map((x) => (x.id === c.id ? c : x)));
-              mostrar(`✅ Respuesta enviada a ${c.contacto_nombre ?? "el vecino"} (${c.codigo}).`);
+              mostrar(`✅ Respuesta registrada para ${c.contacto_nombre ?? "el vecino"} (${c.codigo}).`);
             }}
             onConflicto={conflicto}
           />
@@ -173,8 +186,17 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
         )}
       </main>
 
-      {accion?.tipo === "asignar" && (
+      {accion?.tipo === "detalle" && <Modal titulo="Detalle de la solicitud" onCerrar={() => setAccion(null)}>
+        <DetalleSolicitud id={accion.orden.id} {...comunes} />
+      </Modal>}
+      {accion?.tipo === "cancelar" && <Modal titulo="Cancelar recolección" onCerrar={() => setAccion(null)}>
+        <p>Solicitud {accion.orden.codigo_pasaporte}. El vecino puede cancelarla desde su conversación con Brisa en WhatsApp.</p>
+        <p>La cancelación desde coordinación aún no está habilitada.</p>
+        <button className="btn" onClick={() => setAccion(null)}>Volver</button>
+      </Modal>}
+      {(accion?.tipo === "asignar" || accion?.tipo === "programar" || accion?.tipo === "reasignar") && (
         <DialogoAsignar
+          modo={accion.tipo}
           orden={accion.orden}
           recolectores={recolectores}
           onListo={listo}
@@ -187,6 +209,7 @@ export default function Panel({ sesion, onSalir }: { sesion: Sesion; onSalir: ()
           orden={accion.orden}
           tipo={accion.tipo}
           motivos={motivos}
+          materiales={catalogo?.materiales.filter(m=>m.gremio_id===gremioId)??[]}
           onListo={listo}
           onConflicto={conflicto}
           onCerrar={() => setAccion(null)}

@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { api, ErrorApi } from "./api";
+import { Espera, useDatos } from "./portal";
+import Pasaporte from "./Pasaporte";
+import { Avisos } from "./Operacion";
 import type { Accion } from "./Panel";
 import type { Caso, ItemCatalogo, Orden, Recolector } from "./tipos";
 import { claveParaEnvio, diaDe, hace, textoFranja } from "./util";
@@ -18,12 +21,12 @@ function porFranja(a: Orden, b: Orden): number {
 
 // ------------------------------------------------------------------ tarjeta
 
-function Tarjeta({ orden: o, servicios, recientes, onAccion, sinRecolector }: Comunes & { orden: Orden; sinRecolector?: boolean }) {
+function Tarjeta({ orden: o, servicios, recientes, onAccion, sinRecolector, detalle }: Comunes & { orden: Orden; sinRecolector?: boolean; detalle?: boolean }) {
   const a = o.asignacion;
   return (
     <article className={`tarjeta estado-${o.estado} ${o.estado === "nueva" && recientes.has(o.id) ? "reciente" : ""}`}>
       <div className="tarjeta-cabeza">
-        <span className="codigo">{o.codigo_pasaporte}</span>
+        <span className="codigo">{o.codigo_pasaporte}</span><b>{o.estado==="nueva"?"Recibida":o.estado === "asignada" ? (a?.inicio && a.fin ? "Programada" : "Asignada") : o.estado}</b>
         <span className="tenue">{hace(o.created_at)}</span>
       </div>
       <div className="ubicacion">📍 {o.ubicacion_operativa}</div>
@@ -56,7 +59,12 @@ function Tarjeta({ orden: o, servicios, recientes, onAccion, sinRecolector }: Co
           {o.reasignaciones > 0 && <span className="tenue"> · reasignada {o.reasignaciones}×</span>}
         </div>
       )}
+      {detalle && <><Pasaporte orden={o} /><Avisos id={o.id} /></>}
       <div className="acciones">
+        {!detalle && <button className="btn" onClick={() => onAccion({ tipo: "detalle", orden: o })}>Ver detalle</button>}
+        {detalle && (o.estado === "asignada" || o.estado === "nueva") && (
+          <button className="btn" onClick={() => onAccion({ tipo: "cancelar", orden: o })}>Cancelar recolección</button>
+        )}
         {o.estado === "nueva" && (
           <button className="btn primario grande" onClick={() => onAccion({ tipo: "asignar", orden: o })}>
             🚲 Asignar recolector
@@ -64,14 +72,22 @@ function Tarjeta({ orden: o, servicios, recientes, onAccion, sinRecolector }: Co
         )}
         {o.estado === "asignada" && (
           <>
-            <button className="btn exito" onClick={() => onAccion({ tipo: "recogida", orden: o })}>✅ Recogida</button>
-            <button className="btn peligro" onClick={() => onAccion({ tipo: "rechazada", orden: o })}>❌ Rechazada</button>
-            <button className="btn" onClick={() => onAccion({ tipo: "asignar", orden: o })}>↺ Reasignar</button>
+            <button disabled={!a?.inicio || !a.fin} className="btn exito" onClick={() => onAccion({ tipo: "recogida", orden: o })}>✅ Recogida</button>
+            <button disabled={!a?.inicio || !a.fin} className="btn peligro" onClick={() => onAccion({ tipo: "rechazada", orden: o })}>❌ Rechazada</button>
+            <button className="btn" onClick={() => onAccion({ tipo: "programar", orden: o })}>Programar</button>
+            <button className="btn" onClick={() => onAccion({ tipo: "reasignar", orden: o })}>Reasignar</button>
           </>
         )}
       </div>
     </article>
   );
+}
+
+export function DetalleSolicitud({ id, ...comunes }: Comunes & { id: string }) {
+  const consulta = useDatos<Orden>("/v1/ordenes/" + encodeURIComponent(id));
+  return consulta.datos
+    ? <Tarjeta orden={consulta.datos} {...comunes} detalle />
+    : <Espera error={consulta.error} reintentar={consulta.recargar} />;
 }
 
 // ------------------------------------------------------------------ bandeja
@@ -158,7 +174,7 @@ export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asigna
 
 type FiltroResultado = "todas" | "recogida" | "rechazada" | "cancelada";
 
-export function VistaHistorial({ ordenes, servicios }: Comunes & { ordenes: Orden[] }) {
+export function VistaHistorial({ ordenes, servicios, onAccion }: Comunes & { ordenes: Orden[] }) {
   const [filtro, setFiltro] = useState<FiltroResultado>("todas");
   const cerradas = ordenes
     .filter((o) => o.estado === "recogida" || o.estado === "rechazada" || o.estado === "cancelada")
@@ -181,7 +197,7 @@ export function VistaHistorial({ ordenes, servicios }: Comunes & { ordenes: Orde
         <ul className="historial">
           {visibles.map((o) => (
             <li key={o.id} className={`estado-${o.estado}`}>
-              <span className="codigo">{o.codigo_pasaporte}</span>
+              <Pasaporte orden={o}/>
               <span>{o.ubicacion_operativa}</span>
               <span className="tenue">👤 {o.contacto_nombre ?? "—"} · {o.tipo_servicio_ids.map((id) => servicios.get(id)?.nombre).filter(Boolean).join(", ")}</span>
               <span>
@@ -190,6 +206,7 @@ export function VistaHistorial({ ordenes, servicios }: Comunes & { ordenes: Orde
                 {o.asignacion && <span className="tenue"> · 🚲 {o.asignacion.recolector_nombre}</span>}
               </span>
               <span className="tenue">{hace(o.resultado?.ocurrido_at ?? o.created_at)}</span>
+              <button className="btn" onClick={() => onAccion({ tipo: "detalle", orden: o })}>Ver detalle</button>
             </li>
           ))}
         </ul>
