@@ -1,25 +1,12 @@
 import { useState } from "react";
-import { Aliados, Marca } from "./portal";
-const guias = [
-  [
-    "Separación en casa",
-    "Guarda el cartón y el papel secos. Separa las botellas y los envases aprovechables de los restos de comida. Asorescatar atiende los reciclables.",
-  ],
-  [
-    "Orgánicos para la huerta",
-    "Aparta cáscaras y restos de frutas y verduras en un recipiente. Retira bolsas, vidrio y metal. Huerta Ecorazón coordina la entrega.",
-  ],
-  [
-    "Horarios y rutas",
-    "Comparte el día y la franja en que puedes entregar el material. La coordinadora confirma quién pasa y a qué hora.",
-  ],
-  [
-    "Cómo pedir y seguir tu recolección",
-    "Abre el chat con Brisa. Indica si eres un hogar o un negocio, tu ubicación, el material y tu disponibilidad. Guarda el código de tu Pasaporte Circular para consultar el estado.",
-  ],
-];
+import { Aliados, Espera, Marca, useDatos } from "./portal";
+import { temasEducativos, type TemaEducativo } from "./temasEducativos";
+
+type Contenido = { id: string; titulo: string; texto: string | null };
+
 export default function Comunidad({ volver }: { volver: () => void }) {
-  const [tema, setTema] = useState(0);
+  const [tema, setTema] = useState<TemaEducativo>("separacion");
+  const contenidos = useDatos<Contenido[]>("/v1/contenidos-educativos?tema=" + tema);
   const numero = String(import.meta.env.VITE_WHATSAPP_NUMERO || "").trim();
   return (
     <div className="portal">
@@ -36,19 +23,30 @@ export default function Comunidad({ volver }: { volver: () => void }) {
           <div className="col-12 col-lg-7">
             <section className="eco-tarjeta">
               <h2>Guía de recolección</h2>
-              <nav className="pestanas">
-                {guias.map(([t], i) => (
+              <nav className="pestanas" aria-label="Temas de la guía">
+                {(Object.keys(temasEducativos) as TemaEducativo[]).map((id) => (
                   <button
-                    key={t}
-                    className={"pestana " + (tema === i ? "activa" : "")}
-                    onClick={() => setTema(i)}
+                    key={id}
+                    className={"pestana " + (tema === id ? "activa" : "")}
+                    aria-pressed={tema === id}
+                    onClick={() => setTema(id)}
                   >
-                    {t}
+                    {temasEducativos[id]}
                   </button>
                 ))}
               </nav>
-              <h3>{guias[tema][0]}</h3>
-              <p>{guias[tema][1]}</p>
+              {!contenidos.datos ? (
+                <Espera error={contenidos.error} reintentar={contenidos.recargar} />
+              ) : contenidos.datos.length === 0 ? (
+                <p>Aún no hay contenidos publicados para este tema.</p>
+              ) : (
+                contenidos.datos.map(({ id, titulo, texto }) => (
+                  <article key={id}>
+                    <h3>{titulo}</h3>
+                    {texto && <p style={{ whiteSpace: "pre-line" }}>{texto}</p>}
+                  </article>
+                ))
+              )}
             </section>
           </div>
           <div className="col-12 col-lg-5">
