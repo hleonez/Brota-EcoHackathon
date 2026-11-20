@@ -107,13 +107,16 @@ def _cargar_orden(db: Session, orden_id: uuid.UUID, bloquear: bool = False) -> O
 
 def orden_de_coordinacion(db: Session, actor: Actor, orden_id: uuid.UUID, bloquear: bool = False) -> Orden:
     o = _cargar_orden(db, orden_id, bloquear)
-    if not actor.coordina(o.gremio_id):
+    propia = actor.trabajador_id is not None and any(
+        a.vigente_hasta is None and a.recolector_id == actor.trabajador_id for a in o.asignaciones)
+    if not actor.coordina(o.gremio_id) and not propia:
         raise no_encontrado("orden")
     return o
 
 
 def asignar(db: Session, actor: Actor, orden_id: uuid.UUID, datos: AsignacionIn) -> OrdenBandejaOut:
     o = orden_de_coordinacion(db, actor, orden_id, bloquear=True)
+    actor.exigir_coordinacion(o.gremio_id)
     verificar_version(datos.version_esperada, o.version)
     if o.estado not in ("nueva", "asignada"):
         raise transicion_invalida(f"La orden está {o.estado}; ya no se puede asignar.")
@@ -309,11 +312,16 @@ def get_ordenes(
     db: Session = Depends(get_db),
 ):
     alcance = actor.gremios_coordinados
-    if not alcance:
+    if not alcance and actor.trabajador_id is None:
         raise prohibido("La bandeja es para coordinación.")
     if gremio_id is not None and gremio_id not in alcance:
         raise prohibido("Fuera de tu gremio.")
-    stmt = select(Orden.id).where(Orden.gremio_id.in_([gremio_id] if gremio_id else alcance))
+    stmt = select(Orden.id)
+    if actor.trabajador_id is not None:
+        stmt = stmt.where(exists().where(Asignacion.orden_id == Orden.id,
+            Asignacion.recolector_id == actor.trabajador_id, Asignacion.vigente_hasta.is_(None)))
+    else:
+        stmt = stmt.where(Orden.gremio_id.in_([gremio_id] if gremio_id else alcance))
     if estado:
         stmt = stmt.where(Orden.estado == estado)
     if recolector_id:

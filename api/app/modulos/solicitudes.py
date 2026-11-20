@@ -24,6 +24,7 @@ from app.models import (
     Asignacion,
     EventoDominio,
     Gremio,
+    HabilitacionPiloto,
     MotivoRechazo,
     MovimientoPuntos,
     Orden,
@@ -306,6 +307,14 @@ def crear_solicitud(db: Session, actor: Actor, datos: SolicitudIn) -> SolicitudO
         if datos.unidad_id not in {u.id for u in propias}:
             raise no_encontrado("unidad")
         unidad_id = datos.unidad_id
+
+    habilitacion = db.execute(select(HabilitacionPiloto).where(
+        HabilitacionPiloto.participante_id == actor.participante_id,
+        HabilitacionPiloto.unidad_id == unidad_id,
+        HabilitacionPiloto.activo.is_(True),
+    ).with_for_update()).scalar_one_or_none()
+    if habilitacion is None:
+        raise AppError(403, "PILOT_NOT_ENABLED", "Esta unidad aún no está habilitada para solicitar en el piloto.")
 
     # Serializa solicitudes concurrentes del mismo hogar (regla de solicitud abierta).
     unidad = db.execute(select(Unidad).where(Unidad.id == unidad_id).with_for_update()).scalar_one()

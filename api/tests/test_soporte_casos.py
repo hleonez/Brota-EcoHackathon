@@ -5,7 +5,7 @@ Corre después de test_recorrido_coordinacion.py: la coordinación de reciclaje 
 
 from __future__ import annotations
 
-from tests.conftest import BOT, bot
+from tests.conftest import BOT, bot, habilitar_piloto
 
 VECINO = "573150000005"
 
@@ -20,6 +20,7 @@ def _registrar(client, catalogo) -> None:
     r = client.post("/v1/registros", json={"nombre": "Paola", "unidad_id": u["id"],
                     "consentimiento": {"version_politica": "2026-11", "decision": "aceptado"}}, headers=bot(VECINO))
     assert r.status_code == 201, r.text
+    habilitar_piloto(client, VECINO)
 
 
 def test_casos_llegan_a_la_coordinacion_y_la_respuesta_al_vecino(client, catalogo, operador):

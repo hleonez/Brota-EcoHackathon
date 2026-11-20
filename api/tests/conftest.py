@@ -96,3 +96,13 @@ def catalogo(client: TestClient) -> dict:
     for t in client.get(f"/v1/conjuntos/{conj}/torres", headers=BOT).json()["data"]:
         por_codigo[f"torre:{t['codigo']}"] = t["id"]
     return por_codigo
+
+
+def habilitar_piloto(client, celular):
+    """La preparación de cada recorrido autoriza explícitamente a su solicitante."""
+    me = client.get("/v1/me", headers=bot(celular, False)).json()["data"]
+    sesion = client.post("/v1/auth/sesiones", json={"usuario": "admin", "pin": "2468"}).json()["data"]
+    for unidad in me["unidades"]:
+        r = client.post("/v1/piloto/habilitaciones", json={"participante_id": me["participante_id"], "unidad_id": unidad["id"]},
+            headers={"Authorization": "Bearer " + sesion["token"], **clave()})
+        assert r.status_code == 201, r.text

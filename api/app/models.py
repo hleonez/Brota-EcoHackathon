@@ -222,6 +222,7 @@ class CuentaOperadora(Base):
     y, si tiene `celular_normalizado`, también desde WhatsApp con Brisa."""
 
     __tablename__ = "cuenta_operadora"
+    trabajador_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recolector.id"), unique=True)
     __table_args__ = (
         Index(
             "uq_cuenta_operadora_celular",
@@ -246,7 +247,7 @@ class CuentaOperadora(Base):
 class PermisoOperador(Base):
     __tablename__ = "permiso_operador"
     __table_args__ = (
-        CheckConstraint("rol IN ('coordinacion','fundacion','admin')", name="rol"),
+        CheckConstraint("rol IN ('coordinacion','fundacion','admin','reciclador','huertero')", name="rol"),
         CheckConstraint("rol <> 'coordinacion' OR gremio_id IS NOT NULL", name="coordinacion_con_gremio"),
     )
     id: Mapped[uuid.UUID] = _pk()
@@ -775,3 +776,15 @@ class EventoSalida(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class HabilitacionPiloto(Base):
+    __tablename__ = "habilitacion_piloto"
+    __table_args__ = (UniqueConstraint("participante_id", "unidad_id"),)
+    id: Mapped[uuid.UUID] = _pk()
+    participante_id: Mapped[uuid.UUID] = _fk("participante.id")
+    unidad_id: Mapped[uuid.UUID] = _fk("unidad.id")
+    activo: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), default=True)
+    habilitada_por: Mapped[uuid.UUID] = _fk("cuenta_operadora.id")
+    version: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    created_at: Mapped[datetime] = _ts_now()

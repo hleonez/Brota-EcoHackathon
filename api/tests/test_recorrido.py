@@ -13,7 +13,7 @@ import json
 import httpx
 import pytest
 
-from tests.conftest import BOT, bot
+from tests.conftest import BOT, bot, habilitar_piloto
 
 CARMEN = "573001112233"  # wa_id tal como lo envía WhatsApp
 VECINO = "3005556677"  # móvil colombiano sin indicativo
@@ -60,6 +60,7 @@ def test_registro_por_whatsapp(client, catalogo):
     r = client.post("/v1/registros", json=cuerpo, headers=bot(CARMEN))
     assert r.status_code == 201, r.text
     assert r.json()["data"]["estado_registro"] == "completo"
+    habilitar_piloto(client, CARMEN)
 
     r = client.post("/v1/registros", json=cuerpo, headers=bot(CARMEN))
     assert r.status_code == 409 and _err(r) == "CONTACT_ALREADY_REGISTERED"
@@ -485,6 +486,7 @@ def test_concurrencia_doble_toque(client, catalogo):
     u = client.get("/v1/unidades", params={"torre_id": catalogo["torre:2"], "referencia": "301"}, headers=bot(cel, False)).json()["data"][0]
     client.post("/v1/registros", json={"nombre": "Ana", "unidad_id": u["id"],
                                        "consentimiento": {"version_politica": "2026-11", "decision": "aceptado"}}, headers=bot(cel))
+    habilitar_piloto(client, cel)
     cuerpo = {"tipo_servicio_ids": [catalogo["tipos_servicio:ORGANICOS"]]}
     h = bot(cel)
     with ThreadPoolExecutor(4) as ex:

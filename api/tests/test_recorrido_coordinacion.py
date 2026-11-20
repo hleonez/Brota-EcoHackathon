@@ -5,7 +5,7 @@ Usa la misma base de la sesión; el nombre hace que corra después de test_recor
 
 from __future__ import annotations
 
-from tests.conftest import BOT, bot
+from tests.conftest import BOT, bot, habilitar_piloto
 
 COORD = "573110000001"  # celular de prueba de la coordinación de Asorescatar
 VECINA = "573120000002"
@@ -43,6 +43,7 @@ def test_coordinacion_por_whatsapp(client, operador, catalogo):
               "consentimiento": {"version_politica": "2026-11", "decision": "aceptado"}},
         headers=bot(VECINA),
     )
+    habilitar_piloto(client, VECINA)
     s = client.post(
         "/v1/solicitudes",
         json={"tipo_servicio_ids": [catalogo["tipos_servicio:RECICLABLES"], catalogo["tipos_servicio:ORGANICOS"]],

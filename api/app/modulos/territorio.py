@@ -172,6 +172,8 @@ def get_unidades(
 ):
     """Operadores: búsqueda con filtros. Bot/residente: solo coincidencia exacta torre + referencia."""
     stmt = select(Unidad).where(Unidad.activo.is_(True))
+    if actor.trabajador_id is not None:
+        raise prohibido("Consulta la ubicación desde tus asignaciones.")
     if not actor.es_operador:
         if (torre_id is None and tipo != "negocio") or not referencia:
             raise AppError(

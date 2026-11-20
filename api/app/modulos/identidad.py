@@ -30,6 +30,7 @@ from app.models import (
     Consentimiento,
     CuentaOperadora,
     Gremio,
+    Recolector,
     Participante,
     PermisoOperador,
     SolicitudEliminacion,
@@ -100,6 +101,7 @@ class PermisoOut(Salida):
 
 
 class MeOut(Salida):
+    trabajador_id: uuid.UUID | None = None
     tipo_actor: str
     registrado: bool
     participante_id: uuid.UUID | None = None
@@ -123,11 +125,12 @@ class SolicitudEliminacionOut(Salida):
 
 
 class PermisoIn(Entrada):
-    rol: Literal["coordinacion", "fundacion", "admin"]
+    rol: Literal["coordinacion", "fundacion", "admin", "reciclador", "huertero"]
     gremio_id: uuid.UUID | None = None
 
 
 class CuentaIn(Entrada):
+    trabajador_id: uuid.UUID | None = None
     nombre: str = Field(min_length=1, max_length=120)
     usuario: str = Field(min_length=3, max_length=60, pattern=r"^[a-zA-Z0-9._-]+$")
     pin: str = Field(min_length=4, max_length=12, pattern=r"^\d+$")
@@ -144,6 +147,7 @@ class CuentaPatch(Entrada):
 
 
 class CuentaOut(Salida):
+    trabajador_id: uuid.UUID | None = None
     id: uuid.UUID
     nombre: str
     usuario: str
@@ -245,6 +249,8 @@ def capacidades_de(actor: Actor) -> list[str]:
     if actor.tipo == "servicio_bot":
         return ["avisos"]
     caps: set[str] = set()
+    if actor.trabajador_id is not None:
+        caps |= {"mis_asignaciones", "resultado"}
     if actor.gremios_coordinados:
         caps |= {"bandeja", "asignar", "resultado", "pesajes", "entregas_directas", "recolectores", "registro_asistido", "sync"}
     if actor.es_fundacion:
@@ -270,6 +276,7 @@ def me(db: Session, actor: Actor) -> MeOut:
         base.consentimiento_vigente = ConsentimientoOut.model_validate(c) if c else None
     elif actor.es_operador:
         base.cuenta_operadora_id = actor.cuenta_id
+        base.trabajador_id = actor.trabajador_id
         base.nombre = actor.nombre
         base.permisos = [PermisoOut(rol=r, gremio_id=g) for r, g in actor.permisos]
     return base
@@ -277,7 +284,7 @@ def me(db: Session, actor: Actor) -> MeOut:
 
 def _validar_permisos(db: Session, permisos: list[PermisoIn]) -> None:
     for i, p in enumerate(permisos):
-        if p.rol == "coordinacion":
+        if p.rol in ("coordinacion", "reciclador", "huertero"):
             referencia_activa(db, Gremio, p.gremio_id, f"permisos.{i}.gremio_id", "Gremio")
         elif p.gremio_id is not None:
             raise invalido({f"permisos.{i}.gremio_id": "Solo coordinación lleva gremio"})
@@ -286,6 +293,7 @@ def _validar_permisos(db: Session, permisos: list[PermisoIn]) -> None:
 def _cuenta_out(c: CuentaOperadora) -> CuentaOut:
     return CuentaOut(
         id=c.id,
+        trabajador_id=c.trabajador_id,
         nombre=c.nombre,
         usuario=c.usuario,
         celular=c.celular_normalizado,
@@ -394,7 +402,9 @@ def post_cuenta(
 ):
     def _fn() -> CuentaOut:
         _validar_permisos(db, datos.permisos)
+        _validar_trabajador(db, datos.trabajador_id, datos.permisos)
         c = CuentaOperadora(
+            trabajador_id=datos.trabajador_id,
             nombre=datos.nombre,
             usuario=datos.usuario.lower(),
             pin_hash=hash_pin(datos.pin),
@@ -432,6 +442,7 @@ def patch_cuenta(
             c.pin_hash = hash_pin(datos.pin)
         if datos.permisos is not None:
             _validar_permisos(db, datos.permisos)
+            _validar_trabajador(db, c.trabajador_id, datos.permisos)
             c.permisos = [PermisoOperador(rol=p.rol, gremio_id=p.gremio_id) for p in datos.permisos]
         if "celular" in datos.model_fields_set:
             c.celular_normalizado = normalizar_celular(datos.celular) if datos.celular else None
@@ -445,3 +456,14 @@ def patch_cuenta(
         return _cuenta_out(c)
 
     return escritura(request, db, actor, datos.model_dump(mode="json", exclude={"pin"}), _fn)
+
+
+def _validar_trabajador(db, trabajador_id, permisos):
+    roles = [p for p in permisos if p.rol in ("reciclador", "huertero")]
+    if trabajador_id is None:
+        if roles:
+            raise invalido({"trabajador_id": "Este perfil requiere un trabajador vinculado"})
+        return
+    trabajador = referencia_activa(db, Recolector, trabajador_id, "trabajador_id", "Trabajador")
+    if len(permisos) != 1 or len(roles) != 1 or roles[0].rol != trabajador.tipo or roles[0].gremio_id != trabajador.gremio_id:
+        raise invalido({"permisos": "Debe coincidir el perfil y gremio del trabajador, sin permisos adicionales"})

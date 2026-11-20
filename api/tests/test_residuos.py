@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tests.conftest import BOT, bot
+from tests.conftest import BOT, bot, habilitar_piloto
 
 VECINO = "573130000003"
 
@@ -44,6 +44,8 @@ def test_solicitud_con_residuos_declarados(client, catalogo, operador):
         headers=bot(VECINO),
     )
     assert r.status_code == 201, r.text
+
+    habilitar_piloto(client, VECINO)
 
     # Lo que no se recibe nunca entra a la ruta, ni una respuesta que la ficha no tiene.
     pilas = client.post("/v1/solicitudes", json={"residuos": [{"residuo_id": f["PILAS"]["id"]}]}, headers=bot(VECINO))
