@@ -4,16 +4,22 @@ import { DialogoAsignar, DialogoCierre, DialogoProgramar, Modal } from "./Dialog
 import type { Caso, Catalogo, Orden, Recolector, Sesion } from "./tipos";
 import Indicadores from "./Indicadores";
 import { Pesajes } from "./Operacion";
-import { Marca } from "./portal";
+import { Estado, fechaBogota } from "./portal";
+import { MarcoPanel, enlaceCuenta, nombresPerfil, type CuentaPanel, type GrupoPanel } from "./MarcoPanel";
 import { hace } from "./util";
 import { DetalleSolicitud, VistaBandeja, VistaHistorial, VistaMisOrdenes, VistaReportes, VistaRutas } from "./Vistas";
 
-type Vista = "inicio" | "equipo" | "pesajes" | "indicadores" | "bandeja" | "rutas" | "reportes" | "historial";
+const titulos = {
+  inicio: "Inicio", bandeja: "Bandeja", rutas: "Rutas de hoy", historial: "Historial",
+  reportes: "Reportes", pesajes: "Baldes y pesajes", indicadores: "Indicadores", equipo: "Equipo",
+};
+type Vista = keyof typeof titulos | typeof enlaceCuenta.id;
 export type Accion = { tipo: "detalle" | "asignar" | "programar" | "reasignar" | "recogida" | "rechazada" | "cancelar"; orden: Orden };
 
 const CADA = 15_000; // la bandeja se actualiza sola
 
-export default function Panel({ sesion, rol, onSalir }: { sesion: Sesion; rol: string; onSalir: () => void }) {
+export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: CuentaPanel }) {
+  const { rol, salir } = cuenta;
   const campo = rol === "huertero" || rol === "reciclador"; // el servidor limita `GET /v1/ordenes` a sus órdenes
   const gremioId = sesion.cuenta.permisos.find((p) => p.rol === rol)?.gremio_id ?? null;
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
@@ -123,8 +129,8 @@ export default function Panel({ sesion, rol, onSalir }: { sesion: Sesion; rol: s
       <main className="login">
         <div className="login-caja">
           <h1>Esta cuenta no tiene un gremio asignado</h1>
-          <p className="tenue">El panel de coordinación es para las cuentas de Asorescatar o de la huerta.</p>
-          <button className="btn grande" onClick={onSalir}>Salir</button>
+          <p className="tenue">Pide a administración que vincule tu cuenta con tu colectivo.</p>
+          <button className="btn grande" onClick={salir}>Salir</button>
         </div>
       </main>
     );
@@ -132,55 +138,82 @@ export default function Panel({ sesion, rol, onSalir }: { sesion: Sesion; rol: s
 
   const comunes = { servicios, recientes, onAccion: setAccion, campo };
 
+  const reportesPendientes = casos.filter((c) => c.estado === "abierto").length;
+  const hoy = fechaBogota(new Date());
+  const rutasHoy = programadas.filter((o) => o.asignacion?.inicio &&
+    fechaBogota(new Date(o.asignacion.inicio)) === hoy).length;
+  const bandeja = campo ? "Mis órdenes" : titulos.bandeja;
+  const grupos: GrupoPanel[] = [
+    { enlaces: [{ id: "inicio", texto: titulos.inicio }] },
+    { titulo: "Recolección", enlaces: campo ? [
+      { id: "bandeja", texto: bandeja, cantidad: programadas.length },
+      { id: "historial", texto: titulos.historial },
+    ] : [
+      { id: "bandeja", texto: bandeja, cantidad: nuevas.length },
+      { id: "rutas", texto: titulos.rutas, cantidad: rutasHoy },
+      { id: "historial", texto: titulos.historial },
+      { id: "reportes", texto: titulos.reportes, cantidad: reportesPendientes },
+    ] },
+  ];
+  if (!campo) grupos.push({
+    titulo: "Colectivo",
+    enlaces: (["pesajes", "indicadores", "equipo"] as const).map((id) => ({ id, texto: titulos[id] })),
+  });
+  const titulo = vista === enlaceCuenta.id ? enlaceCuenta.texto : vista === "bandeja" ? bandeja : titulos[vista];
+
   return (
-    <div className="app">
-      <header className="barra">
-        <Marca/>
-        <div className="gremio-nombre">{nombreGremio}</div>
-        <div className="estado-conexion">
-          {error ? <span className="error">{error}</span> : actualizado && <span className="tenue">Actualizado {hace(new Date(actualizado).toISOString())}</span>}
-          <button className="btn" onClick={cargarOrdenes}>↻ Actualizar</button>
-          <button className="btn" onClick={onSalir} title={sesion.cuenta.nombre}>Salir</button>
-        </div>
-      </header>
-
-      <nav className="pestanas" aria-label="Secciones">
-        <Pestana activa={vista === "inicio"} onClick={()=>setVista("inicio")}>Inicio</Pestana>
-        {campo ? (
-          <Pestana activa={vista === "bandeja"} onClick={() => setVista("bandeja")} cuenta={programadas.length} alerta>
-            Mis órdenes
-          </Pestana>
-        ) : (
-          <>
-            <Pestana activa={vista === "bandeja"} onClick={() => setVista("bandeja")} cuenta={nuevas.length} alerta>
-              Bandeja
-            </Pestana>
-            <Pestana activa={vista === "rutas"} onClick={() => setVista("rutas")} cuenta={abiertas.length}>
-              Rutas de hoy
-            </Pestana>
-            <Pestana activa={vista === "reportes"} onClick={() => setVista("reportes")}
-              cuenta={casos.filter((c) => c.estado === "abierto").length} alerta>
-              Reportes
-            </Pestana>
-          </>
-        )}
-        <Pestana activa={vista === "historial"} onClick={() => setVista("historial")}>
-          Historial
-        </Pestana>
-        {!campo && <>
-          <Pestana activa={vista==="pesajes"} onClick={()=>setVista("pesajes")}>Baldes y pesajes</Pestana>
-          <Pestana activa={vista==="indicadores"} onClick={()=>setVista("indicadores")}>Indicadores</Pestana>
-          <Pestana activa={vista==="equipo"} onClick={()=>setVista("equipo")}>Equipo</Pestana>
-        </>}
-      </nav>
-
-      <main className="contenido">
+    <>
+      <MarcoPanel grupos={grupos} activo={vista} titulo={titulo} cuenta={cuenta}
+        contexto={nombreGremio || nombresPerfil[rol]} navegar={(id) => setVista(id as Vista)}
+        acciones={vista !== enlaceCuenta.id && (
+          <div className="panel-actualizar">
+            {actualizado && !error && <span>Actualizado {hace(new Date(actualizado).toISOString())}</span>}
+            <button type="button" className="btn" onClick={cargarOrdenes}>Actualizar</button>
+          </div>
+        )}>
+        {error && <Estado tipo="error">{error}</Estado>}
         {!cargado ? (
-          <p className="tenue centro">Cargando solicitudes…</p>
-        ) : vista==="inicio" ? (<section className="bienvenida"><img className="personaje" alt="" src={"/marca/"+imagenColectivo+".png"}/><h1>¡Hola, {sesion.cuenta.nombre}!</h1><p>{nombreGremio}</p>{error?<p role="alert">Los indicadores están pendientes de actualización.</p>:<>{campo?<h2>{programadas.length} por recoger · {asignadas.length} esperando horario</h2>:<><h2>{nuevas.length} solicitudes por asignar</h2><p>{asignadas.length} asignadas sin horario · {programadas.length} programadas</p></>}</>}<button className="btn primario grande" onClick={()=>setVista("bandeja")}>{campo?"Ver mis órdenes":"Ver solicitudes"}</button></section>)
-        : vista==="indicadores" ? <Indicadores gremioId={gremioId}/>
-        : vista==="pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores}/>
-        : vista==="equipo" ? <section className="eco-tarjeta"><h1>Equipo de {nombreGremio}</h1><ul className="registros">{recolectores.map(r=><li key={r.id}><strong>{r.nombre}</strong><span>{abiertas.filter(o=>o.asignacion?.recolector_id===r.id).length} asignaciones vigentes</span>{r.telefono_contacto&&<a className="btn" href={"tel:"+r.telefono_contacto}>Llamar a {r.nombre}</a>}</li>)}</ul></section>
+          <Estado tipo="carga">Cargando solicitudes…</Estado>
+        ) : vista === "inicio" ? (
+          <>
+            <section className="inicio-colectivo">
+              <div>
+                <h2>{nombreGremio || nombresPerfil[rol]}</h2>
+                <p>Hola, {sesion.cuenta.nombre}.</p>
+              </div>
+              <img alt="" src={`/marca/${imagenColectivo}.png`} />
+            </section>
+            <div className="resumen-operativo">
+              <button type="button" onClick={() => setVista("bandeja")} className="resumen-tarea">
+                <strong>{campo ? programadas.length : nuevas.length}</strong>
+                <span>{campo ? "Órdenes por recoger" : "Solicitudes por asignar"}</span>
+              </button>
+              <button type="button" onClick={() => setVista(campo ? "bandeja" : "rutas")} className="resumen-tarea">
+                <strong>{campo ? asignadas.length : rutasHoy}</strong>
+                <span>{campo ? "Esperan horario" : "Visitas programadas hoy"}</span>
+              </button>
+              {!campo && <button type="button" onClick={() => setVista("reportes")} className="resumen-tarea">
+                <strong>{reportesPendientes}</strong><span>Reportes por responder</span>
+              </button>}
+            </div>
+          </>
+        ) : vista === "indicadores" ? <Indicadores gremioId={gremioId} />
+        : vista === "pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores} />
+        : vista === "equipo" ? (
+          <section className="eco-tarjeta">
+            <h2>Integrantes del colectivo</h2>
+            {recolectores.length ? <ul className="lista-equipo">
+              {recolectores.map((r) => {
+                const asignaciones = abiertas.filter((o) => o.asignacion?.recolector_id === r.id).length;
+                return <li key={r.id}>
+                  <div><strong>{r.nombre}</strong>
+                    <span>{asignaciones} {asignaciones === 1 ? "asignación vigente" : "asignaciones vigentes"}</span></div>
+                  {r.telefono_contacto && <a className="btn" href={`tel:${r.telefono_contacto}`} aria-label={`Llamar a ${r.nombre}`}>Llamar</a>}
+                </li>;
+              })}
+            </ul> : <Estado tipo="vacio">Aún no hay integrantes activos.</Estado>}
+          </section>
+        )
         : vista === "bandeja" && campo ? (
           <VistaMisOrdenes ordenes={ordenes} {...comunes} />
         ) : vista === "bandeja" ? (
@@ -199,7 +232,7 @@ export default function Panel({ sesion, rol, onSalir }: { sesion: Sesion; rol: s
         ) : (
           <VistaHistorial ordenes={ordenes} {...comunes} />
         )}
-      </main>
+      </MarcoPanel>
 
       {accion?.tipo === "detalle" && <Modal titulo="Detalle de la solicitud" onCerrar={() => setAccion(null)}>
         <DetalleSolicitud id={accion.orden.id} {...comunes} />
@@ -239,20 +272,9 @@ export default function Panel({ sesion, rol, onSalir }: { sesion: Sesion; rol: s
         />
       )}
 
-      <div className={`toast ${aviso ? "visible" : ""}`} role="status" aria-live="polite">
+      <div className={`toast ${aviso ? "visible" : ""}`} role="status" aria-live="polite" data-motion="notice" data-state={aviso ? "visible" : "hidden"}>
         {aviso}
       </div>
-    </div>
-  );
-}
-
-function Pestana(props: { activa: boolean; onClick: () => void; cuenta?: number; alerta?: boolean; children: string }) {
-  return (
-    <button className={`pestana ${props.activa ? "activa" : ""}`} onClick={props.onClick} aria-current={props.activa}>
-      {props.children}
-      {props.cuenta !== undefined && props.cuenta > 0 && (
-        <span className={`insignia ${props.alerta ? "alerta" : ""}`}>{props.cuenta}</span>
-      )}
-    </button>
+    </>
   );
 }

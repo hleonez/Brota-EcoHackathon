@@ -14,11 +14,16 @@ export function Modal({ titulo, onCerrar, children }: { titulo: string; onCerrar
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current!;
+    const origen = document.activeElement;
     dialog.showModal();
-    return () => dialog.close();
+    return () => {
+      dialog.close();
+      if (origen instanceof HTMLElement && origen.isConnected) origen.focus();
+    };
   }, []);
   return (
-    <dialog className="modal" ref={ref} onCancel={onCerrar} aria-label={titulo}>
+    <dialog className="modal" ref={ref} data-motion="dialog" data-state="open"
+      onCancel={(e) => { e.preventDefault(); onCerrar(); }} aria-label={titulo}>
         <header>
           <h2>{titulo}</h2>
           <button className="btn icono" onClick={onCerrar} aria-label="Cerrar">✕</button>

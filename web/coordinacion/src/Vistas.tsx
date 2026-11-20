@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, ErrorApi } from "./api";
-import { Espera, useDatos } from "./portal";
+import { Espera, Estado, useDatos } from "./portal";
 import Pasaporte from "./Pasaporte";
 import { Avisos } from "./Operacion";
 import type { Accion } from "./Panel";
@@ -32,12 +32,15 @@ function porFranja(a: Orden, b: Orden): number {
 
 function Tarjeta({ orden: o, servicios, recientes, onAccion, campo, sinRecolector, detalle }: Comunes & { orden: Orden; sinRecolector?: boolean; detalle?: boolean }) {
   const a = o.asignacion;
+  const reciente = o.estado === "nueva" && recientes.has(o.id);
   return (
-    <article className={`tarjeta estado-${o.estado} ${o.estado === "nueva" && recientes.has(o.id) ? "reciente" : ""}`}>
+    <article className={`tarjeta estado-${o.estado} ${reciente ? "reciente" : ""}`}
+      data-motion={reciente ? "new-item" : undefined} data-state={reciente ? "visible" : undefined}>
       <div className="tarjeta-cabeza">
         <span className="codigo">{o.codigo_pasaporte}</span><b>{ETIQUETA_ESTADO[o.estado] ?? o.estado}</b>
         <span className="tenue">{hace(o.created_at)}</span>
       </div>
+      {reciente && <span className="orden-reciente">Recién llegada</span>}
       <div className="ubicacion">📍 {o.ubicacion_operativa}</div>
       <div className="fila-datos">
         <span>👤 {o.contacto_nombre ?? "Sin nombre"}</span>
@@ -156,7 +159,7 @@ export function VistaMisOrdenes({ ordenes, ...c }: Comunes & { ordenes: Orden[] 
 type FiltroDia = "todas" | "hoy" | "manana" | "sin";
 
 export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asignadas: Orden[]; recolectores: Recolector[] }) {
-  const [filtro, setFiltro] = useState<FiltroDia>("todas");
+  const [filtro, setFiltro] = useState<FiltroDia>("hoy");
   const visibles = asignadas.filter((o) => {
     if (filtro === "todas") return true;
     const d = diaDe(o.asignacion?.inicio ?? null);
@@ -165,8 +168,8 @@ export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asigna
   // Recolectores del gremio, más cualquiera que tenga paradas y ya no esté activo.
   const lista = [...recolectores];
   for (const o of visibles) {
-    const a = o.asignacion!;
-    if (!lista.some((r) => r.id === a.recolector_id)) {
+    const a = o.asignacion;
+    if (a && !lista.some((r) => r.id === a.recolector_id)) {
       lista.push({ id: a.recolector_id, nombre: a.recolector_nombre, telefono_contacto: null, gremio_id: o.gremio_id, activo: false });
     }
   }
@@ -204,7 +207,7 @@ export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asigna
         ))}
       </div>
       {libres.length > 0 && <p className="tenue">Sin paradas: {libres.map((r) => r.nombre).join(", ")}.</p>}
-      <p className="tenue">El recolector no usa ninguna app: llámalo o déjale el recado con sus paradas.</p>
+      <p className="tenue">Usa el número de contacto para compartir las paradas con el responsable.</p>
     </div>
   );
 }
@@ -335,5 +338,5 @@ function TarjetaCaso({ caso: c, onRespondido, onConflicto }: { caso: Caso; onRes
 }
 
 function Vacio({ texto }: { texto: string }) {
-  return <p className="vacio">{texto}</p>;
+  return <Estado tipo="vacio">{texto}</Estado>;
 }

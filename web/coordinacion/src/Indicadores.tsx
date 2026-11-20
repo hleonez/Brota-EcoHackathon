@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Espera, fechaBogota, numero, useDatos } from "./portal";
+import { Espera, Estado, fechaBogota, numero, useDatos } from "./portal";
 import type { Catalogo } from "./tipos";
 
 interface Resumen {
@@ -43,9 +43,20 @@ export default function Indicadores({ gremioId }: { gremioId?: string }) {
   }
   if (gremioId || flujo) params.set("gremio_id", gremioId || flujo);
   const r = useDatos<Resumen>(valido ? "/v1/reportes/resumen?" + params : "");
+  const resumen = r.datos;
+  const porEstado = resumen ? Object.entries({ ...Object.fromEntries(
+    Object.keys(estados).map((estado) => [estado, 0]),
+  ), ...resumen.ordenes_por_estado }) : [];
+  const escala = Math.max(1, ...porEstado.map(([, cantidad]) => cantidad));
+  const sinRegistros = resumen && porEstado.every(([, cantidad]) => cantidad === 0) &&
+    resumen.materiales.length === 0 && resumen.hogares_participantes === 0 &&
+    Number(resumen.kg_aceptados) === 0 && Number(resumen.kg_rechazados) === 0 &&
+    resumen.valor_estimado === null;
   return (
-    <section>
-      <div className="campos">
+    <section className="impacto" aria-label="Resumen del periodo">
+      <fieldset className="eco-tarjeta filtros-impacto">
+        <legend>Filtrar periodo</legend>
+        <div className="campos">
         <label>
           Desde
           <input
@@ -80,57 +91,51 @@ export default function Indicadores({ gremioId }: { gremioId?: string }) {
         <button className="btn" onClick={r.recargar}>
           Actualizar
         </button>
-      </div>
+        </div>
+      </fieldset>
       {catalogo.error && (
         <Espera error={catalogo.error} reintentar={catalogo.recargar} />
       )}
       {!valido ? (
-        <p role="alert">
+        <Estado tipo="error">
           Elige una fecha final igual o posterior a la inicial.
-        </p>
-      ) : !r.datos ? (
+        </Estado>
+      ) : !resumen ? (
         <Espera error={r.error} reintentar={r.recargar} />
+      ) : sinRegistros ? (
+        <Estado tipo="vacio">No hay registros para el periodo y colectivo seleccionados.</Estado>
       ) : (
         <>
-          <div className="row g-3">
+          <div className="resumen-impacto">
             {[
-              [numero(r.datos.kg_aceptados) + " kg", "Material aceptado"],
-              [numero(r.datos.hogares_participantes), "Hogares participantes"],
+              [numero(resumen.kg_aceptados) + " kg", "Material aceptado"],
+              [numero(resumen.hogares_participantes), "Hogares participantes"],
               [
-                r.datos.valor_estimado === null
+                resumen.valor_estimado === null
                   ? "Sin precio"
-                  : "$ " + numero(r.datos.valor_estimado),
+                  : "$ " + numero(resumen.valor_estimado),
                 "Valor estimado en COP",
               ],
             ].map(([n, t]) => (
-              <div className="col-12 col-md-4" key={t}>
-                <div className="eco-tarjeta">
-                  <small>{t}</small>
-                  <strong className="cifra">{n}</strong>
-                </div>
+              <div className="eco-tarjeta impacto-cifra" key={t}>
+                <span>{t}</span>
+                <strong className="cifra">{n}</strong>
               </div>
             ))}
           </div>
           <section className="eco-tarjeta">
             <h2>Órdenes creadas en el periodo</h2>
-            {Object.entries(r.datos.ordenes_por_estado).map(([k, n]) => (
+            {porEstado.map(([k, n]) => (
               <div className="medida" key={k}>
                 <span>{estados[k] || k}</span>
-                <progress
-                  aria-label={estados[k] || k}
-                  value={n}
-                  max={Math.max(
-                    1,
-                    ...Object.values(r.datos!.ordenes_por_estado),
-                  )}
-                />
                 <b>{numero(n)}</b>
+                <progress aria-label={estados[k] || k} value={n} max={escala} />
               </div>
             ))}
           </section>
           <section className="eco-tarjeta">
             <h2>Material por método de medición</h2>
-            {r.datos.materiales.length ? (
+            {resumen.materiales.length ? (
               <div className="desliza">
                 <table>
                   <thead>
@@ -147,7 +152,7 @@ export default function Indicadores({ gremioId }: { gremioId?: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {r.datos.materiales.map((m) => (
+                    {resumen.materiales.map((m) => (
                       <tr key={m.material_id}>
                         <th>{m.nombre}</th>
                         {[
@@ -164,7 +169,7 @@ export default function Indicadores({ gremioId }: { gremioId?: string }) {
                 </table>
               </div>
             ) : (
-              <p>Sin pesajes confirmados en este periodo.</p>
+              <Estado tipo="vacio">Sin pesajes confirmados en este periodo.</Estado>
             )}
             <p className="tenue">
               El valor estimado usa los precios aplicados a los pesajes
