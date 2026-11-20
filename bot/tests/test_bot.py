@@ -41,6 +41,7 @@ class APIFalsa:
         self.avisos: list[dict] = []
         self.confirmaciones: list[tuple[str, dict]] = []
         self.cuerpos_solicitud: list[dict] = []
+        self.unidades: list[dict] | None = None  # si se define, reemplaza la unidad de GET /v1/me
         self.ia: dict | None = None  # respuesta de /v1/ia/interpretar; None = IA no disponible (503)
         self.cuerpos_ia: list[dict] = []
         self.casos: list[dict] = []
@@ -53,8 +54,11 @@ class APIFalsa:
         p, m = req.url.path, req.method
         if p == "/v1/me":
             if cel in self.registrados:
+                unidades = self.unidades if self.unidades is not None else [
+                    {"id": "u402", "conjunto_id": "c1", "torre_id": "t3"}
+                ]
                 return _ok({"registrado": True, "nombre": self.registrados[cel], "politica_datos_version": "2026-11",
-                            "unidades": [{"id": "u402", "conjunto_id": "c1", "torre_id": "t3"}]})
+                            "unidades": unidades})
             return _ok({"registrado": False, "politica_datos_version": "2026-11", "unidades": []})
         if p == "/v1/conjuntos":
             return _ok([{"id": "c1", "nombre": "Brisas de San Pablo"}])

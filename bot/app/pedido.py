@@ -1,18 +1,21 @@
 """Pedido guiado: Brisa enseña antes de pedir.
 
     ELIGE (lista o texto) → CONFIRMA (si fue texto) → CHEQUEO (preguntas de cada ficha)
-    → MAS (¿algo más?) → RESUMEN → Enviar | Corregir | Cancelar
+    → MAS (¿algo más?) → RESUMEN (cuándo pasar) → Enviar | Corregir | Cancelar
 
 Cada material queda listo, en revisión (lo confirma el equipo), por preparar (fuera del envío,
-con el consejo) o no se recibe (con la alternativa). Nada se crea hasta «Enviar solicitud».
+con el consejo) o no se recibe (con la alternativa). Nada se crea hasta «Enviar solicitud»,
+y solo con una preferencia: cuando pueda, o una franja. Nunca las dos juntas.
 Las fichas vienen de la API (`GET /v1/residuos`); el bot no decide qué se recibe.
 El borrador vive en memoria por celular (2 h); para varias réplicas, pasarlo a Redis.
 """
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app import textos as T
@@ -23,6 +26,9 @@ from app.whatsapp import Boton, Entrante, Fila, WhatsApp
 
 INCLUIDOS = ("listo", "revision")
 CONFIRMAR_ENVIO = {"enviar", "enviar solicitud", "enviala", "si", "si enviala", "dale", "confirmo"}
+# Misma zona fija UTC-5 que usa liga_del_mes (America/Bogota, sin horario de verano).
+ZONA = timezone(timedelta(hours=-5))
+_FRANJA = re.compile(r"^(hoy|manana) (\d{1,2}) a (\d{1,2})$")
 
 
 @dataclass
@@ -36,17 +42,94 @@ class Item:
 
 @dataclass
 class Borrador:
-    paso: str = "ELIGE"  # ELIGE | CONFIRMA | CHEQUEO | MAS | RESUMEN
+    paso: str = "ELIGE"  # ELIGE | CONFIRMA | CHEQUEO | MAS | RESUMEN | HORARIO
     items: list[Item] = field(default_factory=list)
     propuestos: list[str] = field(default_factory=list)
     fuente_propuesta: str = "texto"  # texto | foto | audio
+    preferencia_sin_restriccion: bool = False
+    preferencia_inicio: str | None = None
+    preferencia_fin: str | None = None
     actualizado: float = field(default_factory=time.monotonic)
+
+    def preferencia_lista(self) -> bool:
+        """Una sola alternativa: sin restricción (sin fechas) o una ventana con fin posterior."""
+        if self.preferencia_sin_restriccion:
+            return self.preferencia_inicio is None and self.preferencia_fin is None
+        return self.preferencia_inicio is not None and self.preferencia_fin is not None
 
     def item(self, codigo: str) -> Item | None:
         return next((i for i in self.items if i.codigo == codigo), None)
 
     def pendiente(self) -> Item | None:
         return next((i for i in self.items if i.estado == "pendiente"), None)
+
+
+def ahora_bogota() -> datetime:
+    """Ahora en la zona fija UTC-5 que ya usa `liga_del_mes`."""
+    return datetime.now(ZONA)
+
+
+def interpretar_franja(texto: str | None) -> tuple[str, str] | None:
+    """«hoy» o «mañana» y dos horas en 24 h, por ejemplo «mañana 9 a 12».
+
+    Devuelve inicio y fin con la zona UTC-5. El fin tiene que ser posterior.
+    Si el texto no calza, None: no se llama a la API.
+    """
+    coincidencia = _FRANJA.match(normalizar(texto))
+    if coincidencia is None:
+        return None
+    hora_ini, hora_fin = int(coincidencia.group(2)), int(coincidencia.group(3))
+    if hora_ini > 23 or hora_fin > 23 or hora_fin <= hora_ini:
+        return None
+    fecha = ahora_bogota().date()
+    if coincidencia.group(1) == "manana":
+        fecha += timedelta(days=1)
+    inicio = datetime(fecha.year, fecha.month, fecha.day, hora_ini, tzinfo=ZONA)
+    fin = datetime(fecha.year, fecha.month, fecha.day, hora_fin, tzinfo=ZONA)
+    return inicio.isoformat(), fin.isoformat()
+
+
+def _texto_franja(inicio: str, fin: str) -> str:
+    ini, fin_dt = datetime.fromisoformat(inicio), datetime.fromisoformat(fin)
+    hoy = ahora_bogota().date()
+    if ini.date() == hoy:
+        dia = "Hoy"
+    elif ini.date() == hoy + timedelta(days=1):
+        dia = "Mañana"
+    else:
+        dia = f"{ini.day}/{ini.month}"
+    return f"{dia} de {ini.hour} a {fin_dt.hour}"
+
+
+def _pregunta(b: Borrador) -> str:
+    if not b.preferencia_lista():
+        return T.P_PREGUNTA_PREFERENCIA
+    if b.preferencia_sin_restriccion:
+        return T.P_PREGUNTA_ENVIO
+    return T.P_PREGUNTA_FRANJA.format(franja=_texto_franja(b.preferencia_inicio or "", b.preferencia_fin or ""))
+
+
+def _botones_resumen(b: Borrador) -> list[Boton]:
+    if not b.preferencia_lista():
+        return [
+            Boton("P_SIN", "Cuando pueda"),
+            Boton("P_HORARIO", "Tengo un horario"),
+            Boton("P_CORREGIR", "✏ Corregir"),
+        ]
+    return [
+        Boton("P_ENVIAR", "✅ Enviar solicitud"),
+        Boton("P_CORREGIR", "✏ Corregir"),
+        Boton("P_CANCELAR", "❌ Cancelar"),
+    ]
+
+
+def _unidad_id_negocio(me: dict[str, Any]) -> str | None:
+    """La única unidad, y solo si es un negocio. Un hogar o una unidad sin tipo no se manda."""
+    unidades = me.get("unidades") or []
+    if len(unidades) != 1 or unidades[0].get("tipo") != "negocio":
+        return None
+    identificador = unidades[0].get("id")
+    return str(identificador) if identificador else None
 
 
 class Borradores:
@@ -139,6 +222,15 @@ class Pedido:
             await self._elegir(cel, b, fichas)
         elif accion == "P_LISTO":
             await self._resumen(cel, b, fichas, me)
+        elif accion == "P_SIN":
+            b.preferencia_sin_restriccion = True
+            b.preferencia_inicio = b.preferencia_fin = None
+            await self._resumen(cel, b, fichas, me)
+        elif accion == "P_HORARIO":
+            b.preferencia_sin_restriccion = False
+            b.preferencia_inicio = b.preferencia_fin = None
+            b.paso = "HORARIO"
+            await self.wa.texto(cel, T.P_PIDE_HORARIO)
         elif accion == "P_ENVIAR":
             await self._enviar(m, b, fichas, me)
         elif accion == "P_CANCELAR":
@@ -193,6 +285,9 @@ class Pedido:
     # ------------------------------------------------------------------ pasos
 
     async def _texto(self, m: Entrante, b: Borrador, fichas: dict[str, dict[str, Any]], me: dict[str, Any]) -> None:
+        if b.paso == "HORARIO":
+            await self._recibir_horario(m, b, fichas, me)
+            return
         if b.paso == "RESUMEN" and normalizar(m.texto) in CONFIRMAR_ENVIO:
             await self._enviar(m, b, fichas, me)
             return
@@ -335,11 +430,29 @@ class Pedido:
                 ubicacion=unidad.get("etiqueta") or "tu apartamento",
                 fuera=(T.P_RESUMEN_FUERA.format(lista=", ".join(por_preparar)) if por_preparar else "")
                 + (T.P_RESUMEN_NO_VA.format(lista=", ".join(no_va)) if no_va else ""),
+                pregunta=_pregunta(b),
             ),
-            [Boton("P_ENVIAR", "✅ Enviar solicitud"), Boton("P_CORREGIR", "✏ Corregir"), Boton("P_CANCELAR", "❌ Cancelar")],
+            _botones_resumen(b),
         )
 
+    async def _recibir_horario(
+        self, m: Entrante, b: Borrador, fichas: dict[str, dict[str, Any]], me: dict[str, Any]
+    ) -> None:
+        franja = interpretar_franja(m.texto)
+        if franja is None:
+            await self.wa.texto(m.de, T.P_HORARIO_NO)
+            return
+        b.preferencia_sin_restriccion = False
+        b.preferencia_inicio, b.preferencia_fin = franja
+        await self._resumen(m.de, b, fichas, me)
+
     async def _enviar(self, m: Entrante, b: Borrador, fichas: dict[str, dict[str, Any]], me: dict[str, Any]) -> None:
+        if b.paso == "HORARIO" or not b.preferencia_lista():
+            if b.paso == "HORARIO":
+                await self.wa.texto(m.de, T.P_PIDE_HORARIO)
+            else:
+                await self._resumen(m.de, b, fichas, me)
+            return
         if b.paso != "RESUMEN":  # se envía solo lo que la persona vio en el resumen
             await self._resumen(m.de, b, fichas, me)
             return
@@ -349,7 +462,13 @@ class Pedido:
             if i.estado in INCLUIDOS and i.codigo in fichas
         ]
         try:
-            s = await self.api.crear_solicitud(m.de, m.wamid, residuos=residuos)
+            s = await self.api.crear_solicitud(
+                m.de, m.wamid, residuos=residuos,
+                preferencia_sin_restriccion=b.preferencia_sin_restriccion,
+                preferencia_inicio=None if b.preferencia_sin_restriccion else b.preferencia_inicio,
+                preferencia_fin=None if b.preferencia_sin_restriccion else b.preferencia_fin,
+                unidad_id=_unidad_id_negocio(me),
+            )
         except ErrorBrota as err:
             if err.codigo == "OPEN_REQUEST_EXISTS":
                 self.borradores.borrar(m.de)
@@ -378,7 +497,9 @@ class Pedido:
         await self.wa.lista(celular, T.P_CORREGIR, "Ver opciones", "Tu pedido", filas)
 
     async def _seguir(self, celular: str, b: Borrador, fichas: dict[str, dict[str, Any]], me: dict[str, Any]) -> None:
-        if b.paso == "RESUMEN":
+        if b.paso == "HORARIO":
+            await self.wa.texto(celular, T.P_PIDE_HORARIO)
+        elif b.paso == "RESUMEN":
             await self._resumen(celular, b, fichas, me)
         elif b.paso == "CONFIRMA" and b.propuestos:
             await self._confirmar_texto(celular, b, fichas)

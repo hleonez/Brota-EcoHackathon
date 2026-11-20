@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 
 from app.catalogo import buscar
 from tests.test_bot import CEL, RESIDUOS, _texto, entorno, enviar  # noqa: F401 (fixture)
@@ -59,15 +60,23 @@ def test_pedido_guiado_hasta_enviar(entorno):
     resumen = _texto(r[0])
     assert "🧴 Botellas plásticas ✅" in resumen and "🧃 Cajas de leche y jugo 🔎" in resumen
     assert "Queda por fuera: 📦 Cartón" in resumen
-    assert _botones(r[0]) == ["P_ENVIAR", "P_CORREGIR", "P_CANCELAR"]
-    assert api.cuerpos_solicitud == []  # nada se crea antes de confirmar
+    assert "¿Cuándo podemos pasar?" in resumen
+    assert _botones(r[0]) == ["P_SIN", "P_HORARIO", "P_CORREGIR"]
+    assert api.cuerpos_solicitud == []  # nada se crea antes de elegir la preferencia
+
+    r = enviar(c, "enviar")  # el atajo no hace el POST mientras la preferencia esté vacía
+    assert api.cuerpos_solicitud == [] and _botones(r[0]) == ["P_SIN", "P_HORARIO", "P_CORREGIR"]
+
+    r = enviar(c, boton="P_SIN")
+    assert "¿La envío?" in _texto(r[0]) and _botones(r[0]) == ["P_ENVIAR", "P_CORREGIR", "P_CANCELAR"]
+    assert api.cuerpos_solicitud == []
 
     r = enviar(c, boton="P_ENVIAR", wamid="wamid.enviar")
     assert "BR-00001" in _texto(r[0])
     assert api.cuerpos_solicitud == [{"residuos": [
         {"residuo_id": "r-pet", "estado": "listo", "respuestas": {"vacias": "si", "quimicos": "no"}, "fuente": "texto"},
         {"residuo_id": "r-tetrapak", "estado": "revision", "respuestas": {}, "fuente": "lista"},
-    ]}]
+    ], "preferencia_sin_restriccion": True}]
     post = next(x for x in api.llamadas if x.url.path == "/v1/solicitudes" and x.method == "POST")
     assert post.headers["Idempotency-Key"] == "wamid.enviar"
 
@@ -135,10 +144,12 @@ def test_solicitud_abierta(entorno):
     for _ in range(2):
         enviar(c, lista="P_ADD:FRUVER")
         enviar(c, boton="P_LISTO")
+        enviar(c, boton="P_SIN")
         r = enviar(c, boton="P_ENVIAR")
     assert "Ya tienes una solicitud en camino (BR-00001)" in _texto(r[0])
     assert [json.dumps(b) for b in api.cuerpos_solicitud][0] == json.dumps(
-        {"residuos": [{"residuo_id": "r-fruver", "estado": "listo", "respuestas": {}, "fuente": "lista"}]}
+        {"residuos": [{"residuo_id": "r-fruver", "estado": "listo", "respuestas": {}, "fuente": "lista"}],
+         "preferencia_sin_restriccion": True}
     )
 
 
@@ -149,3 +160,71 @@ def test_listo_con_algo_que_separar(entorno):
     r = enviar(c, boton="P_V:PET:quimicos:si")  # alguna tuvo químicos: se separa y las demás sí van
     assert _texto(r[0]) == "💡 Saca esas; las demás sí." and "Botellas plásticas: listo" in _texto(r[1])
     assert "🧴 Botellas plásticas ✅" in _texto(enviar(c, boton="P_LISTO")[0])
+
+
+def test_franja_manana_envia_inicio_y_fin(entorno, monkeypatch):
+    from app import pedido as mod
+
+    zona = timezone(timedelta(hours=-5))
+    monkeypatch.setattr(mod, "ahora_bogota", lambda: datetime(2026, 11, 20, 8, 30, tzinfo=zona))
+    assert mod.interpretar_franja("mañana 9 a 12") == (
+        "2026-11-21T09:00:00-05:00", "2026-11-21T12:00:00-05:00",
+    )
+    assert mod.interpretar_franja("hoy 12 a 9") is None
+    assert mod.interpretar_franja("pasado mañana") is None
+
+    c, api = _registrada(entorno)
+    enviar(c, lista="P_ADD:FRUVER")
+    enviar(c, boton="P_LISTO")
+    r = enviar(c, boton="P_HORARIO")
+    assert "mañana 9 a 12" in _texto(r[0])
+
+    r = enviar(c, "pasado mañana")
+    assert "No entendí esa franja" in _texto(r[0]) and api.cuerpos_solicitud == []
+
+    r = enviar(c, "mañana 9 a 12")
+    assert "Mañana de 9 a 12" in _texto(r[0])
+    assert _botones(r[0]) == ["P_ENVIAR", "P_CORREGIR", "P_CANCELAR"]
+    enviar(c, boton="P_ENVIAR")
+    cuerpo = api.cuerpos_solicitud[0]
+    assert cuerpo["preferencia_inicio"] == "2026-11-21T09:00:00-05:00"
+    assert cuerpo["preferencia_fin"] == "2026-11-21T12:00:00-05:00"
+    assert "preferencia_sin_restriccion" not in cuerpo
+    assert "unidad_id" not in cuerpo
+
+
+def test_hogar_no_envia_unidad_id(entorno):
+    c, api = _registrada(entorno)
+    api.unidades = [{"id": "u402", "tipo": "hogar", "etiqueta": "Torre 3 · Apto 402", "torre_id": "t3"}]
+    enviar(c, lista="P_ADD:FRUVER")
+    r = enviar(c, boton="P_LISTO")
+    assert "Torre 3 · Apto 402" in _texto(r[0])
+    enviar(c, boton="P_SIN")
+    enviar(c, boton="P_ENVIAR")
+    assert "unidad_id" not in api.cuerpos_solicitud[0]
+    assert api.cuerpos_solicitud[0]["preferencia_sin_restriccion"] is True
+
+
+def test_negocio_envia_unidad_y_no_pregunta_torre(entorno):
+    c, api = entorno
+    cel = "573100000201"
+    api.registrados[cel] = "Contacto Asadero El Corredor (demo)"
+    api.unidades = [{
+        "id": "u-asadero",
+        "tipo": "negocio",
+        "etiqueta": "Asadero El Corredor (demo) · Corredor comercial",
+    }]
+    r = enviar(c, "hola", de=cel)
+    assert "torre" not in _texto(r[0]).lower()
+    filas = [row["id"] for row in r[0]["interactive"]["action"]["sections"][0]["rows"]]
+    assert filas[0] == "M_PEDIR"
+
+    enviar(c, lista="P_ADD:FRUVER", de=cel)
+    r = enviar(c, boton="P_LISTO", de=cel)
+    assert "Asadero El Corredor (demo) · Corredor comercial" in _texto(r[0])
+    enviar(c, boton="P_SIN", de=cel)
+    enviar(c, boton="P_ENVIAR", de=cel)
+    cuerpo = api.cuerpos_solicitud[0]
+    assert cuerpo["unidad_id"] == "u-asadero"
+    assert cuerpo["preferencia_sin_restriccion"] is True
+    assert "preferencia_inicio" not in cuerpo and "preferencia_fin" not in cuerpo

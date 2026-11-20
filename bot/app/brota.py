@@ -133,13 +133,25 @@ class Brota:
 
     async def crear_solicitud(
         self, celular: str, clave: str, tipo_servicio_ids: list[str] | None = None,
-        residuos: list[dict[str, Any]] | None = None,
+        residuos: list[dict[str, Any]] | None = None, *,
+        preferencia_sin_restriccion: bool = False,
+        preferencia_inicio: str | None = None,
+        preferencia_fin: str | None = None,
+        unidad_id: str | None = None,
     ) -> dict[str, Any]:
+        """Una sola alternativa de horario: la bandera, o inicio y fin. Nunca las dos."""
         cuerpo: dict[str, Any] = {}
         if tipo_servicio_ids:
             cuerpo["tipo_servicio_ids"] = tipo_servicio_ids
         if residuos:
             cuerpo["residuos"] = residuos
+        if preferencia_sin_restriccion:
+            cuerpo["preferencia_sin_restriccion"] = True
+        elif preferencia_inicio and preferencia_fin:
+            cuerpo["preferencia_inicio"] = preferencia_inicio
+            cuerpo["preferencia_fin"] = preferencia_fin
+        if unidad_id:
+            cuerpo["unidad_id"] = unidad_id
         return (await self._pedir("POST", "/v1/solicitudes", celular, clave=clave, json=cuerpo))["data"]
 
     async def crear_caso(
