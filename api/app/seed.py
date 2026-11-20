@@ -21,19 +21,23 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.core.seguridad import hash_pin
 from app.db import get_sessionmaker
 from app.models import (
     CapacidadTorre,
     Conjunto,
+    Consentimiento,
     ContenidoEducativo,
     ContenidoMaterial,
     ContenidoMotivo,
     CuentaOperadora,
     Gremio,
+    HabilitacionPiloto,
     Huerta,
     Material,
     MotivoRechazo,
+    Participante,
     PermisoOperador,
     PuntoRecepcion,
     Recolector,
@@ -44,6 +48,7 @@ from app.models import (
     VersionEquivalencia,
     VersionPrecioMaterial,
     VersionReglaIncentivo,
+    VinculoUnidad,
 )
 from app.seed_residuos import RESIDUOS
 
@@ -79,16 +84,91 @@ CONTENIDOS = [
     ("Consejo de Brisa", "Separa en casa: reciclable limpio y seco por un lado, orgánico por otro. ¡Así todo brota!", [], [], True, "servicio"),
     ("Horarios y rutas del piloto", "Ejemplo del piloto: la coordinación acuerda el día y la hora. La preferencia del solicitante no programa la visita. Las rutas de demostración cubren el conjunto y el corredor comercial.", [], [], False, "horarios_rutas"),
 ]
+# (usuario, nombre, permisos [(rol, código de gremio)] o None, recolector (nombre, código de gremio) o None).
+# Con recolector, el único permiso es su tipo y su gremio. Las otras cuentas no tienen trabajador.
 CUENTAS = [
-    ("coord-reciclaje", "Coordinación Asorescatar", [("coordinacion", "ASORESCATAR")]),
-    ("coord-huerta", "Coordinación Huerta Ecorazón", [("coordinacion", "ECORAZON")]),
-    ("fundacion", "Fundación Santo Domingo", [("fundacion", None)]),
-    ("admin", "Administración Brota", [("admin", None)]),
+    ("coord-reciclaje", "Coordinación Asorescatar", [("coordinacion", "ASORESCATAR")], None),
+    ("coord-huerta", "Coordinación Huerta Ecorazón", [("coordinacion", "ECORAZON")], None),
+    ("fundacion", "Fundación Santo Domingo", [("fundacion", None)], None),
+    ("admin", "Administración Brota", [("admin", None)], None),
+    ("huertero-demo", "Huertero demo 1", None, ("Huertero demo 1", "ECORAZON")),
+    ("reciclador-demo", "Rosa (demo)", None, ("Rosa (demo)", "ASORESCATAR")),
+]
+# (celular, nombre, unidad "negocio"|"hogar", habilitar en el piloto).
+PARTICIPANTES = [
+    ("573100000201", "Contacto Asadero El Corredor (demo)", "negocio", True),
+    ("573100000101", "Residente Torre 1 apto 101", "hogar", True),
+    ("573100000102", "Otro residente Torre 1 apto 101", "hogar", False),
 ]
 
 
 def _uno(db: Session, modelo, **filtros):
     return db.execute(select(modelo).filter_by(**filtros)).scalar_one_or_none()
+
+
+def _sembrar_participantes(db: Session, conjunto_id) -> str:
+    """Tres contactos de ejemplo. Una segunda corrida no duplica vínculo ni habilitación."""
+    admin = _uno(db, CuentaOperadora, usuario="admin")
+    if admin is None:
+        raise RuntimeError("La semilla necesita la cuenta admin para habilitar el piloto.")
+    torre = _uno(db, Torre, conjunto_id=conjunto_id, codigo="1")
+    hogar = _uno(db, Unidad, torre_id=torre.id, tipo="hogar", referencia_local="101") if torre else None
+    negocio = _uno(db, Unidad, tipo="negocio", referencia_local="Asadero El Corredor (demo)")
+    if hogar is None or negocio is None:
+        raise RuntimeError("Faltan la vivienda Torre 1 apto 101 o el asadero de la semilla.")
+    politica = get_settings().politica_datos_version
+    unidades = {"hogar": hogar, "negocio": negocio}
+    for celular, nombre, clave, habilitar in PARTICIPANTES:
+        unidad = unidades[clave]
+        p = db.execute(
+            select(Participante).where(
+                Participante.celular_normalizado == celular, Participante.estado != "eliminado"
+            )
+        ).scalar_one_or_none()
+        if p is None:
+            p = Participante(nombre=nombre, celular_normalizado=celular, estado="activo")
+            db.add(p)
+            db.flush()
+        ultimo = db.execute(
+            select(Consentimiento)
+            .where(Consentimiento.participante_id == p.id)
+            .order_by(Consentimiento.registrado_at.desc(), Consentimiento.id.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        if ultimo is None or ultimo.decision != "aceptado" or ultimo.version_politica != politica:
+            db.add(
+                Consentimiento(
+                    participante_id=p.id, version_politica=politica, decision="aceptado", canal="asistido"
+                )
+            )
+        vinculo = db.execute(
+            select(VinculoUnidad).where(
+                VinculoUnidad.participante_id == p.id,
+                VinculoUnidad.unidad_id == unidad.id,
+                VinculoUnidad.vigente_hasta.is_(None),
+            )
+        ).scalar_one_or_none()
+        if vinculo is None:
+            tipo = "residente" if unidad.tipo == "hogar" else "contacto_negocio"
+            db.add(VinculoUnidad(participante_id=p.id, unidad_id=unidad.id, tipo_vinculo=tipo))
+        if not habilitar:
+            continue
+        ya = db.execute(
+            select(HabilitacionPiloto).where(
+                HabilitacionPiloto.participante_id == p.id, HabilitacionPiloto.unidad_id == unidad.id
+            )
+        ).scalar_one_or_none()
+        if ya is None:
+            db.add(
+                HabilitacionPiloto(
+                    participante_id=p.id,
+                    unidad_id=unidad.id,
+                    activo=True,
+                    vigente_desde=INICIO,
+                    habilitada_por=admin.id,
+                )
+            )
+    return ", ".join(celular for celular, *_resto in PARTICIPANTES)
 
 
 def sembrar(db: Session) -> dict[str, str]:
@@ -189,15 +269,32 @@ def sembrar(db: Session) -> dict[str, str]:
             db.add(ContenidoMaterial(contenido_id=c.id, material_id=mat[mc].id))
 
     pin = os.environ.get("SEED_PIN") or ""
-    nuevas = [u for u, _, _ in CUENTAS if not _uno(db, CuentaOperadora, usuario=u)]
+    nuevas = [usuario for usuario, *_resto in CUENTAS if not _uno(db, CuentaOperadora, usuario=usuario)]
     if nuevas and not pin:
         pin = f"{secrets.randbelow(10**6):06d}"
         creados["pin_generado"] = pin
-    for usuario, nombre, permisos in CUENTAS:
-        if usuario in nuevas:
-            c = CuentaOperadora(usuario=usuario, nombre=nombre, pin_hash=hash_pin(pin))
-            c.permisos = [PermisoOperador(rol=r, gremio_id=g[gc].id if gc else None) for r, gc in permisos]
-            db.add(c)
+    for usuario, nombre, permisos, recolector_ref in CUENTAS:
+        if usuario not in nuevas:
+            continue
+        recolector = None
+        if recolector_ref is not None:
+            nombre_recolector, codigo_gremio = recolector_ref
+            recolector = _uno(db, Recolector, nombre=nombre_recolector, gremio_id=g[codigo_gremio].id)
+            if recolector is None:
+                raise RuntimeError(f"Falta el recolector de la semilla: {nombre_recolector}")
+        c = CuentaOperadora(
+            usuario=usuario,
+            nombre=nombre,
+            pin_hash=hash_pin(pin),
+            trabajador_id=recolector.id if recolector else None,
+        )
+        if recolector is not None:
+            c.permisos = [PermisoOperador(rol=recolector.tipo, gremio_id=recolector.gremio_id)]
+        else:
+            c.permisos = [PermisoOperador(rol=rol, gremio_id=g[codigo].id if codigo else None) for rol, codigo in permisos]
+        db.add(c)
+    db.flush()
+    creados["celulares"] = _sembrar_participantes(db, conj.id)
     db.commit()
     creados["cuentas_nuevas"] = ", ".join(nuevas) or "ninguna"
     return creados

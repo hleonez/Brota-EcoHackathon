@@ -39,7 +39,7 @@ uv run uvicorn app.main:app --reload --port 8000
 ```
 
 Abre `http://localhost:8000/docs`. Cuentas de la semilla (PIN = `SEED_PIN`; si no lo defines,
-la semilla genera uno y lo imprime una vez): `coord-reciclaje`, `coord-huerta`, `fundacion`, `admin`.
+la semilla genera uno y lo imprime una vez): `coord-reciclaje`, `coord-huerta`, `fundacion`, `admin`, `huertero-demo`, `reciclador-demo`.
 
 Si el puerto 8000 está ocupado, usa otro (`--port 8010`) y ajusta la URL del bot.
 
