@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ErrorApi } from "./api";
 import type { AcuerdoCanal, ItemCatalogo, Orden, Recolector } from "./tipos";
 import { claveParaEnvio, franjas, puntos, textoFranja } from "./util";
@@ -10,25 +10,50 @@ interface Base {
   onCerrar: () => void;
 }
 
+const CierreModal = createContext<() => void>(() => {});
+
+function CancelarModal() {
+  const cerrar = useContext(CierreModal);
+  return <button type="button" className="btn grande" onClick={cerrar}>Cancelar</button>;
+}
+
 export function Modal({ titulo, onCerrar, children }: { titulo: string; onCerrar: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const [cerrando, setCerrando] = useState(false);
+  const temporizador = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function cerrar() {
+    if (cerrando) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      onCerrar();
+      return;
+    }
+    setCerrando(true);
+    temporizador.current = setTimeout(onCerrar, 240);
+  }
   useEffect(() => {
     const dialog = ref.current!;
     const origen = document.activeElement;
     dialog.showModal();
     return () => {
+      clearTimeout(temporizador.current);
       dialog.close();
       if (origen instanceof HTMLElement && origen.isConnected) origen.focus();
     };
   }, []);
   return (
-    <dialog className="modal" ref={ref} data-motion="dialog" data-state="open"
-      onCancel={(e) => { e.preventDefault(); onCerrar(); }} aria-label={titulo}>
+    <dialog className="modal" ref={ref} data-motion="dialog" data-state={cerrando ? "closed" : "open"}
+      onTransitionEnd={(e) => {
+        if (cerrando && e.target === e.currentTarget && e.propertyName === "opacity") {
+          clearTimeout(temporizador.current);
+          onCerrar();
+        }
+      }}
+      onCancel={(e) => { e.preventDefault(); cerrar(); }} aria-label={titulo}>
         <header>
           <h2>{titulo}</h2>
-          <button className="btn icono" onClick={onCerrar} aria-label="Cerrar">✕</button>
+          <button className="btn icono" onClick={cerrar} aria-label="Cerrar">✕</button>
         </header>
-        {children}
+        <CierreModal.Provider value={cerrar}>{children}</CierreModal.Provider>
     </dialog>
   );
 }
@@ -113,7 +138,7 @@ export function DialogoAsignar({ orden, recolectores, modo, onListo, onConflicto
         {modo === "reasignar" && orden.estado === "programada" && <p className="tenue">Al reasignar se pierde el horario ({textoFranja(actual?.inicio ?? null, actual?.fin ?? null)}). Tendrás que programar de nuevo.</p>}
         {error && <p className="error" role="alert">{error}</p>}
         <div className="pie-modal">
-          <button type="button" className="btn grande" onClick={onCerrar}>Cancelar</button>
+          <CancelarModal />
           <button className="btn primario grande" disabled={!recolector || enviando || (modo === "reasignar" && recolector === actual?.recolector_id)}>
             {enviando ? "Guardando…" : verbo}
           </button>
@@ -187,7 +212,7 @@ export function DialogoProgramar({ orden, onListo, onConflicto, onCerrar }: Base
         </label>
         {error && <p className="error" role="alert">{error}</p>}
         <div className="pie-modal">
-          <button type="button" className="btn grande" onClick={onCerrar}>Cancelar</button>
+          <CancelarModal />
           <button className="btn primario grande" disabled={!franja || !canal || enviando}>
             {enviando ? "Guardando…" : reprograma ? "Reprogramar" : "Programar"}
           </button>
@@ -272,7 +297,7 @@ export function DialogoCierre({
         </p>
         {error && <p className="error" role="alert">{error}</p>}
         <div className="pie-modal">
-          <button type="button" className="btn grande" onClick={onCerrar}>Cancelar</button>
+          <CancelarModal />
           <button className={`btn grande ${rechazo ? "peligro" : "exito"}`} disabled={(rechazo ? !motivo : !aceptados.length) || enviando}>
             {enviando ? "Guardando…" : rechazo ? "❌ Registrar rechazo" : "✅ Confirmar recogida"}
           </button>

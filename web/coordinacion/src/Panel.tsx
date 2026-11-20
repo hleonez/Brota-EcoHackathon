@@ -272,7 +272,7 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
         />
       )}
 
-      <div className={`toast ${aviso ? "visible" : ""}`} role="status" aria-live="polite" data-motion="notice" data-state={aviso ? "visible" : "hidden"}>
+      <div className={`toast ${aviso ? "visible" : ""}`} role="status" aria-live="polite" data-motion="notice" data-state={aviso ? "open" : "closed"}>
         {aviso}
       </div>
     </>

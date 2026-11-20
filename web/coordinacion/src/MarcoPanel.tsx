@@ -40,6 +40,13 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
   children: ReactNode;
 }) {
   const [abierto, setAbierto] = useState(false);
+  const [movil, setMovil] = useState(() => window.matchMedia("(max-width: 1023px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1023px)");
+    const actualizar = () => setMovil(media.matches);
+    media.addEventListener("change", actualizar);
+    return () => media.removeEventListener("change", actualizar);
+  }, []);
   const id = useId();
   const nav = useRef<HTMLElement>(null);
   const boton = useRef<HTMLButtonElement>(null);
@@ -104,6 +111,7 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
         </button>
       </div>
       <nav id={id} ref={nav} className="panel-nav" aria-label="Secciones del panel"
+        inert={movil && !abierto}
         data-motion="nav" data-state={abierto ? "open" : "closed"}>
         {grupos.map(({ titulo: grupo, enlaces }) => (
           <div className="panel-grupo" key={grupo ?? enlaces[0]?.id}>

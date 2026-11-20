@@ -35,7 +35,7 @@ function Tarjeta({ orden: o, servicios, recientes, onAccion, campo, sinRecolecto
   const reciente = o.estado === "nueva" && recientes.has(o.id);
   return (
     <article className={`tarjeta estado-${o.estado} ${reciente ? "reciente" : ""}`}
-      data-motion={reciente ? "new-item" : undefined} data-state={reciente ? "visible" : undefined}>
+      data-motion={reciente ? "new-item" : undefined} data-state={reciente ? "new" : undefined}>
       <div className="tarjeta-cabeza">
         <span className="codigo">{o.codigo_pasaporte}</span><b>{ETIQUETA_ESTADO[o.estado] ?? o.estado}</b>
         <span className="tenue">{hace(o.created_at)}</span>

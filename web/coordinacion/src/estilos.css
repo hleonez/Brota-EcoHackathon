@@ -116,9 +116,6 @@ input, textarea {
 .tarjeta.estado-nueva { border-left-color: var(--nueva); }
 .tarjeta.estado-asignada { border-left-color: var(--asignada); }
 .tarjeta.estado-programada { border-left-color: var(--exito, var(--marca)); }
-.tarjeta.reciente { animation: llegada 2.4s ease-out 2; }
-@keyframes llegada { 0% { box-shadow: 0 0 0 4px var(--nueva); } 100% { box-shadow: var(--sombra); } }
-@media (prefers-reduced-motion: reduce) { .tarjeta.reciente { animation: none; outline: 3px solid var(--nueva); } }
 .tarjeta-cabeza { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
 .codigo { font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 .ubicacion { font-size: 19px; font-weight: 600; }
@@ -200,7 +197,7 @@ legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 140%); max-width: min(640px, calc(100% - 32px));
   background: var(--tinta); color: var(--fondo); padding: 14px 20px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
-  transition: transform 0.25s ease, visibility 0.25s; z-index: 30; font-size: 16px; visibility: hidden;
+   z-index: 30; font-size: 16px; visibility: hidden;
 }
 .toast.visible { transform: translate(-50%, 0); visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
