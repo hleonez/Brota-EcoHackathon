@@ -1,0 +1,235 @@
+/* EcoConecta Villas de San Pablo — brand foundation.
+   Source: Manual de Identidad Visual, sections 2 (palette), 3 (typography), 5 (interfaces) and 8 (tokens).
+   Only the eight manual colors are used; light tints are mixes of those colors with white, never new hues. */
+
+@font-face {
+  font-family: Inter;
+  src: url("/fuentes/inter-variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: Poppins;
+  src: url("/fuentes/poppins-600.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: Poppins;
+  src: url("/fuentes/poppins-700.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  /* Manual §8 — design variables, verbatim. */
+  --eco-forest: #063b2e;
+  --eco-green: #168a2e;
+  --eco-leaf: #65a90a;
+  --eco-teal: #0a9b70;
+  --eco-yellow: #f6c400;
+  --eco-orange: #f28c00;
+  --eco-charcoal: #202522;
+  --eco-background: #f2f5f2;
+  --eco-white: #ffffff;
+  --font-heading: "Poppins", "Arial", sans-serif;
+  --font-body: "Inter", "Arial", sans-serif;
+
+  /* Tints for surfaces and pills (palette color + white). Text never uses them. */
+  --eco-green-50: color-mix(in srgb, var(--eco-green) 10%, white);
+  --eco-leaf-100: color-mix(in srgb, var(--eco-leaf) 26%, white);
+  --eco-teal-50: color-mix(in srgb, var(--eco-teal) 12%, white);
+  --eco-yellow-100: color-mix(in srgb, var(--eco-yellow) 24%, white);
+  --eco-orange-50: color-mix(in srgb, var(--eco-orange) 14%, white);
+  /* Darker shades for text on tints (AA contrast). */
+  --eco-teal-ink: color-mix(in srgb, var(--eco-teal) 55%, var(--eco-forest));
+  --eco-yellow-ink: color-mix(in srgb, var(--eco-yellow) 30%, var(--eco-forest));
+
+  --eco-muted: #4d5f55;
+  --eco-line: #dde5df;
+  --eco-line-strong: #c4d1c8;
+  --eco-danger: #a3312a;
+  --eco-danger-50: #fdecea;
+
+  --eco-shadow: 0 1px 2px #063b2e14;
+  --eco-shadow-raised: 0 2px 6px #063b2e14, 0 10px 24px #063b2e12;
+  --eco-radius: 20px;
+  --eco-radius-sm: 14px;
+  --eco-radius-lg: 28px;
+  --eco-gutter: clamp(16px, 4vw, 40px);
+
+  /* Aliases consumed by estilos.css and the older views. */
+  --fondo: var(--eco-background);
+  --panel: var(--eco-white);
+  --tinta: var(--eco-charcoal);
+  --tenue: var(--eco-muted);
+  --linea: var(--eco-line);
+  --marca: var(--eco-green);
+  --marca-tinta: var(--eco-white);
+  --marca-suave: var(--eco-green-50);
+  --exito: var(--eco-green);
+  --peligro: var(--eco-danger);
+  --peligro-suave: var(--eco-danger-50);
+  --nueva: var(--eco-teal);
+  --asignada: var(--eco-yellow-ink);
+  --bosque: var(--eco-forest);
+  --verde-eco: var(--eco-green);
+  --amarillo: var(--eco-yellow);
+  --sombra: var(--eco-shadow);
+  --radio: var(--eco-radius);
+  color-scheme: light;
+}
+
+/* ---------- base & typography (manual §3) */
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font-body);
+  font-size: 16px;
+  background: var(--eco-background);
+  color: var(--eco-charcoal);
+  overflow-x: hidden;
+}
+img { max-width: 100%; }
+h1, h2, h3 { font-family: var(--font-heading); color: var(--eco-forest); line-height: 1.2; text-wrap: balance; }
+h1 { font-size: clamp(28px, 3vw, 32px); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: clamp(20px, 2.2vw, 24px); font-weight: 600; }
+h3 { font-size: 18px; font-weight: 600; }
+p { text-wrap: pretty; }
+.codigo, .kpi-n, .cifra, time { font-variant-numeric: tabular-nums; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.icono { flex-shrink: 0; width: 22px; height: 22px; }
+
+/* ---------- buttons (manual §5: primary Verde Eco + white; secondary white + forest border) */
+.btn {
+  min-height: 46px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--eco-forest);
+  background: var(--eco-white);
+  color: var(--eco-forest);
+  font-family: var(--font-body);
+  font-weight: 600;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 120ms ease;
+}
+.btn:active:not(:disabled) { transform: scale(0.98); }
+.btn.grande { min-height: 54px; font-size: 17px; padding: 12px 24px; }
+.btn.primario { background: var(--eco-green); border-color: var(--eco-green); color: var(--eco-white); }
+.btn.exito { border-color: var(--eco-green); color: var(--eco-green); }
+.btn.peligro { border-color: var(--eco-danger); color: var(--eco-danger); }
+.pie-modal .btn.exito { background: var(--eco-green); color: var(--eco-white); }
+.pie-modal .btn.peligro { background: var(--eco-danger); color: var(--eco-white); }
+.btn.icono { border-radius: 999px; }
+@media (hover: hover) {
+  .btn:hover:not(:disabled) { background: var(--eco-green-50); }
+  .btn.primario:hover:not(:disabled) { background: var(--eco-forest); border-color: var(--eco-forest); }
+}
+
+/* ---------- fields */
+input, textarea, select { font: inherit; }
+input, textarea,
+.formulario input:not([type="checkbox"]),
+.formulario select,
+.formulario textarea,
+.campos input,
+.campos select {
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  padding: 11px 14px;
+  border: 1.5px solid var(--eco-line-strong);
+  border-radius: var(--eco-radius-sm);
+  background: var(--eco-white);
+  color: var(--eco-charcoal);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+input[type="checkbox"], input[type="radio"] { width: auto; min-height: 0; }
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--eco-green);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--eco-green) 18%, transparent);
+}
+.formulario textarea { min-height: 96px; }
+.campos, .registros li { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.campos label, .formulario label { display: grid; gap: 6px; font-weight: 600; flex: 1 1 12rem; }
+.formulario { display: grid; gap: 14px; }
+.portal :focus-visible, .login :focus-visible {
+  outline: 3px solid var(--eco-forest);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--eco-teal) 30%, white);
+}
+
+/* ---------- official logo (manual §4): original file, white plate, clear space, min 220px wide */
+.identidad { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.identidad span { display: none; }
+.identidad img, .logo-placa {
+  display: block;
+  box-sizing: content-box;
+  width: 220px;
+  max-width: none;
+  height: auto;
+  padding: 12px 14px;
+  border-radius: var(--eco-radius-sm);
+  background: var(--eco-white);
+  object-fit: contain;
+}
+
+/* ---------- partners (each logo follows its own rules: shown as supplied, no effects) */
+.aliados {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px clamp(14px, 3vw, 32px);
+  padding: 14px var(--eco-gutter);
+  /* White band: partner logos ship on white, so they blend in instead of showing as boxes. */
+  background: var(--eco-white);
+  color: var(--eco-muted);
+  font-size: 14px;
+}
+.aliados img { height: 48px; width: auto; max-width: 140px; object-fit: contain; }
+.aliados strong { color: var(--eco-forest); }
+
+/* ---------- notices (manual §5: color + icon + text) */
+.aviso {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-block: 10px;
+  padding: 12px 16px 12px 42px;
+  border: 1px solid color-mix(in srgb, var(--eco-green) 30%, white);
+  border-left-width: 5px;
+  border-radius: var(--eco-radius-sm);
+  background: var(--eco-green-50);
+  color: var(--eco-forest);
+  overflow-wrap: anywhere;
+}
+/* The icon sits in the left gutter so it never wraps onto its own line. */
+.aviso::before { content: "ℹ"; position: absolute; left: 16px; top: 12px; font-weight: 700; }
+.aviso-error { color: #801e17; background: var(--eco-danger-50); border-color: #e3b1ac; border-left-color: var(--eco-danger); }
+.aviso-error::before { content: "⚠"; }
+.aviso-exito::before { content: "✓"; }
+.toast {
+  bottom: max(20px, env(safe-area-inset-bottom));
+  padding: 14px 20px;
+  border-radius: 18px;
+  background: var(--eco-forest);
+  color: var(--eco-white);
+  box-shadow: var(--eco-shadow-raised);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
