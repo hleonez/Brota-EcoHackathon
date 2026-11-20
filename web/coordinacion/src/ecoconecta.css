@@ -38,23 +38,6 @@
   border-bottom: 1px solid var(--linea);
   gap: 5px;
 }
-.cifra {
-  display: block;
-  font-size: 32px;
-  color: #063b2e;
-}
-.medida {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px 12px;
-  margin: 12px 0;
-}
-.medida progress {
-  grid-column: 1 / -1;
-  width: 100%;
-  accent-color: var(--verde-eco);
-}
 .desliza {
   overflow: auto;
 }
@@ -113,12 +96,6 @@ td {
 }
 
 
-.impacto-cifra { margin: 0; display: grid; gap: 4px; }
-.filtros-impacto { min-inline-size: 0; }
-.filtros-impacto legend { font-weight: 700; color: var(--bosque); padding-inline: 6px; }
-.filtros-impacto .campos > label { min-width: 0; }
-.filtros-impacto .campos > .btn { min-height: 46px; }
-.impacto .desliza { max-width: 100%; }
 .lista-equipo { padding: 0; margin: 0; list-style: none; }
 .lista-equipo li {
   display: flex;
