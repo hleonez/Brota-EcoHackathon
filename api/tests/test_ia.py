@@ -33,6 +33,17 @@ def test_sin_clave_la_ia_no_esta_disponible(client):
     assert r.status_code == 503 and r.json()["error"]["code"] == "IA_NO_DISPONIBLE"
 
 
+def test_capacidades_reflejan_la_clave(client, monkeypatch):
+    data = client.get("/v1/capacidades").json()["data"]
+    assert data["ia_disponible"] is False
+    assert data["modulos"]["ia_mensajes"] is False
+
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "clave-de-prueba")
+    data = client.get("/v1/capacidades").json()["data"]
+    assert data["ia_disponible"] is True
+    assert data["modulos"]["ia_mensajes"] is True
+
+
 def test_texto_solo_propone_codigos_del_catalogo(client, gemini):
     llamadas, respuesta = gemini
     respuesta.update({

@@ -1,6 +1,6 @@
 # Estado de la API EcoConecta
 
-Contrato: `0.3-ecoconecta.2`. Implementación en `feat/implementar-api-update`. Gemini permanece apagado: `POST /v1/ia/interpretar` responde `503` y no llama al proveedor.
+Contrato: `0.3-ecoconecta.2`. Implementación en `feat/implementar-api-update`. Sin clave, `POST /v1/ia/interpretar` responde `503` y no llama al proveedor. Con clave, llama a Gemini.
 
 ## Qué deben enviar el bot y el panel
 

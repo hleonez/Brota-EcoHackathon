@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
+from app.config import get_settings
 from app.core.errores import AppError
 from app.modulos import coordinacion, ia
 from app.modulos.solicitudes import SolicitudIn, _estado_general
@@ -33,6 +34,21 @@ def test_resumen_no_confunde_cancelacion_y_recoleccion(estados, esperado):
 
 
 def test_ia_no_llama_proveedor_no_autorizado(monkeypatch):
-    monkeypatch.setattr(ia, "llamar_gemini", lambda *a: pytest.fail("No debe llamar a Gemini"))
-    with pytest.raises(AppError):
+    llamadas: list[tuple] = []
+
+    def falso(*args):
+        llamadas.append(args)
+        return {"intencion": "pedir", "residuos": []}
+
+    monkeypatch.setattr(ia, "llamar_gemini", falso)
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "")
+    with pytest.raises(AppError) as exc:
         ia.interpretar(None, ia.InterpretarIn(texto="tengo cartón"))
+    assert exc.value.status == 503 and exc.value.code == "IA_NO_DISPONIBLE"
+    assert llamadas == []
+
+    monkeypatch.setattr(get_settings(), "gemini_api_key", "clave-de-prueba")
+    db = SimpleNamespace(execute=lambda *a, **k: SimpleNamespace(scalars=lambda: []))
+    salida = ia.interpretar(db, ia.InterpretarIn(texto="tengo cartón"))
+    assert len(llamadas) == 1
+    assert salida.intencion == "pedir"

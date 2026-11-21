@@ -275,8 +275,8 @@ def post_interpretar(datos: InterpretarIn, actor: Actor = Depends(get_actor), db
 
 
 def proveedor_autorizado() -> bool:
-    """Gemini no está permitido por el reto; solo se habilitará al migrar el adaptador."""
-    return False
+    """Gemini queda habilitado si el proceso arrancó con GEMINI_API_KEY."""
+    return bool(get_settings().gemini_api_key.strip())
 
 
 # --------------------------------------------------------------------------- Papel Inteligente
