@@ -10,7 +10,9 @@ interface Base {
   onCerrar: () => void;
 }
 
-export function Modal({ titulo, onCerrar, children }: { titulo: string; onCerrar: () => void; children: ReactNode }) {
+export function Modal({ titulo, onCerrar, children, bloquearCierre = false }: {
+  titulo: string; onCerrar: () => void; children: ReactNode; bloquearCierre?: boolean;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current!;
@@ -23,10 +25,13 @@ export function Modal({ titulo, onCerrar, children }: { titulo: string; onCerrar
   }, []);
   return (
     <dialog className="modal" ref={ref} data-motion="dialog" data-state="open"
-      onCancel={(e) => { e.preventDefault(); onCerrar(); }} aria-label={titulo}>
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!bloquearCierre) onCerrar();
+      }} aria-label={titulo}>
         <header>
           <h2>{titulo}</h2>
-          <button className="btn icono" onClick={onCerrar} aria-label="Cerrar">✕</button>
+          <button type="button" className="btn icono" onClick={onCerrar} disabled={bloquearCierre} aria-label="Cerrar">✕</button>
         </header>
         {children}
     </dialog>
