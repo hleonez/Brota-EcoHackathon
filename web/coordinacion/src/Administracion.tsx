@@ -394,10 +394,15 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
         </section>
       ) : vista === "Inicio" ? (
         <Portada saludo={`¡Hola, ${cuentaSesion.nombre.trim().split(/\s+/)[0] || cuentaSesion.nombre}!`}
-          texto="Gestiona accesos, unidades y configuración del programa EcoConecta." imagen="/marca/administracion.png">
-          <TarjetaAccion icono="piloto" titulo="Revisar habilitaciones" onClick={() => navegar("Piloto")} />
-          <TarjetaAccion icono="cuentas" titulo="Crear cuenta" tono="turquesa" onClick={() => navegar("Cuentas")} />
-          <TarjetaAccion icono="educación" titulo="Contenido educativo" tono="amarillo" onClick={() => navegar("Educación")} />
+          texto="Aquí puedes configurar la información general de Brota." imagen="/panel/vecina.webp">
+          <TarjetaAccion icono="cuentas" imagen="/panel/personas.webp" titulo="Usuarios"
+            texto="Gestiona las personas que usan la plataforma." onClick={() => navegar("Cuentas")} />
+          <TarjetaAccion icono="materiales" imagen="/panel/reciclaje.webp" titulo="Materiales" tono="lila"
+            texto="Define los tipos de material que se reciben." onClick={() => navegar("Materiales")} />
+          <TarjetaAccion icono="equivalencias" imagen="/panel/monedas.webp" titulo="Equivalencias" tono="amarillo"
+            texto="Convierte baldes y bultos en kilos para valorar cada entrega." onClick={() => navegar("Equivalencias")} />
+          <TarjetaAccion icono="puntos" imagen="/panel/estrella.webp" titulo="Reglas de puntos"
+            texto="Establece cómo se otorgan los puntos a la comunidad." onClick={() => navegar("Puntos")} />
         </Portada>
       ) : vista === "Piloto" && !lista.datos ? (
         <section className="eco-tarjeta">

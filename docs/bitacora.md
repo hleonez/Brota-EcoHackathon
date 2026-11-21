@@ -721,6 +721,29 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
 - **Pendiente:** «Correo o usuario» acepta el usuario; las cuentas no tienen correo todavía. Revocar
   sesiones en el servidor al salir (lista de `jti`) y PIN más largo para cuentas de administración.
 
+## 23 · 20-nov-2026 · Panel en estilo clay (solo en `dev/jeremy`)
+
+- **Pedido:** cambiar el diseño del panel al de la imagen de referencia del usuario (claymorfismo),
+  conservando las opciones del menú. Se empezó por el marco y el inicio de Administración.
+- **Ilustraciones 3D** recortadas de la referencia y sin fondo (`public/panel/`): personas, reciclaje,
+  monedas, estrella, la vecina, las plantas de la barra lateral y las colinas del suelo; el brote del
+  logo para armar «Brota» en blanco.
+- **Marco (todos los perfiles):** barra lateral verde bosque con degradé, logo de Brota en blanco,
+  opción activa en píldora verde clara con relieve y plantas con colinas abajo; barra superior con el
+  área y su icono en círculo blanco, el logo de EcoConecta en píldora blanca (manual: original, 220 px,
+  sobre blanco) y avatar verde; fondo crema con colinas al pie. Estilos en `src/estilo/clay.css`
+  (se carga al final y manda sobre `marco.css` e `inicio.css`).
+- **Saludo y tarjetas (todos los perfiles):** franja menta de forma orgánica con chispas y el personaje
+  del perfil sobre una mancha lila; las acciones salen de la franja y van como tarjetas clay en 2×2
+  (pastel, relieve, separador, botón redondo blanco). `TarjetaAccion` acepta ilustración 3D.
+- **Inicio de Administración:** Usuarios → Cuentas, Materiales, Equivalencias (la tarjeta de monedas;
+  «Precios» no es una sección del panel: la API solo permite crear precios) y Reglas de puntos.
+- **Mi cuenta y Cerrar sesión** salen del menú lateral (como en la referencia) y se llega por el avatar:
+  «Mi cuenta» trae el botón de cerrar sesión. Así el menú cabe sin desplazarse en 1911×975.
+- Sin campana de notificaciones: el panel no tiene ese servicio todavía.
+- Probado: Administración (inicio, Cuentas, Mi cuenta), Coordinación huerta, escritorio 1911×975 y
+  móvil con el menú desplegable.
+
 ---
 
 ## Próximos pasos

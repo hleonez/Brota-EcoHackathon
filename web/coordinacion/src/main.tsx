@@ -11,6 +11,7 @@ import "./estilo/pendientes.css";
 import "./estilo/vistas.css";
 import "./estilo/impacto.css";
 import "./estilo/controles.css";
+import "./estilo/clay.css";
 import "./motion/animaciones.css";
 
 createRoot(document.getElementById("root")!).render(
