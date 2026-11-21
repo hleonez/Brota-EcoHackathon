@@ -89,15 +89,23 @@
   width: calc(291 * var(--u));
   height: auto;
 }
+/* Placa blanca: el manual pide el logo sobre fondo blanco y con área de seguridad. Se apoya sobre
+   el borde superior de la tarjeta (anclada por abajo: si el logo crece a su mínimo de 220 px, la
+   placa sube y no tapa el contenido de la tarjeta). */
 .acceso-ecoconecta {
   position: absolute;
+  z-index: 2;
   left: calc(1190 * var(--u));
-  top: calc(16 * var(--u));
-  width: max(220px, calc(272 * var(--u)));
+  top: calc(134 * var(--u));
+  width: max(220px, calc(236 * var(--u)));
   height: auto;
-  transform: translateX(-50%);
-  padding: 4px 8px; /* área de seguridad alrededor del logo */
+  transform: translate(-50%, -100%);
   box-sizing: content-box;
+  padding: calc(14 * var(--u)) calc(28 * var(--u));
+  border: 1px solid var(--acceso-borde);
+  border-radius: calc(26 * var(--u));
+  background: #ffffff;
+  box-shadow: 0 calc(10 * var(--u)) calc(26 * var(--u)) #6b4a2a1f, 0 1px 3px #6b4a2a14;
 }
 
 /* --- saludo */
@@ -443,7 +451,13 @@
   .acceso-marcas { display: flex; align-items: center; justify-content: space-between; gap: 8px 6px; flex-wrap: wrap; }
   .acceso-logo, .acceso-ecoconecta { position: static; transform: none; }
   .acceso-logo { width: clamp(100px, 28vw, 150px); }
-  .acceso-ecoconecta { width: 220px; padding: 4px 0; }
+}
+/* Teléfonos: las dos marcas no caben en una fila con la placa; cada una va centrada en la suya. */
+@media (max-width: 420px) {
+  .acceso-marcas { justify-content: center; }
+}
+@media (max-width: 1199px), (max-aspect-ratio: 5/4) {
+  .acceso-ecoconecta { width: 220px; padding: 10px 14px; border-radius: 18px; }
   .acceso-saludo, .acceso-tarjeta, .acceso-aliados { position: static; width: auto; }
   .acceso-saludo h1 { font-size: clamp(28px, 8vw, 40px); letter-spacing: -0.5px; white-space: normal; }
   .acceso-saludo h1::after { height: 12px; left: -10px; bottom: 0; }
