@@ -633,8 +633,12 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   (el pesaje sincronizado sale `rechazada` en vez de `aplicada`; corrido solo, falla con
   `KeyError: 'huertero'` porque depende de otra prueba). Viene de `develop`, no de esta mezcla: avisar
   a quien hizo la sincronización offline.
-- La pila de Docker que está corriendo es anterior: hay que relanzar `.\brota.ps1` para aplicar las
-  migraciones nuevas.
+- Se relanzó `.\brota.ps1`: la base quedó en la migración `0013`, la API responde
+  (`/health/ready` 200), el panel abre y `coord-reciclaje` / `coord-huerta` inician sesión. Brisa
+  registró su webhook en Meta y la URL pública responde 200.
+- **Arreglo en `brota.ps1`:** al reiniciar el túnel, el script mostraba la dirección vieja porque el
+  bot aún no había visto la nueva (~1 min). Ahora guarda la URL anterior y espera hasta que Brisa
+  registre una distinta.
 
 ---
 

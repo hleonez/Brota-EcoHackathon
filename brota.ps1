@@ -77,13 +77,17 @@ switch ($Accion) {
         Test-Requisitos
         Write-Host "Levantando Brota (la primera vez tarda unos minutos en construir)..." -ForegroundColor Cyan
         Invoke-Compose @("up", "-d", "--build", "--wait")
+        $bot = Get-Valor "BOT_LOCAL_PORT" "8090"
+        try { $anterior = (Invoke-RestMethod "http://localhost:$bot/health" -TimeoutSec 5).url_publica } catch { $anterior = $null }
         # El túnel gratuito de Cloudflare caduca si queda prendido muchas horas ("Tunnel not found"):
         # se reinicia en cada arranque para tener siempre una dirección nueva; Brisa la registra en Meta.
         Invoke-Compose @("restart", "tunel")
-        $bot = Get-Valor "BOT_LOCAL_PORT" "8090"
-        Write-Host "Esperando a que Brisa se conecte a Meta..." -ForegroundColor Cyan
-        for ($i = 0; $i -lt 30; $i++) {
-            try { if ((Invoke-RestMethod "http://localhost:$bot/health" -TimeoutSec 5).url_publica) { break } } catch { }
+        Write-Host "Esperando a que Brisa registre la dirección nueva en Meta..." -ForegroundColor Cyan
+        for ($i = 0; $i -lt 40; $i++) {
+            try {
+                $url = (Invoke-RestMethod "http://localhost:$bot/health" -TimeoutSec 5).url_publica
+                if ($url -and $url -ne $anterior) { break }
+            } catch { }
             Start-Sleep -Seconds 3
         }
         Show-Estado
