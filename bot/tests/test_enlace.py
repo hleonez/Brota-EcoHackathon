@@ -69,6 +69,23 @@ def test_si_ya_estaba_registrada_no_la_toca():
     assert _correr(meta)["url"] == PUBLICA and meta.registros == []
 
 
+def test_no_le_quita_el_webhook_a_produccion():
+    meta = MetaFalsa(callback_actual="https://brota-bot.onrender.com/webhook")
+    assert _correr(meta)["url"] is None and meta.registros == []
+
+
+def test_reemplaza_produccion_solo_si_se_pide():
+    meta = MetaFalsa(callback_actual="https://brota-bot.onrender.com/webhook")
+    s = ajustes(whatsapp_app_id="977", whatsapp_app_secret="secreto", whatsapp_verify_token="verificar",
+                enlace_reemplazar_fijo=True)
+
+    async def correr():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(meta)) as cli:
+            return await enlace.registrar_webhook(cli, s, f"{PUBLICA}/webhook")
+
+    assert asyncio.run(correr()) is True and len(meta.registros) == 1
+
+
 def test_sin_app_secret_no_intenta_registrar():
     s = ajustes(whatsapp_app_secret="", whatsapp_app_id="977")
 

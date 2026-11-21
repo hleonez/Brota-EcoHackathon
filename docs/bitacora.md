@@ -640,6 +640,24 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   bot aún no había visto la nueva (~1 min). Ahora guarda la URL anterior y espera hasta que Brisa
   registre una distinta.
 
+## 21 · 20-nov-2026 · Revisión de producción y del último develop
+
+- **Producción (revisada a las ~19:50):** API en Render (`brota-api-6bpj.onrender.com`,
+  `/health/ready` = ready, base en Neon), bot en Render (`brota-bot.onrender.com`, tardó 18 s en
+  despertar: plan `free`), panel en Cloudflare Pages (`brota-panel.pages.dev`), compilado contra esa
+  API; el CORS de la API acepta ese origen.
+- **Incidente:** el bot local (`.\brota.ps1`, entrada 20) registró su túnel como webhook de la app en
+  Meta y le quitó los mensajes al bot de Render. Se apagaron el bot y el túnel locales y se devolvió el
+  webhook a `https://brota-bot.onrender.com/webhook` (Meta lo verificó y quedó activo).
+- **Seguro nuevo (`bot/app/enlace.py`):** si Meta ya apunta a una URL fija (no `*.trycloudflare.com`),
+  el túnel local no la reemplaza; el log lo explica. Para hacerlo a propósito:
+  `ENLACE_REEMPLAZAR_FIJO=true`. Dos pruebas nuevas; bot 62/62.
+- **develop `cb3f0c7`** (PR #21, `feat/ui-08-edicion`) mezclado en `dev/jeremy` sin conflictos: el admin
+  desactiva unidades y motivos de rechazo (nunca se borran), no puede desactivar su propia cuenta, listas
+  editables y estilos del panel por vistas. API 76/77 (sigue fallando `test_sync_offline_sin_duplicar`),
+  panel compila. El CI (`infra.yaml`) solo compila el panel y valida Compose: no corre las pruebas de API
+  ni del bot, por eso ese fallo no se ve en GitHub.
+
 ---
 
 ## Próximos pasos

@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # Autoconexión (Docker): URL de métricas del túnel de Cloudflare (p. ej. http://tunel:2000).
     # Si está definida, el bot registra solo su webhook en Meta con la URL pública del túnel.
     tunel_metricas_url: str = ""
+    # Si Meta ya apunta a una URL fija (Render, producción), el túnel local NO la reemplaza,
+    # salvo que esto sea true: así correr Brota en un portátil no le quita los mensajes a producción.
+    enlace_reemplazar_fijo: bool = False
     whatsapp_app_id: str = ""  # opcional: si falta, se obtiene del token
     whatsapp_waba_id: str = ""  # cuenta de WhatsApp Business (plantillas: python -m app.meta)
 

@@ -24,6 +24,7 @@ from app.config import Settings
 log = logging.getLogger("brota.bot.enlace")
 
 OBJETO = "whatsapp_business_account"
+TUNEL_RAPIDO = ".trycloudflare.com"
 
 
 class ErrorEnlace(Exception):
@@ -73,6 +74,13 @@ async def registrar_webhook(cliente: httpx.AsyncClient, s: Settings, callback: s
     campos = {f.get("name") for f in actual.get("fields", []) if f.get("name")} | {"messages"}
     if actual.get("callback_url") == callback and actual.get("active"):
         return False
+    anterior = actual.get("callback_url") or ""
+    if anterior and TUNEL_RAPIDO in callback and TUNEL_RAPIDO not in anterior and not s.enlace_reemplazar_fijo:
+        raise ErrorEnlace(
+            f"Meta envía los mensajes a {anterior} (URL fija, p. ej. producción): el túnel local no la "
+            "reemplaza. Brisa local sigue sin WhatsApp real (usa /lab o el simulador). Para quitársela a "
+            "producción a propósito: ENLACE_REEMPLAZAR_FIJO=true en bot/.env."
+        )
     r = await cliente.post(
         url,
         data={
