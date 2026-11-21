@@ -43,7 +43,11 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: var(--acceso-crema);
+  /* Cielo crema y suelo verde de borde a borde: si la pantalla no es 16:9, el lienzo no la llena
+     y estos tonos continúan la ilustración (sus bordes se desvanecen hacia aquí). */
+  background:
+    linear-gradient(to top, #93c858 0, #a9d473 6%, #c8e5a2 13%, #e6f0cf 20%, #fcf0e600 30%),
+    var(--acceso-crema);
   color: var(--eco-charcoal);
   font-family: var(--font-body, "Inter", "Arial", sans-serif);
 }
@@ -61,6 +65,20 @@
   pointer-events: none;
 }
 .acceso-escena { display: none; }
+/* Pantalla más ancha que 16:9: sobran franjas a los lados -> los bordes de la ilustración se funden. */
+@media (min-aspect-ratio: 1673/941) {
+  .acceso-fondo {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+    mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+  }
+}
+/* Más alta que 16:9: sobra arriba y abajo -> el suelo de la ilustración se funde con el verde. */
+@media (max-aspect-ratio: 1671/941) {
+  .acceso-fondo {
+    -webkit-mask-image: linear-gradient(to bottom, #000 90%, transparent);
+    mask-image: linear-gradient(to bottom, #000 90%, transparent);
+  }
+}
 
 /* --- marcas: Brota a la izquierda; EcoConecta centrado sobre la tarjeta, >=220 px (manual) */
 .acceso-marcas { display: contents; }

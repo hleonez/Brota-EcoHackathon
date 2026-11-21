@@ -698,6 +698,10 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   `test_sync_offline_sin_duplicar`, de develop). En el navegador: error con contraseña errada, ingreso de
   `coord-huerta`, «Recordarme» en localStorage sin contraseña, bloqueo al sexto intento, sesión vencida;
   escritorio 1672×941 y 1366×768, tablet 768 y móvil 375.
+- **Borde a borde:** el lienzo es 16:9; en pantallas más anchas (p. ej. 1911×975) sobraban franjas
+  crema a los lados con la ilustración cortada. Ahora la página tiene cielo crema y suelo verde de
+  borde a borde, y la ilustración desvanece sus orillas (máscara lateral si es más ancha, inferior si
+  es más alta). Probado en 1911×975, 1672×941, 1366×768 y 1280×1000.
 - **Pendiente:** «Correo o usuario» acepta el usuario; las cuentas no tienen correo todavía. Revocar
   sesiones en el servidor al salir (lista de `jti`) y PIN más largo para cuentas de administración.
 
