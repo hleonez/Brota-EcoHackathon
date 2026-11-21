@@ -1,0 +1,124 @@
+/* Login and access states: always centered in the viewport, mobile first.
+   `safe center` keeps the top reachable when the content is taller than the screen. */
+
+.login {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  align-content: safe center;
+  gap: 20px;
+  padding: max(20px, env(safe-area-inset-top)) var(--eco-gutter) max(20px, env(safe-area-inset-bottom));
+  background: var(--eco-background);
+}
+.login-caja {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: clamp(22px, 4vw, 36px);
+  border: 1px solid var(--eco-line);
+  border-radius: var(--eco-radius-lg);
+  background: var(--eco-white);
+  box-shadow: var(--eco-shadow-raised);
+}
+.login-caja h1, .login-caja h2, .login-caja p { margin: 0; }
+.login-caja label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 15px; }
+.login > .login-caja .identidad { align-items: center; }
+
+.acceso { width: 100%; }
+.acceso-tarjeta {
+  width: min(100%, 1000px);
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--eco-line);
+  border-radius: var(--eco-radius-lg);
+  background: var(--eco-white);
+  box-shadow: var(--eco-shadow-raised);
+}
+.acceso-ilustracion {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: clamp(22px, 5vw, 40px) clamp(16px, 5vw, 40px) 20px;
+  text-align: center;
+  background: var(--eco-green-50);
+  color: var(--eco-forest);
+  isolation: isolate;
+  overflow: hidden;
+}
+/* One flat decorative shape, no gradients (manual §6). */
+.acceso-ilustracion::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  right: -90px;
+  top: -90px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: var(--eco-yellow-100);
+}
+.acceso-ilustracion .identidad img { box-shadow: var(--eco-shadow); }
+.acceso-mensaje h1 { margin: 6px 0; }
+.acceso-mensaje p { margin: 0 auto; max-width: 34ch; color: var(--eco-forest); }
+.acceso-personajes { display: none; }
+.acceso .login-caja.acceso-form {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: clamp(22px, 5vw, 44px);
+}
+.acceso-form-cabeza { display: grid; gap: 4px; }
+.acceso-ayuda { font-size: 14px; color: var(--eco-muted); text-align: center; }
+.acceso-comunidad { width: 100%; }
+.acceso > .aliados {
+  width: min(100%, 1000px);
+  padding: 10px 20px;
+  border: 1px solid var(--eco-line);
+  border-radius: var(--eco-radius);
+}
+
+.teclado-pin { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.teclado-pin .btn {
+  min-height: 48px;
+  border: 0;
+  border-radius: var(--eco-radius-sm);
+  background: var(--eco-green-50);
+  color: var(--eco-forest);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.teclado-pin .btn:nth-child(10) { font-size: 14px; }
+/* The on-screen PIN pad is for touch screens; mouse + keyboard devices type the PIN. */
+@media (hover: hover) and (pointer: fine) {
+  .teclado-pin { display: none; }
+}
+
+@media (min-width: 860px) {
+  .acceso-tarjeta { grid-template-columns: 1.05fr 1fr; min-height: min(600px, calc(100dvh - 140px)); }
+  .acceso-ilustracion { align-items: flex-start; text-align: left; padding: 40px 40px 0; }
+  .acceso-mensaje p { margin: 0; }
+  .acceso-personajes {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    width: 100%;
+    margin-top: auto;
+  }
+  .acceso-personajes img { width: 48%; max-width: 230px; height: auto; object-fit: contain; }
+  .acceso-personajes img + img { margin-left: -8%; }
+  .acceso .login-caja.acceso-form { justify-content: center; }
+}
+@media (max-height: 640px) and (min-width: 860px) {
+  .acceso-tarjeta { min-height: 0; }
+  .acceso-personajes img { max-width: 170px; }
+}
+/* Keep the logo at its 220px minimum on the narrowest phones by trimming plate padding. */
+@media (max-width: 359px) {
+  .acceso-ilustracion .identidad img { padding: 10px; }
+}
