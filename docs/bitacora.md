@@ -618,6 +618,24 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   procesados, el resultado y los controles. El control humano ya existe: la IA propone, el vecino
   confirma y la coordinación asigna, programa y cierra.
 
+## 20 · 20-nov-2026 · develop al día en `dev/jeremy`
+
+- `git fetch --all --prune`: llegaron las ramas nuevas del equipo (`feat/ui-01…07`, `feat/Jav/*`,
+  `dev/davz/*`, `codex/david/frontend-animaciones`, `feat/implementar-api-update`, `papel-ojo`,
+  `plan-despliegue`, `Feature/Viaña/frontend`). `main` local avanzó a `8b26ee8` (PR #19, ya contiene
+  `develop`).
+- `develop` (`2d8177d`) se mezcló en `dev/jeremy` sin conflictos: 113 archivos. Trae migraciones
+  0005–0013 (huerteros y recicladores, piloto, cuentas de trabajadores, preferencia horaria y estado
+  `programada`, evidencia de cierre, publicación de contenidos), el rediseño del panel con la marca y
+  Bootstrap (grid), animaciones y el plan de despliegue. Varios faltantes de la entrada 19 ya quedan
+  cubiertos en código.
+- **Pruebas:** bot 60/60; panel compila; API 73/74. Falla `tests/test_recorrido.py::test_sync_offline_sin_duplicar`
+  (el pesaje sincronizado sale `rechazada` en vez de `aplicada`; corrido solo, falla con
+  `KeyError: 'huertero'` porque depende de otra prueba). Viene de `develop`, no de esta mezcla: avisar
+  a quien hizo la sincronización offline.
+- La pila de Docker que está corriendo es anterior: hay que relanzar `.\brota.ps1` para aplicar las
+  migraciones nuevas.
+
 ---
 
 ## Próximos pasos
