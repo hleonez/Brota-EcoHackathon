@@ -6,6 +6,7 @@ import { Avisos } from "./Operacion";
 import type { Accion } from "./Panel";
 import type { Caso, ItemCatalogo, Orden, Recolector } from "./tipos";
 import { claveParaEnvio, diaDe, hace, textoFranja } from "./util";
+import { Paginada } from "./Paginacion";
 
 interface Comunes {
   servicios: Map<string, ItemCatalogo>;
@@ -119,19 +120,31 @@ export function VistaBandeja({ nuevas, asignadas, programadas, ...c }: Comunes &
     <div className="columnas">
       <section>
         <h2>Nuevas <span className="tenue">· por asignar ({nuevas.length})</span></h2>
-        {porLlegada.length ? porLlegada.map((o) => <Tarjeta key={o.id} orden={o} {...c} />) : (
+        {porLlegada.length ? (
+          <Paginada items={porLlegada} porPagina={4} compacta etiqueta="solicitudes nuevas">
+            {(pagina) => pagina.map((o) => <Tarjeta key={o.id} orden={o} {...c} />)}
+          </Paginada>
+        ) : (
           <Vacio texto="No hay solicitudes nuevas. Cuando un vecino pida por WhatsApp, aparece aquí." />
         )}
       </section>
       <section>
         <h2>Asignadas <span className="tenue">· por programar ({asignadas.length})</span></h2>
-        {asignadas.length ? [...asignadas].sort(porFranja).map((o) => <Tarjeta key={o.id} orden={o} {...c} />) : (
+        {asignadas.length ? (
+          <Paginada items={[...asignadas].sort(porFranja)} porPagina={4} compacta etiqueta="órdenes asignadas">
+            {(pagina) => pagina.map((o) => <Tarjeta key={o.id} orden={o} {...c} />)}
+          </Paginada>
+        ) : (
           <Vacio texto="Todas las asignadas ya tienen horario." />
         )}
       </section>
       <section>
         <h2>Programadas <span className="tenue">· por cerrar ({programadas.length})</span></h2>
-        {programadas.length ? [...programadas].sort(porFranja).map((o) => <Tarjeta key={o.id} orden={o} {...c} />) : (
+        {programadas.length ? (
+          <Paginada items={[...programadas].sort(porFranja)} porPagina={4} compacta etiqueta="órdenes programadas">
+            {(pagina) => pagina.map((o) => <Tarjeta key={o.id} orden={o} {...c} />)}
+          </Paginada>
+        ) : (
           <Vacio texto="Nada programado por ahora." />
         )}
       </section>
@@ -146,7 +159,11 @@ export function VistaMisOrdenes({ ordenes, ...c }: Comunes & { ordenes: Orden[] 
   return (
     <section>
       <h2>Mis órdenes <span className="tenue">· por recoger ({abiertas.length})</span></h2>
-      {abiertas.length ? abiertas.map((o) => <Tarjeta key={o.id} orden={o} sinRecolector {...c} />) : (
+      {abiertas.length ? (
+        <Paginada items={abiertas} porPagina={5} etiqueta="mis órdenes">
+          {(pagina) => pagina.map((o) => <Tarjeta key={o.id} orden={o} sinRecolector {...c} />)}
+        </Paginada>
+      ) : (
         <Vacio texto="No tienes órdenes pendientes. Cuando coordinación te asigne una, aparece aquí." />
       )}
       {abiertas.some((o) => o.estado === "asignada") && <p className="tenue">Las órdenes «Asignadas» esperan que coordinación acuerde el horario; podrás cerrarlas cuando estén programadas.</p>}
@@ -246,8 +263,10 @@ export function VistaHistorial({ ordenes, servicios, onAccion }: Comunes & { ord
         ))}
       </div>
       {visibles.length === 0 ? <Vacio texto="Aún no hay órdenes cerradas." /> : (
+        <Paginada key={filtro} items={visibles} porPagina={8} etiqueta="historial">
+        {(pagina) => (
         <ul className="historial">
-          {visibles.map((o) => (
+          {pagina.map((o) => (
             <li key={o.id} className={`estado-${o.estado}`}>
               <Pasaporte orden={o}/>
               <span>{o.ubicacion_operativa}</span>
@@ -262,6 +281,8 @@ export function VistaHistorial({ ordenes, servicios, onAccion }: Comunes & { ord
             </li>
           ))}
         </ul>
+        )}
+        </Paginada>
       )}
     </div>
   );
@@ -284,12 +305,20 @@ export function VistaReportes({
     <div className="columnas">
       <section>
         <h2>Por responder <span className="tenue">({abiertos.length})</span></h2>
-        {abiertos.length ? abiertos.map((c) => <TarjetaCaso key={c.id} caso={c} onRespondido={onRespondido} onConflicto={onConflicto} />)
+        {abiertos.length ? (
+          <Paginada items={abiertos} porPagina={4} compacta etiqueta="reportes por responder">
+            {(pagina) => pagina.map((c) => <TarjetaCaso key={c.id} caso={c} onRespondido={onRespondido} onConflicto={onConflicto} />)}
+          </Paginada>
+        )
           : <Vacio texto="No hay reportes pendientes. Cuando un vecino reporte algo o pida hablar con alguien, aparece aquí." />}
       </section>
       <section>
         <h2>Respondidos <span className="tenue">({atendidos.length})</span></h2>
-        {atendidos.length ? atendidos.map((c) => <TarjetaCaso key={c.id} caso={c} onRespondido={onRespondido} onConflicto={onConflicto} />)
+        {atendidos.length ? (
+          <Paginada items={atendidos} porPagina={4} compacta etiqueta="reportes respondidos">
+            {(pagina) => pagina.map((c) => <TarjetaCaso key={c.id} caso={c} onRespondido={onRespondido} onConflicto={onConflicto} />)}
+          </Paginada>
+        )
           : <Vacio texto="Aún no hay reportes respondidos." />}
       </section>
     </div>

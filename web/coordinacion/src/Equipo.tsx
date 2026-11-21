@@ -4,6 +4,7 @@ import { BotonBaja, Campo, Formulario } from "./Formulario";
 import { Estado, useDatos } from "./portal";
 import type { Orden, Recolector } from "./tipos";
 import { claveNueva } from "./util";
+import { Paginada } from "./Paginacion";
 
 type Huerta = { id: string; nombre: string; gremio_id: string; activo: boolean };
 
@@ -42,8 +43,10 @@ export function EquipoColectivo({ gremioId, organico, recolectores, abiertas, re
           <h2>Integrantes del colectivo</h2>
           {aviso && <Estado tipo={aviso.tipo}>{aviso.texto}</Estado>}
           {recolectores.length ? (
+            <Paginada items={recolectores} porPagina={6} etiqueta="integrantes">
+            {(pagina) => (
             <ul className="lista-equipo">
-              {recolectores.map((r) => {
+              {pagina.map((r) => {
                 const asignaciones = abiertas.filter((o) => o.asignacion?.recolector_id === r.id).length;
                 return (
                   <li key={r.id}>
@@ -61,6 +64,8 @@ export function EquipoColectivo({ gremioId, organico, recolectores, abiertas, re
                 );
               })}
             </ul>
+            )}
+            </Paginada>
           ) : <Estado tipo="vacio">Aún no hay integrantes activos.</Estado>}
         </section>
       </div>

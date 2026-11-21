@@ -767,6 +767,21 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
 - Probado: Cuentas (buscador), Educación, Piloto, Sistema, campana y barrio con Administración y
   Coordinación, escritorio 1911×975 y móvil.
 
+## 25 · 20-nov-2026 · Paginación de listas (solo en `dev/jeremy`)
+
+- **Problema:** las listas mostraban todo lo que devolvía la API y la página crecía sin límite (p. ej.
+  Unidades: 102 filas seguidas).
+- **`src/Paginacion.tsx` (`Paginada`):** muestra un número fijo por página, «1–6 de 102», anterior y
+  siguiente, números con «…» y selector «Ver 6/12/24 por página». Al cambiar de sección, filtro o
+  búsqueda vuelve a la página 1; si el inicio de la lista quedó fuera de la pantalla, sube a él. La
+  versión compacta (columnas angostas) muestra «2 / 5» sin selector.
+- **Dónde:** las 11 secciones de Administración (6 por página), Bandeja (4 por columna), Mis órdenes de
+  recolectores (5), Historial (8), Reportes (4 por columna), Baldes y pesajes (6), Equipo (6) y la guía
+  pública para hogares y negocios (4).
+- Probado en Unidades: siguiente página (7–12 de 102), 24 por página y búsqueda «Torre 3» (1–6 de 20).
+- La API ya limita cada consulta (`limit=100`); si una lista supera 100 registros, hará falta pedir más
+  páginas al servidor (`offset`).
+
 ---
 
 ## Próximos pasos

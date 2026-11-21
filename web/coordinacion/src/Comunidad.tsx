@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Aliados, Espera, Estado, Marca, useDatos } from "./portal";
 import { temasEducativos, type TemaEducativo } from "./temasEducativos";
+import { Paginada } from "./Paginacion";
 
 type Contenido = { id: string; titulo: string; texto: string | null };
 
@@ -43,12 +44,14 @@ export default function Comunidad({ volver }: { volver: () => void }) {
               ) : contenidos.datos.length === 0 ? (
                 <Estado tipo="vacio">Aún no hay contenidos publicados para este tema.</Estado>
               ) : (
-                contenidos.datos.map(({ id, titulo, texto }) => (
-                  <article className="guia-articulo" key={id}>
-                    <h3>{titulo}</h3>
-                    {texto && <p style={{ whiteSpace: "pre-line" }}>{texto}</p>}
-                  </article>
-                ))
+                <Paginada items={contenidos.datos} porPagina={4} etiqueta="contenidos de la guía">
+                  {(pagina) => pagina.map(({ id, titulo, texto }) => (
+                    <article className="guia-articulo" key={id}>
+                      <h3>{titulo}</h3>
+                      {texto && <p style={{ whiteSpace: "pre-line" }}>{texto}</p>}
+                    </article>
+                  ))}
+                </Paginada>
               )}
             </section>
           </div>

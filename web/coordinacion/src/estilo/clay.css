@@ -870,3 +870,77 @@ button.panel-globo-fila:hover { background: #f0f8ea; transform: translateX(2px);
   .sistema-estado li:nth-child(3) { animation-delay: 120ms; }
   .registro-estado.estado-alerta .icono { animation: clay-chispea 2.4s ease-in-out infinite; }
 }
+
+/* ==========================================================================================
+   Paginación (Paginacion.tsx): cada lista muestra un número fijo de registros por página.
+   Global: también la usa la guía pública para hogares y negocios.
+   ========================================================================================== */
+.paginacion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 16px;
+  padding: 10px 14px 10px 20px;
+  border: 1px solid #f0e9e1;
+  border-radius: 999px;
+  background: #fffdfb;
+  box-shadow: 0 6px 14px #4a5c3c0d, inset 0 2px 1px #ffffff;
+  font-family: var(--font-body, "Inter", "Arial", sans-serif);
+}
+.paginacion-resumen { color: #4f5752; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.paginacion-botones { display: flex; align-items: center; gap: 6px; }
+.paginacion-numero, .paginacion-paso {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 6px;
+  border: 1px solid #efe7df;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #13261d;
+  font: 600 15px/1 var(--font-body, "Inter", "Arial", sans-serif);
+  box-shadow: 0 3px 8px #4a5c3c14, inset 0 2px 1px #ffffff;
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms ease, box-shadow 160ms ease;
+}
+.paginacion-paso .icono { width: 20px; height: 20px; stroke-width: 2.6; }
+.paginacion-atras { transform: rotate(180deg); }
+@media (hover: hover) {
+  .paginacion-numero:hover:not([aria-current="page"]), .paginacion-paso:hover:not(:disabled) { transform: translateY(-2px); background: #f0f8ea; }
+}
+.paginacion-numero:active, .paginacion-paso:active:not(:disabled) { transform: scale(.94); }
+.paginacion-numero[aria-current="page"] {
+  border-color: transparent;
+  background: linear-gradient(180deg, #25a045 0%, #168a2e 55%, #10702a 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 14px #10702a40, inset 0 2px 1px #ffffff40;
+}
+.paginacion-paso:disabled { opacity: .4; cursor: default; box-shadow: none; }
+.paginacion-numero:focus-visible, .paginacion-paso:focus-visible { outline: 3px solid #f6c400; outline-offset: 2px; }
+.paginacion-salto { padding: 0 4px; color: #4f5752; font-weight: 600; font-size: 14px; }
+.paginacion-tamano { display: flex; align-items: center; gap: 8px; color: #4f5752; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.paginacion-tamano select {
+  height: 40px;
+  padding: 0 34px 0 14px;
+  border: 1.5px solid #e7ddd3;
+  border-radius: 999px;
+  appearance: none;
+  background: #fcf8f4 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23063b2e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") right 10px center / 16px no-repeat;
+  color: #13261d;
+  font: 600 14px var(--font-body, "Inter", "Arial", sans-serif);
+  cursor: pointer;
+}
+.paginacion-tamano select:focus-visible { outline: 3px solid #f6c400; outline-offset: 2px; }
+/* columnas angostas (bandeja, reportes) */
+.paginacion.es-compacta { padding: 8px 8px 8px 16px; border-radius: 22px; }
+.paginacion.es-compacta .paginacion-numero, .paginacion.es-compacta .paginacion-paso { min-width: 36px; height: 36px; }
+@media (max-width: 640px) {
+  .paginacion { justify-content: center; border-radius: 26px; padding: 12px; }
+  .paginacion-resumen { width: 100%; text-align: center; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .paginada-pagina { animation: clay-vista 320ms cubic-bezier(0.23, 1, 0.32, 1) backwards; }
+}

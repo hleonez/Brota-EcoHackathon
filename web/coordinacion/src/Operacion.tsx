@@ -3,6 +3,7 @@ import { Modal } from "./Dialogos";
 import { Campo, Formulario, Pildoras } from "./Formulario";
 import { Espera, fechaBogota, useDatos } from "./portal";
 import type { ItemCatalogo, Recolector } from "./tipos";
+import { Paginada } from "./Paginacion";
 interface CatalogoPesaje {
   materiales: ItemCatalogo[];
   equivalencias: { id: string; recipiente: string; kg_por_unidad: string }[];
@@ -138,8 +139,10 @@ export function Pesajes({
             ) : lista.datos.length === 0 ? (
               <p>Aún no hay mediciones.</p>
             ) : (
+              <Paginada items={lista.datos} porPagina={6} etiqueta="mediciones">
+              {(pagina) => (
               <ul className="registros">
-                {lista.datos.map((p) => (
+                {pagina.map((p) => (
                   <li key={p.id}>
                     <strong>
                       {p.codigo} · {p.estado}
@@ -162,6 +165,8 @@ export function Pesajes({
                   </li>
                 ))}
               </ul>
+              )}
+              </Paginada>
             )}
           </section>
           {confirmar && (

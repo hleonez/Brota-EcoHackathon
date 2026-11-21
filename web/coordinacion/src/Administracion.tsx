@@ -7,6 +7,7 @@ import { Espera, Estado, fechaBogota, useDatos } from "./portal";
 import { claveNueva } from "./util";
 import { temasEducativos, type TemaEducativo } from "./temasEducativos";
 import type { Catalogo, ItemCatalogo, Recolector } from "./tipos";
+import { Paginada } from "./Paginacion";
 
 type Fila = {
   id: string;
@@ -540,8 +541,10 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                 if (visibles.length === 0)
                   return <div className="vacio-clay"><p>Nada coincide con «{busqueda.trim()}».</p></div>;
                 return (
+                <Paginada key={vista + "|" + consulta} items={visibles} porPagina={6} etiqueta={vista}>
+                {(pagina) => (
                 <ul className="registros registros-clay">
-                  {visibles.map(({ f, titulo, datos }, n) => {
+                  {pagina.map(({ f, titulo, datos }, n) => {
                     const cambio = cambiosEstado[vista];
                     const propia = vista === "Cuentas" && f.nombre === cuentaSesion.nombre;
                     return (
@@ -587,6 +590,8 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                     );
                   })}
                 </ul>
+                )}
+                </Paginada>
                 );
               })()}
             </section>
