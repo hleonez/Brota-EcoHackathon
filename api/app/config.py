@@ -78,6 +78,13 @@ class Settings(BaseSettings):
         return ""
 
     def database_url(self) -> URL:
+        query: dict[str, str] = {}
+        if self.db_sslmode:
+            query["sslmode"] = self.db_sslmode
+        # verify-full busca un root.crt que la imagen slim no trae. libpq usa el
+        # almacén del sistema con sslrootcert=system (también vale PGSSLROOTCERT).
+        if self.db_sslmode in {"verify-ca", "verify-full"}:
+            query["sslrootcert"] = "system"
         return URL.create(
             "postgresql+psycopg",
             username=self.db_user or None,
@@ -85,7 +92,7 @@ class Settings(BaseSettings):
             host=self.db_host,
             port=self.db_port,
             database=self.db_name,
-            query={"sslmode": self.db_sslmode} if self.db_sslmode else {},
+            query=query,
         )
 
 
