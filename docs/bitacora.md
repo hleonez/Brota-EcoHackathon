@@ -708,6 +708,10 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   la pestaña queda pegada encima de la tarjeta.
 - **Icono del navegador:** el brote verde de Brota (`favicon.ico` 16/32/48, `favicon-32.png` y
   `apple-touch-icon.png` 180 px para iPhone), recortado del logo y enlazado en `index.html`.
+- **Cuentas locales:** la base local tenía 4 cuentas; faltaban `huertero-demo` y `reciclador-demo`
+  (la semilla las agregó después y en local no corre sola). Se aplicó `python -m app.seed` dentro del
+  contenedor de la API con el PIN de desarrollo; las 6 cuentas inician sesión. En producción el PIN es
+  el `SEED_PIN` de Render, no el de desarrollo.
 - **Pendiente:** «Correo o usuario» acepta el usuario; las cuentas no tienen correo todavía. Revocar
   sesiones en el servidor al salir (lista de `jti`) y PIN más largo para cuentas de administración.
 
