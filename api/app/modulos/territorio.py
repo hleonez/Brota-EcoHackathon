@@ -168,12 +168,15 @@ def get_torres(
 @router.get("/unidades/gestion")
 def get_unidades_gestion(
     tipo: Literal["hogar", "negocio"] | None = Query(None),
+    incluir_inactivas: bool = Query(False),
     _actor: Actor = Depends(actor_admin),
     pag: Paginacion = Depends(paginacion),
     db: Session = Depends(get_db),
 ):
     """Listado para administración. No reemplaza el directorio de coordinación."""
-    stmt = select(Unidad).where(Unidad.activo.is_(True))
+    stmt = select(Unidad)
+    if not incluir_inactivas:
+        stmt = stmt.where(Unidad.activo.is_(True))
     if tipo is not None:
         stmt = stmt.where(Unidad.tipo == tipo)
     stmt = stmt.order_by(Unidad.torre_id, func.length(Unidad.referencia_local), Unidad.referencia_local, Unidad.id)
@@ -240,6 +243,27 @@ def post_unidad(
         return unidad_resumen(u)
 
     return escritura(request, db, actor, datos, _fn, status=201)
+
+
+class UnidadPatch(Entrada):
+    activo: bool
+
+
+@router.patch("/unidades/{unidad_id}")
+def patch_unidad(
+    unidad_id: uuid.UUID, datos: UnidadPatch, request: Request,
+    actor: Actor = Depends(actor_admin), db: Session = Depends(get_db),
+):
+    """Desactiva o reactiva una unidad. Nunca se borra: solicitudes, pesajes y puntos la referencian."""
+
+    def _fn() -> UnidadResumen:
+        u = obtener(db, Unidad, unidad_id, "unidad", bloquear=True)
+        u.activo = datos.activo
+        db.flush()
+        registrar_evento(db, "unidad_actualizada", actor, datos={"unidad_id": str(u.id), "activo": u.activo})
+        return unidad_resumen(u)
+
+    return escritura(request, db, actor, datos, _fn)
 
 
 # --------------------------------------------------------------------------- catálogos
