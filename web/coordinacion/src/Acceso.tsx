@@ -25,8 +25,10 @@ export function PantallaAcceso({ etiqueta, children }: { etiqueta: string; child
         <img className="acceso-fondo" src="/acceso/fondo.webp" alt="" aria-hidden="true" draggable={false} />
         <header className="acceso-marcas">
           <img className="acceso-logo" src="/acceso/logo-brota.webp" alt="Brota" width={291} height={69} />
-          <img className="acceso-ecoconecta" src="/acceso/ecoconecta.webp" width={660} height={223}
-            alt="EcoConecta Villas de San Pablo" />
+          <div className="acceso-pestana">
+            <img className="acceso-ecoconecta" src="/acceso/ecoconecta.webp" width={660} height={223}
+              alt="EcoConecta Villas de San Pablo" />
+          </div>
         </header>
         <div className="acceso-saludo">
           <h1>Bienvenido a Brota</h1>

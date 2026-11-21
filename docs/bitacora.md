@@ -702,9 +702,12 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   crema a los lados con la ilustración cortada. Ahora la página tiene cielo crema y suelo verde de
   borde a borde, y la ilustración desvanece sus orillas (máscara lateral si es más ancha, inferior si
   es más alta). Probado en 1911×975, 1672×941, 1366×768 y 1280×1000.
-- **Logo de EcoConecta en placa blanca:** a pedido del usuario, el logo va en un rectángulo blanco
-  redondeado (fondo blanco y área de seguridad, como pide el manual) que se apoya sobre el borde
-  superior de la tarjeta. En celular va centrado debajo del logo de Brota.
+- **Logo de EcoConecta como pestaña de la tarjeta:** a pedido del usuario, el logo va en una pestaña
+  que sale de la misma tarjeta (mismo blanco, sin línea de unión, curvas cóncavas a los lados), así
+  cumple el fondo blanco y el área de seguridad del manual. La tarjeta pasó a blanco puro. En celular
+  la pestaña queda pegada encima de la tarjeta.
+- **Icono del navegador:** el brote verde de Brota (`favicon.ico` 16/32/48, `favicon-32.png` y
+  `apple-touch-icon.png` 180 px para iPhone), recortado del logo y enlazado en `index.html`.
 - **Pendiente:** «Correo o usuario» acepta el usuario; las cuentas no tienen correo todavía. Revocar
   sesiones en el servidor al salir (lista de `jti`) y PIN más largo para cuentas de administración.
 

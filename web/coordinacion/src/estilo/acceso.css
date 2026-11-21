@@ -35,7 +35,7 @@
 .acceso {
   --u: calc(min(100vw, 100svh * 1.77683) / 1672);
   --acceso-crema: #fcf0e6;
-  --acceso-tarjeta: #fffcf8;
+  --acceso-tarjeta: #ffffff;
   --acceso-campo: #fcf8f4;
   --acceso-borde: #ede4db;
   --acceso-placeholder: #66706a;
@@ -89,24 +89,41 @@
   width: calc(291 * var(--u));
   height: auto;
 }
-/* Placa blanca: el manual pide el logo sobre fondo blanco y con área de seguridad. Se apoya sobre
-   el borde superior de la tarjeta (anclada por abajo: si el logo crece a su mínimo de 220 px, la
-   placa sube y no tapa el contenido de la tarjeta). */
-.acceso-ecoconecta {
+/* Pestaña de la tarjeta con el logo: el manual pide el logo sobre fondo blanco y con área de
+   seguridad. Es la misma tarjeta (mismo blanco, mismo borde, sin línea de unión) que sube en el
+   centro, con curvas cóncavas donde se junta. Anclada por abajo al borde de la tarjeta: si el logo
+   crece a su mínimo de 220 px, la pestaña crece hacia arriba. */
+.acceso-pestana {
+  --curva: calc(26 * var(--u));
   position: absolute;
   z-index: 2;
   left: calc(1190 * var(--u));
-  top: calc(134 * var(--u));
-  width: max(220px, calc(236 * var(--u)));
-  height: auto;
-  transform: translate(-50%, -100%);
-  box-sizing: content-box;
-  padding: calc(14 * var(--u)) calc(28 * var(--u));
+  top: calc(114 * var(--u) + 2px); /* 2 px dentro de la tarjeta: tapa su borde superior */
+  translate: -50% -100%;
+  padding: calc(16 * var(--u)) calc(30 * var(--u)) calc(8 * var(--u));
   border: 1px solid var(--acceso-borde);
-  border-radius: calc(26 * var(--u));
-  background: #ffffff;
-  box-shadow: 0 calc(10 * var(--u)) calc(26 * var(--u)) #6b4a2a1f, 0 1px 3px #6b4a2a14;
+  border-bottom: 0;
+  border-radius: calc(30 * var(--u)) calc(30 * var(--u)) 0 0;
+  background: var(--acceso-tarjeta);
+  box-shadow: 0 calc(-8 * var(--u)) calc(20 * var(--u)) -4px #6b4a2a14;
 }
+/* curvas cóncavas donde la pestaña se junta con la tarjeta (con la misma línea de borde) */
+.acceso-pestana::before, .acceso-pestana::after {
+  content: "";
+  position: absolute;
+  bottom: 1px; /* termina sobre la línea del borde de la tarjeta */
+  width: var(--curva);
+  height: var(--curva);
+}
+.acceso-pestana::before {
+  left: calc(-1 * var(--curva) - 1px);
+  background: radial-gradient(circle at 0 0, transparent calc(var(--curva) - 1px), var(--acceso-borde) calc(var(--curva) - 1px), var(--acceso-borde) var(--curva), var(--acceso-tarjeta) calc(var(--curva) + 0.5px));
+}
+.acceso-pestana::after {
+  right: calc(-1 * var(--curva) - 1px);
+  background: radial-gradient(circle at 100% 0, transparent calc(var(--curva) - 1px), var(--acceso-borde) calc(var(--curva) - 1px), var(--acceso-borde) var(--curva), var(--acceso-tarjeta) calc(var(--curva) + 0.5px));
+}
+.acceso-ecoconecta { display: block; width: max(220px, calc(236 * var(--u))); height: auto; }
 
 /* --- saludo */
 .acceso-saludo {
@@ -420,7 +437,7 @@
 
 /* --- entrada suave (respeta "reducir movimiento") */
 @media (prefers-reduced-motion: no-preference) {
-  .acceso-tarjeta { animation: acceso-entra .5s cubic-bezier(.2, .8, .2, 1) both; }
+  .acceso-tarjeta, .acceso-pestana { animation: acceso-entra .5s cubic-bezier(.2, .8, .2, 1) both; }
   .acceso-saludo { animation: acceso-entra .5s .08s cubic-bezier(.2, .8, .2, 1) both; }
 }
 @keyframes acceso-entra {
@@ -448,16 +465,19 @@
     gap: 18px;
   }
   .acceso-fondo { display: none; }
-  .acceso-marcas { display: flex; align-items: center; justify-content: space-between; gap: 8px 6px; flex-wrap: wrap; }
-  .acceso-logo, .acceso-ecoconecta { position: static; transform: none; }
+  .acceso-marcas { display: contents; }
+  .acceso-logo { order: 1; align-self: flex-start; position: static; }
+  .acceso-saludo { order: 2; }
+  .acceso-pestana {
+    order: 3; position: static; translate: none; align-self: center;
+    margin-bottom: -20px; /* el gap (18 px) + 2 px dentro de la tarjeta */
+    padding: 12px 18px 6px; border-radius: 20px 20px 0 0; --curva: 16px;
+  }
+  .acceso-tarjeta { order: 4; }
+  .acceso-aliados { order: 5; }
+  .acceso-escena { order: 6; }
   .acceso-logo { width: clamp(100px, 28vw, 150px); }
-}
-/* Teléfonos: las dos marcas no caben en una fila con la placa; cada una va centrada en la suya. */
-@media (max-width: 420px) {
-  .acceso-marcas { justify-content: center; }
-}
-@media (max-width: 1199px), (max-aspect-ratio: 5/4) {
-  .acceso-ecoconecta { width: 220px; padding: 10px 14px; border-radius: 18px; }
+  .acceso-ecoconecta { width: 220px; }
   .acceso-saludo, .acceso-tarjeta, .acceso-aliados { position: static; width: auto; }
   .acceso-saludo h1 { font-size: clamp(28px, 8vw, 40px); letter-spacing: -0.5px; white-space: normal; }
   .acceso-saludo h1::after { height: 12px; left: -10px; bottom: 0; }
