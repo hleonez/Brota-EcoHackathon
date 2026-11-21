@@ -4,6 +4,7 @@ import { DialogoAsignar, DialogoCierre, DialogoProgramar, Modal } from "./Dialog
 import type { Caso, Catalogo, Orden, Recolector, Sesion } from "./tipos";
 import Indicadores from "./Indicadores";
 import { Pesajes } from "./Operacion";
+import type { RevisionFoto } from "./PapelInteligente";
 import { Estado, fechaBogota } from "./portal";
 import { MarcoPanel, enlaceCuenta, nombresPerfil, type CuentaPanel, type GrupoPanel } from "./MarcoPanel";
 import { hace } from "./util";
@@ -31,6 +32,7 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
   const [error, setError] = useState<string | null>(null);
   const [actualizado, setActualizado] = useState<number | null>(null);
   const [vista, setVista] = useState<Vista>("inicio");
+  const revisionesFoto = useRef(new Map<string, RevisionFoto>());
   const [accion, setAccion] = useState<Accion | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [recientes, setRecientes] = useState<Set<string>>(new Set());
@@ -198,7 +200,7 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
             </div>
           </>
         ) : vista === "indicadores" ? <Indicadores gremioId={gremioId} />
-        : vista === "pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores} />
+        : vista === "pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores} revisionesFoto={revisionesFoto.current} />
         : vista === "equipo" ? (
           <section className="eco-tarjeta">
             <h2>Integrantes del colectivo</h2>

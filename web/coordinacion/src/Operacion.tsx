@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "./Dialogos";
 import { Campo, Formulario } from "./Formulario";
-import { Espera, fechaBogota, useDatos } from "./portal";
+import { Espera, Estado, fechaBogota, useDatos } from "./portal";
+import { LeerTiquete, RevisarTiquete, type EdicionFoto, type RevisionFoto } from "./PapelInteligente";
 import type { ItemCatalogo, Recolector } from "./tipos";
 interface CatalogoPesaje {
   materiales: ItemCatalogo[];
+  motivos_rechazo: ItemCatalogo[];
   equivalencias: { id: string; recipiente: string; kg_por_unidad: string }[];
 }
 interface Pesaje {
@@ -12,6 +14,7 @@ interface Pesaje {
   version: number;
   codigo: string;
   estado: string;
+  origen_captura: string;
   fecha_medicion: string;
   recolector_nombre: string | null;
   lineas: { material_nombre: string; kg_aceptados: string }[];
@@ -41,20 +44,73 @@ function DetalleTiquete({ id, volver }: { id: string; volver: () => void }) {
 export function Pesajes({
   gremio,
   recolectores,
+  revisionesFoto,
 }: {
   gremio: string;
   recolectores: Recolector[];
+  revisionesFoto: Map<string, RevisionFoto>;
 }) {
   const c = useDatos<CatalogoPesaje>("/v1/catalogos?gremio_id=" + gremio);
   const lista = useDatos<Pesaje[]>("/v1/pesajes?limit=100&gremio_id=" + gremio);
   const [metodo, setMetodo] = useState("bascula");
   const [tiquete, setTiquete] = useState<string | null>(null);
   const [confirmar, setConfirmar] = useState<Pesaje | null>(null);
+  const [subirFoto, setSubirFoto] = useState(false);
+  const [edicionFoto, setEdicionFoto] = useState<EdicionFoto | null>(null);
+  const [avisoManual, setAvisoManual] = useState("");
+  const zonaManual = useRef<HTMLDivElement>(null);
+  const enfocarManual = useRef(false);
+
+  useEffect(() => {
+    if (!subirFoto && enfocarManual.current) {
+      zonaManual.current?.querySelector<HTMLElement>("form select, form input")?.focus();
+      enfocarManual.current = false;
+    }
+  }, [subirFoto]);
+
+  function irAManual(aviso = "") {
+    enfocarManual.current = true;
+    setAvisoManual(aviso);
+    setSubirFoto(false);
+  }
+
+  function abrirConfirmado(id: string) {
+    revisionesFoto.delete(id);
+    setEdicionFoto(null);
+    setTiquete(id);
+    lista.recargar();
+  }
+
   return (
     <>
       {tiquete && <DetalleTiquete id={tiquete} volver={() => setTiquete(null)} />}
+      {subirFoto && <LeerTiquete gremio={gremio} recolectores={recolectores}
+        cerrar={() => setSubirFoto(false)} manual={irAManual} listo={(datos, vistaPrevia) => {
+          const { dudosos, materiales_descartados, advertencias } = datos;
+          revisionesFoto.set(datos.id, { dudosos, materiales_descartados, advertencias });
+          setSubirFoto(false);
+          setEdicionFoto({ id: datos.id, datos, vistaPrevia });
+          lista.recargar();
+        }} />}
+      {edicionFoto && c.datos && <RevisarTiquete key={edicionFoto.id} edicion={edicionFoto}
+        revision={revisionesFoto.get(edicionFoto.id)}
+        materiales={c.datos.materiales.filter((material) => material.gremio_id === gremio)}
+        motivos={c.datos.motivos_rechazo.filter((motivo) => !motivo.gremio_id || motivo.gremio_id === gremio)}
+        recolectores={recolectores} cerrar={() => setEdicionFoto(null)} actualizado={lista.recargar}
+        confirmado={abrirConfirmado} />}
       <div className="row g-3">
-        <div className="col-12 col-lg-6">
+        <div className="col-12 col-lg-6" ref={zonaManual}>
+          <section className="eco-tarjeta captura-tiquete">
+            <div>
+              <h2>Papel Inteligente</h2>
+              <p>Lee un tiquete de báscula y revisa los datos antes de confirmar.</p>
+            </div>
+            <button className="btn" type="button" disabled={!c.datos} onClick={() => {
+              setAvisoManual("");
+              setSubirFoto(true);
+            }}>Foto del tiquete</button>
+          </section>
+          {avisoManual && <Estado tipo="error">{avisoManual}</Estado>}
           {c.datos ? (
             <Formulario
               titulo="Registrar medición"
@@ -162,7 +218,14 @@ export function Pesajes({
                     </small>
                     {p.estado !== "borrador" && <button className="btn" onClick={() => setTiquete(p.id)}>Ver Tiquete Vivo</button>}
                     {p.estado === "borrador" && (
-                      <button className="btn" onClick={() => setConfirmar(p)}>
+                      <button className="btn" disabled={p.origen_captura === "foto_ia" && !c.datos} onClick={() => {
+                        if (p.origen_captura === "foto_ia") {
+                          setConfirmar(null);
+                          setEdicionFoto({ id: p.id });
+                        } else {
+                          setConfirmar(p);
+                        }
+                      }}>
                         Revisar y confirmar
                       </button>
                     )}
