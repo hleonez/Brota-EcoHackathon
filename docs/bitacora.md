@@ -899,6 +899,31 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   verifican «etiqueta, valor» en celdas seguidas (`_fila`) en vez de «Etiqueta: valor» en una línea.
   Las cifras comprobadas son las mismas. API 115/119 (las 4 de `develop`).
 
+## 30 · 21-nov-2026 · Trazabilidad: tablero Kanban para Administración
+
+- **API** (`api/app/modulos/trazabilidad.py`, solo administración, solo lectura):
+  - `GET /v1/trazabilidad`: órdenes de todos los gremios con un resumen por estado.
+    - Sin fechas trae las abiertas y las cerradas de los últimos 30 días.
+    - Filtros: `gremio_id`, `desde`/`hasta` y `q` (código BR-… o ubicación). Máximo 500 tarjetas.
+    - Arma las tarjetas en pocas consultas, no una por tarjeta.
+  - `GET /v1/trazabilidad/{orden_id}`: la historia de la orden.
+    - Une `evento_dominio` con los avisos de Brisa (`evento_salida`): a quién, qué texto y si llegó.
+    - Incluye las otras órdenes de la misma solicitud, los pesajes y los puntos abonados.
+  - Sin celulares: el contacto va por nombre y los textos pasan por el mismo enmascarado de Actividad.
+  - Asignar, programar y cerrar sigue siendo de la coordinación de cada gremio (RN-01).
+- **Panel** (`Trazabilidad.tsx`, en Seguimiento):
+  - Seis columnas: sin asignar, asignadas, programadas, recogidas, rechazadas y canceladas.
+  - Cada tarjeta muestra código, gremio, ubicación, vecino, qué entrega, recolector y franja.
+  - Alertas: espera recolector más de 24 h, sin hora más de 48 h, visita vencida sin cerrar y aviso
+    de WhatsApp que no llegó.
+  - Ficha en ventana modal: barra de avance, datos y «paso a paso» con los mensajes de Brisa como
+    burbujas.
+  - Se actualiza sola cada 30 s, exporta a CSV y en celular las columnas se deslizan.
+  - El tablero de Inicio tiene el botón «Ver recorrido».
+- `tests/test_trazabilidad.py`: 3 pruebas (recorrido completo, filtros y validación, solo
+  administración). API 118/122 (las mismas 4 de `develop`). Probado en el navegador (escritorio y
+  celular).
+
 ---
 
 ## Próximos pasos

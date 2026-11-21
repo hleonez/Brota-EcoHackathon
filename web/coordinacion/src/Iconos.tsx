@@ -45,6 +45,7 @@ const trazos: Record<string, string> = {
   conversaciones: "M4 5h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3.5V15H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM18 9h2a2 2 0 0 1 2 2v9l-3.5-3H12",
   "liga de torres": "M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4",
   actividad: "M3 12h4l3-8 4 16 3-8h4",
+  trazabilidad: "M4 4h4.5v16H4zM9.75 4h4.5v10h-4.5zM15.5 4H20v7h-4.5z",
   programa: "M4 4h16v16H4zM8 8h8M8 12h8M8 16h5",
   descargar: "M12 4v11M7 10l5 5 5-5M5 20h14",
   tabla: "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14",

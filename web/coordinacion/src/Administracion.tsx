@@ -10,6 +10,7 @@ import { temasEducativos, type TemaEducativo } from "./temasEducativos";
 import type { Catalogo, ItemCatalogo, Recolector } from "./tipos";
 import { Paginada } from "./Paginacion";
 import { Modal } from "./Dialogos";
+import { Trazabilidad } from "./Trazabilidad";
 import { Actividad, Conversaciones, LigaTorres, Participantes, Precios, Programa, Reportes, TableroInicio } from "./AdminExtra";
 
 type Fila = {
@@ -86,7 +87,7 @@ const gruposAdministracion = [
   { enlaces: ["Inicio"] },
   { titulo: "Personas y acceso", enlaces: ["Cuentas", "Participantes", "Registro asistido", "Piloto"] },
   { titulo: "Operación", enlaces: ["Recolectores", "Unidades", "Materiales", "Precios", "Educación"] },
-  { titulo: "Seguimiento", enlaces: ["Conversaciones", "Reportes", "Liga de torres", "Actividad"] },
+  { titulo: "Seguimiento", enlaces: ["Trazabilidad", "Conversaciones", "Reportes", "Liga de torres", "Actividad"] },
   { titulo: "Configuración", enlaces: ["Puntos", "Canjes", "Motivos", "Equivalencias", "Programa", "Sistema"] },
 ] as const;
 type Seccion = (typeof gruposAdministracion)[number]["enlaces"][number];
@@ -97,7 +98,7 @@ const nombresVisibles: Partial<Record<string, string>> = {
 };
 const nombreSeccion = (seccion: string) => nombresVisibles[seccion] ?? seccion;
 /** Secciones con pantalla propia (AdminExtra.tsx), no la lista genérica. */
-const seccionesPropias = new Set<string>(["Canjes", "Participantes", "Precios", "Conversaciones", "Reportes", "Liga de torres", "Actividad", "Programa"]);
+const seccionesPropias = new Set<string>(["Trazabilidad", "Canjes", "Participantes", "Precios", "Conversaciones", "Reportes", "Liga de torres", "Actividad", "Programa"]);
 const secciones = gruposAdministracion.map((grupo) => ({
   titulo: "titulo" in grupo ? grupo.titulo : undefined,
   enlaces: grupo.enlaces.map((seccion) => ({ id: seccion, texto: nombreSeccion(seccion) })),
@@ -117,6 +118,7 @@ const fichasSeccion: Record<Exclude<Seccion, "Inicio">, { imagen?: string; icono
   Sistema: { icono: "sistema", tono: "verde", texto: "Estado del servidor y de los servicios que usa el panel." },
   Participantes: { imagen: "/panel/personas.webp", icono: "participantes", tono: "lila", texto: "Los vecinos y negocios registrados, su unidad y si ya están habilitados en el piloto." },
   Precios: { imagen: "/panel/monedas.webp", icono: "precios", tono: "amarillo", texto: "Cuánto vale un kilo de cada material. Sirve para estimar el valor de lo aprovechado." },
+  Trazabilidad: { imagen: "/panel/reciclaje.webp", icono: "trazabilidad", tono: "turquesa", texto: "Cada solicitud de WhatsApp en su columna: sin asignar, asignada, programada y cerrada. Toca una para ver su historia completa." },
   Conversaciones: { imagen: "/panel/vecina.webp", icono: "conversaciones", tono: "verde", texto: "Lo que cada vecino habló con Brisa por WhatsApp, como en el celular." },
   Reportes: { icono: "reportes", tono: "turquesa", texto: "Indicadores del programa y descargas en CSV para Excel." },
   "Liga de torres": { imagen: "/panel/estrella.webp", icono: "liga de torres", tono: "amarillo", texto: "Qué torre participa más: hogares con entregas válidas sobre el total de viviendas." },
@@ -528,7 +530,8 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
           )}
         </section>
       ) : seccionesPropias.has(vista) ? (
-        vista === "Participantes" ? <Participantes navegar={navegar} />
+        vista === "Trazabilidad" ? <Trazabilidad />
+          : vista === "Participantes" ? <Participantes navegar={navegar} />
           : vista === "Precios" ? <Precios />
           : vista === "Conversaciones" ? <Conversaciones />
           : vista === "Reportes" ? <Reportes />
