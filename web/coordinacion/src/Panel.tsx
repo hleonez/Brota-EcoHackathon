@@ -11,9 +11,10 @@ import { hace, textoFranja } from "./util";
 import { Icono } from "./Iconos";
 import { CanjesReservados } from "./Canjes";
 import { DetalleSolicitud, VistaBandeja, VistaHistorial, VistaMisOrdenes, VistaReportes, VistaRutas } from "./Vistas";
+import { Trazabilidad } from "./Trazabilidad";
 
 const titulos = {
-  inicio: "Inicio", bandeja: "Bandeja", rutas: "Rutas de hoy", historial: "Historial",
+  inicio: "Inicio", bandeja: "Bandeja", trazabilidad: "Recorrido", rutas: "Rutas de hoy", historial: "Historial",
   reportes: "Reportes", pesajes: "Baldes y pesajes", indicadores: "Indicadores", equipo: "Equipo",
   canjes: "Canjes",
 };
@@ -25,8 +26,8 @@ const iconosOrden: Record<string, string> = { nueva: "nuevo", asignada: "cuenta"
 
 const CADA = 15_000; // la bandeja se actualiza sola
 
-export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: CuentaPanel }) {
-  const { rol, salir } = cuenta;
+export default function Panel({ sesion, cuenta: cuentaSesion }: { sesion: Sesion; cuenta: CuentaPanel }) {
+  const { rol, salir } = cuentaSesion;
   const campo = rol === "huertero" || rol === "reciclador"; // el servidor limita `GET /v1/ordenes` a sus órdenes
   const gremioId = sesion.cuenta.permisos.find((p) => p.rol === rol)?.gremio_id ?? null;
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
@@ -120,6 +121,18 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
   const abiertas = [...asignadas, ...programadas];
   const pendientes = campo ? programadas : [...nuevas, ...asignadas];
   const primerNombre = sesion.cuenta.nombre.trim().split(/\s+/)[0] || sesion.cuenta.nombre;
+  // Personajes del diseño: la coordinadora de reciclaje y Viviana, de la huerta.
+  const cuenta: CuentaPanel = campo ? cuentaSesion : {
+    ...cuentaSesion,
+    retrato: organico ? "/panel/retrato-viviana.webp" : "/panel/retrato-coordinadora.webp",
+    cargo: organico ? "Coordinación de la huerta" : "Coordinación de reciclaje",
+  };
+  /** Qué pide el vecino, para la etiqueta de la fila: reciclable u orgánico, según lo declarado. */
+  function tipoMaterial(o: Orden) {
+    const nombres = [...o.residuos.map((r) => r.nombre), ...o.tipo_servicio_ids.map((id) => servicios.get(id)?.nombre ?? "")];
+    const esOrganico = organico || nombres.some((n) => /org[aá]nic|c[aá]scara|comida|huerta/i.test(n));
+    return esOrganico ? { texto: "Orgánico", icono: "materiales", clase: "tipo-organico" } : { texto: "Reciclable", icono: "reciclar", clase: "tipo-reciclable" };
+  }
 
   function listo(o: Orden, texto: string) {
     setOrdenes((l) => l.map((x) => (x.id === o.id ? o : x)));
@@ -160,6 +173,7 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
       { id: "historial", texto: titulos.historial },
     ] : [
       { id: "bandeja", texto: bandeja, cantidad: nuevas.length },
+      { id: "trazabilidad", texto: titulos.trazabilidad },
       { id: "rutas", texto: titulos.rutas, cantidad: rutasHoy },
       { id: "historial", texto: titulos.historial },
       { id: "reportes", texto: titulos.reportes, cantidad: reportesPendientes },
@@ -177,6 +191,7 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
   return (
     <>
       <MarcoPanel grupos={grupos} activo={vista} titulo={titulo} cuenta={cuenta} portada={vista === "inicio"}
+        ilustracionLateral={!campo && !organico ? "/panel/caneca.webp" : undefined}
         contexto={nombreGremio || nombresPerfil[rol]} navegar={(id) => setVista(id as Vista)}
         acciones={vista !== enlaceCuenta.id && (
           <div className="panel-actualizar">
@@ -189,7 +204,9 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
           <Estado tipo="carga">Cargando solicitudes…</Estado>
         ) : vista === "inicio" ? (
           <>
-            <Portada saludo={`¡Hola, ${primerNombre}!`} imagen={`/marca/${imagenColectivo}.png`}
+            <Portada saludo={`¡Hola, ${primerNombre}!`}
+              imagen={campo ? `/marca/${imagenColectivo}.png` : organico ? "/panel/viviana.webp" : "/panel/coordinadora.webp"}
+              lado={!campo && !organico ? "izquierda" : "derecha"} mancha={!campo && !organico ? "verde" : "lila"}
               texto={campo
                 ? `Tus recolecciones con ${nombreGremio || "el colectivo"}, en un solo lugar.`
                 : organico
@@ -200,15 +217,16 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
                 <TarjetaAccion icono="historial" titulo="Ver historial" tono="turquesa"
                   onClick={() => setVista("historial")} />
               </> : organico ? <>
-                <TareaPrincipal icono="pesajes" titulo="Registrar la entrega de baldes orgánicos"
+                <TareaPrincipal icono="pesajes" imagen="/panel/balde.webp" titulo="Registrar la entrega de baldes orgánicos"
                   texto="Lleva el control de los residuos orgánicos que recibe la huerta." />
                 <TarjetaAccion icono="pesajes" titulo="Registrar baldes" tono="solido"
                   onClick={() => setVista("pesajes")} />
-                <TarjetaAccion icono="entregas" titulo="Ver entregas" tono="turquesa"
+                <TarjetaAccion icono="entregas" titulo="Ver entregas" tono="lila"
                   onClick={() => setVista("historial")} />
               </> : <>
-                <TarjetaAccion icono="bandeja" titulo="Ver solicitudes" onClick={() => setVista("bandeja")} />
-                <TarjetaAccion icono="pesajes" titulo="Registrar pesaje" tono="amarillo"
+                <TarjetaAccion icono="bandeja" imagen="/panel/portapapeles.webp" titulo="Ver solicitudes"
+                  onClick={() => setVista("bandeja")} />
+                <TarjetaAccion icono="pesajes" imagen="/panel/bascula.webp" titulo="Registrar pesaje" tono="amarillo"
                   onClick={() => setVista("pesajes")} />
               </>}
             </Portada>
@@ -242,8 +260,13 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
                           <strong>{o.contacto_nombre ?? o.ubicacion_operativa}</strong>
                           <small>{o.contacto_nombre ? o.ubicacion_operativa + " · " : ""}<span className="codigo">{o.codigo_pasaporte}</span></small>
                         </span>
-                        <span className={"pendiente-tipo estado-" + o.estado}>
-                          <Icono nombre={iconosOrden[o.estado] ?? "nuevo"} />{estadosOrden[o.estado] ?? o.estado}
+                        <span className="pendiente-etiquetas">
+                          {!campo && (() => { const m = tipoMaterial(o); return (
+                            <span className={"pendiente-material " + m.clase}><Icono nombre={m.icono} />{m.texto}</span>
+                          ); })()}
+                          <span className={"pendiente-tipo estado-" + o.estado}>
+                            <Icono nombre={iconosOrden[o.estado] ?? "nuevo"} />{estadosOrden[o.estado] ?? o.estado}
+                          </span>
                         </span>
                         <span className="pendiente-hora"><Icono nombre="reloj" />{o.asignacion?.inicio ? textoFranja(o.asignacion.inicio, o.asignacion.fin) : o.preferencia_horaria ?? hace(o.created_at)}</span>
                         <span className="pendiente-ir"><Icono nombre="chevron" /></span>
@@ -255,6 +278,7 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
             </section>
           </>
         ) : vista === "canjes" ? <CanjesReservados />
+        : vista === "trazabilidad" && !campo ? <Trazabilidad gremioFijo={gremioId} />
         : vista === "indicadores" ? <Indicadores gremioId={gremioId} />
         : vista === "pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores} />
         : vista === "equipo" ? (

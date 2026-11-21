@@ -1,7 +1,7 @@
 /**
- * Trazabilidad (Administración): tablero Kanban de las solicitudes de todos los gremios, desde que
- * el vecino escribe a Brisa hasta el cierre, y la historia completa de cada una en una ficha.
- * Solo lectura: asignar, programar y cerrar sigue siendo de la coordinación de cada gremio (RN-01).
+ * Trazabilidad: tablero Kanban de las solicitudes, desde que el vecino escribe a Brisa hasta el
+ * cierre, y la historia completa de cada una en una ficha. Administración ve todos los gremios; cada
+ * coordinación, solo el suyo (`gremioFijo`). Solo lectura: asignar y cerrar sigue en la Bandeja.
  */
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
@@ -31,7 +31,7 @@ type Paso =
   | { clase: "aviso"; tipo: string; ocurrido_at: string; destino: "vecino" | "coordinacion" | "sin_destino"; estado: string; intentos: number; texto: string | null };
 interface Historia extends Tarjeta {
   tipo_generador: string | null;
-  otras_ordenes: { orden_id: string; gremio_nombre: string; estado: string }[];
+  otras_ordenes: { orden_id: string | null; gremio_nombre: string; estado: string }[];
   pesajes: { codigo: string; estado: string; fecha_medicion: string }[];
   puntos_otorgados: string;
   linea: Paso[];
@@ -95,15 +95,16 @@ function alertas(t: Tarjeta, ahora = Date.now()): string[] {
 type Ventana = "activas" | "mes" | "anterior";
 const ventanas: [Ventana, string][] = [["activas", "Activas y últimos 30 días"], ["mes", "Este mes"], ["anterior", "Mes pasado"]];
 
-export function Trazabilidad() {
+export function Trazabilidad({ gremioFijo }: { gremioFijo?: string } = {}) {
   const [ventana, setVentana] = useState<Ventana>("activas");
-  const [gremio, setGremio] = useState("");
+  const [gremioElegido, setGremio] = useState("");
+  const gremio = gremioFijo ?? gremioElegido;
   const [q, setQ] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [abierta, setAbierta] = useState<string | null>(null);
   const [mostrar, setMostrar] = useState<Record<string, number>>({});
   const [ahora, setAhora] = useState(() => Date.now());
-  const cat = useDatos<Catalogo>("/v1/catalogos");
+  const cat = useDatos<Catalogo>(gremioFijo ? "" : "/v1/catalogos");
 
   useEffect(() => {
     const id = setTimeout(() => setBusqueda(q.trim()), 300);
@@ -162,12 +163,12 @@ export function Trazabilidad() {
           <div className="lista-herramientas">
             <label className="buscador-mini"><Icono nombre="buscar" /><span className="visually-hidden">Buscar por código o ubicación</span>
               <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="BR-00012 o Torre 3" /></label>
-            <label className="filtro-select"><span className="visually-hidden">Gremio</span>
+            {!gremioFijo && <label className="filtro-select"><span className="visually-hidden">Gremio</span>
               <select value={gremio} onChange={(e) => setGremio(e.target.value)}>
                 <option value="">Todos los gremios</option>
                 {(cat.datos?.gremios ?? []).map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
               </select>
-            </label>
+            </label>}
             <button type="button" className="btn" onClick={() => { recargar(); setAhora(Date.now()); }}><Icono nombre="historial" />Actualizar</button>
             <BotonDescarga onClick={exportar}>CSV</BotonDescarga>
           </div>
@@ -217,7 +218,9 @@ export function Trazabilidad() {
               );
             })}
           </div>
-          <p className="chat-privacidad"><Icono nombre="piloto" />Solo lectura para Administración: la coordinación de cada gremio asigna y cierra. Sin celulares; el vecino aparece por su nombre.</p>
+          <p className="chat-privacidad"><Icono nombre="piloto" />{gremioFijo
+            ? "Vista de seguimiento: asigna, programa y cierra desde la Bandeja. Sin celulares; el vecino aparece por su nombre."
+            : "Solo lectura para Administración: la coordinación de cada gremio asigna y cierra. Sin celulares; el vecino aparece por su nombre."}</p>
         </>
       )}
       {abierta && <FichaOrden ordenId={abierta} cerrar={() => setAbierta(null)} abrirOtra={setAbierta} />}
@@ -300,11 +303,12 @@ function FichaOrden({ ordenId, cerrar, abrirOtra }: { ordenId: string; cerrar: (
           {d.otras_ordenes.length > 0 && (
             <div className="traza-otras">
               <span>La misma solicitud también va a:</span>
-              {d.otras_ordenes.map((o) => (
-                <button key={o.orden_id} type="button" className="registro-dato traza-otra" onClick={() => abrirOtra(o.orden_id)}>
-                  <span className={"punto tono-" + (columnaDe[o.estado]?.tono ?? "gris")} aria-hidden="true" />{o.gremio_nombre} · {columnaDe[o.estado]?.titulo ?? o.estado}
-                </button>
-              ))}
+              {d.otras_ordenes.map((o) => {
+                const contenido = <><span className={"punto tono-" + (columnaDe[o.estado]?.tono ?? "gris")} aria-hidden="true" />{o.gremio_nombre} · {columnaDe[o.estado]?.titulo ?? o.estado}</>;
+                return o.orden_id ? (
+                  <button key={o.orden_id} type="button" className="registro-dato traza-otra" onClick={() => abrirOtra(o.orden_id!)}>{contenido}</button>
+                ) : <span key={o.gremio_nombre} className="registro-dato">{contenido}</span>;
+              })}
             </div>
           )}
 

@@ -924,6 +924,32 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   administración). API 118/122 (las mismas 4 de `develop`). Probado en el navegador (escritorio y
   celular).
 
+## 31 · 21-nov-2026 · Coordinación con los personajes del diseño y «Recorrido»
+
+- **Ilustraciones** recortadas de los diseños del usuario (fondo quitado con relleno desde el
+  borde) en `web/coordinacion/public/panel/`:
+  - personajes: `coordinadora.webp` y `viviana.webp`;
+  - objetos: `portapapeles.webp`, `bascula.webp`, `balde.webp` y `caneca.webp`;
+  - retratos redondos: `retrato-coordinadora.webp` y `retrato-viviana.webp`.
+- **Inicio de Coordinación de reciclaje:**
+  - la coordinadora va a la izquierda del saludo, sobre una mancha verde;
+  - «Ver solicitudes» lleva el portapapeles y «Registrar pesaje», la báscula;
+  - la caneca reemplaza las plantas al pie de la barra lateral.
+- **Inicio de la Huerta:**
+  - Viviana va a la derecha;
+  - el balde de orgánicos acompaña la «Tarea principal de hoy»;
+  - «Registrar baldes» va en verde y «Ver entregas», en lila.
+- **Encabezado de las dos coordinaciones:** el avatar muestra el retrato, el nombre y el cargo.
+- **Filas pendientes:** etiqueta «Reciclable» u «Orgánico» junto al estado.
+- **Recorrido** (menú Recolección): el tablero Kanban de trazabilidad, ahora también para la
+  coordinación, limitado a su gremio (RN-01).
+  - `GET /v1/trazabilidad` filtra por los gremios que coordina y responde 403 si pide otro gremio.
+  - La historia de una orden ajena responde 404.
+  - En «la misma solicitud también va a…» la otra orden se ve, pero no se abre.
+  - Prueba nueva en `test_trazabilidad.py`: 4/4.
+- Componentes: `Portada` acepta `lado` y `mancha`; `TareaPrincipal` acepta `imagen`; `MarcoPanel`
+  acepta `ilustracionLateral`; `CuentaPanel` acepta `retrato` y `cargo`.
+
 ---
 
 ## Próximos pasos

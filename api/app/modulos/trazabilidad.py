@@ -1,8 +1,9 @@
-"""Trazabilidad para Administración: el tablero (Kanban) de órdenes y la historia de cada una.
+"""Trazabilidad: el tablero (Kanban) de órdenes y la historia de cada una.
 
 Solo lectura. La administración observa el recorrido completo (de la solicitud por WhatsApp al
-cierre) de todos los gremios; asignar, programar y cerrar sigue siendo de la coordinación de cada
-gremio (RN-01). Nunca devuelve celulares: el contacto va por nombre y los textos se limpian.
+cierre) de todos los gremios; cada coordinación ve solo las órdenes de su gremio (RN-01). Asignar,
+programar y cerrar sigue en la bandeja de la coordinación. Nunca devuelve celulares: el contacto va
+por nombre y los textos se limpian.
 """
 
 from __future__ import annotations
@@ -16,8 +17,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.errores import invalido, no_encontrado
-from app.core.seguridad import Actor, actor_admin
+from app.core.errores import invalido, no_encontrado, prohibido
+from app.core.seguridad import Actor, actor_operador
 from app.core.tipos import InstanteEntrada, _utc, ahora
 from app.db import get_db
 from app.models import (
@@ -47,6 +48,15 @@ router = APIRouter(tags=["trazabilidad (administración)"])
 ESTADOS = ("nueva", "asignada", "programada", "recogida", "rechazada", "cancelada")
 DIAS_CERRADAS = 30
 MAXIMO = 500
+
+
+def _alcance(actor: Actor) -> set[uuid.UUID] | None:
+    """None: todos los gremios (administración). Si no, los gremios que coordina."""
+    if actor.es_admin:
+        return None
+    if actor.gremios_coordinados:
+        return actor.gremios_coordinados
+    raise prohibido("El recorrido de las solicitudes es para administración y coordinación.")
 
 
 def _tarjetas(db: Session, ordenes: list[tuple[Orden, Solicitud]]) -> list[dict[str, Any]]:
@@ -159,10 +169,13 @@ def get_tablero(
     desde: InstanteEntrada | None = Query(None, description="Sin fechas: todas las abiertas y las cerradas de los últimos 30 días"),
     hasta: InstanteEntrada | None = Query(None),
     q: str | None = Query(None, max_length=60, description="Código BR-… o ubicación"),
-    _actor: Actor = Depends(actor_admin),
+    actor: Actor = Depends(actor_operador),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Tablero de órdenes de todos los gremios, agrupable por estado."""
+    """Tablero de órdenes (todos los gremios para administración; el propio para coordinación)."""
+    alcance = _alcance(actor)
+    if gremio_id is not None and alcance is not None and gremio_id not in alcance:
+        raise prohibido("Fuera de tu gremio.")
     if desde and hasta and hasta <= desde:
         raise invalido({"hasta": "Debe ser posterior a desde"})
     condiciones: list[Any] = []
@@ -175,6 +188,8 @@ def get_tablero(
         condiciones.append(or_(Orden.estado.in_(ABIERTAS), Orden.updated_at >= ahora() - timedelta(days=DIAS_CERRADAS)))
     if gremio_id:
         condiciones.append(Orden.gremio_id == gremio_id)
+    elif alcance is not None:
+        condiciones.append(Orden.gremio_id.in_(alcance))
     if q and q.strip():
         patron = f"%{q.strip()}%"
         condiciones.append(or_(Solicitud.codigo_pasaporte.ilike(patron), Solicitud.ubicacion_operativa.ilike(patron)))
@@ -214,12 +229,13 @@ def _destino(a: EventoSalida) -> _DESTINO:
 
 
 @router.get("/trazabilidad/{orden_id}")
-def get_historia(orden_id: uuid.UUID, _actor: Actor = Depends(actor_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+def get_historia(orden_id: uuid.UUID, actor: Actor = Depends(actor_operador), db: Session = Depends(get_db)) -> dict[str, Any]:
     """Historia completa de una orden: eventos, avisos de Brisa, pesajes y puntos."""
+    alcance = _alcance(actor)
     fila = db.execute(
         select(Orden, Solicitud).join(Solicitud, Solicitud.id == Orden.solicitud_id).where(Orden.id == orden_id)
     ).first()
-    if fila is None:
+    if fila is None or (alcance is not None and fila[0].gremio_id not in alcance):
         raise no_encontrado("orden")
     o, s = fila
     tarjeta = _tarjetas(db, [(o, s)])[0]
@@ -266,10 +282,11 @@ def get_historia(orden_id: uuid.UUID, _actor: Actor = Depends(actor_admin), db: 
     # Lo de una misma transacción comparte la hora exacta: el empate sigue el orden del flujo.
     linea.sort(key=lambda x: (x["ocurrido_at"], x["clase"] == "aviso", _PASO.get(x["tipo"], 50)))
 
+    # La coordinación ve que la solicitud también va a otro gremio, pero no abre esa orden.
     otras = [
-        {"orden_id": str(oid), "gremio_nombre": nombre, "estado": estado}
-        for oid, nombre, estado in db.execute(
-            select(Orden.id, Gremio.nombre, Orden.estado).join(Gremio, Gremio.id == Orden.gremio_id)
+        {"orden_id": str(oid) if alcance is None or g in alcance else None, "gremio_nombre": nombre, "estado": estado}
+        for oid, g, nombre, estado in db.execute(
+            select(Orden.id, Orden.gremio_id, Gremio.nombre, Orden.estado).join(Gremio, Gremio.id == Orden.gremio_id)
             .where(Orden.solicitud_id == s.id, Orden.id != o.id)
         )
     ]

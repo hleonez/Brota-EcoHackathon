@@ -96,8 +96,23 @@ def test_filtros_y_validacion(client, operador, catalogo):
     assert client.get("/v1/trazabilidad/00000000-0000-0000-0000-000000000000", headers=admin).status_code == 404
 
 
-def test_solo_administracion(client, operador):
-    for usuario in ("coord-reciclaje", "coord-huerta", "fundacion", "reciclador-demo"):
+def test_coordinacion_ve_solo_su_gremio(client, operador, catalogo):
+    reciclaje = catalogo["gremios:ASORESCATAR"]
+    r = client.get("/v1/trazabilidad", headers=operador("coord-reciclaje", False))
+    assert r.status_code == 200, r.text
+    tarjetas = r.json()["data"]["tarjetas"]
+    assert tarjetas and all(t["gremio_id"] == reciclaje for t in tarjetas)
+    h = client.get(f"/v1/trazabilidad/{tarjetas[0]['orden_id']}", headers=operador("coord-reciclaje", False))
+    assert h.status_code == 200
+    assert all(o["orden_id"] is None for o in h.json()["data"]["otras_ordenes"])
+    # La huerta no ve la orden del reciclaje ni puede pedir otro gremio.
+    assert client.get(f"/v1/trazabilidad/{tarjetas[0]['orden_id']}", headers=operador("coord-huerta", False)).status_code == 404
+    r = client.get("/v1/trazabilidad", params={"gremio_id": reciclaje}, headers=operador("coord-huerta", False))
+    assert r.status_code == 403
+
+
+def test_sin_permiso(client, operador):
+    for usuario in ("fundacion", "reciclador-demo"):
         assert client.get("/v1/trazabilidad", headers=operador(usuario, False)).status_code == 403
     assert client.get("/v1/trazabilidad", headers=BOT).status_code in (401, 403)
     assert client.get("/v1/trazabilidad").status_code == 401
