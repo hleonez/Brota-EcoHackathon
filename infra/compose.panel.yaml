@@ -6,6 +6,7 @@ services:
     build:
       context: ../web/coordinacion
       args:
+        VITE_WHATSAPP_NUMERO: "${VITE_WHATSAPP_NUMERO:-}"
         VITE_API_URL: "http://localhost:${API_LOCAL_PORT:-8000}"
     ports:
       - target: 80

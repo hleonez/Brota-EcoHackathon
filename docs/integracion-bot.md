@@ -228,13 +228,15 @@ Recorrido en el bot (`bot/app/coordinacion.py`):
 | --- | --- | --- |
 | Aviso `nueva_orden` | «🆕 Nueva solicitud BR-00002 · Torre 2 · Apto 403» + [🚲 Asignar] [📋 Ver bandeja] | — |
 | Asignar | Lista de recolectores (con teléfono) → lista de franjas | `GET /v1/recolectores`, `GET /v1/ordenes/{id}` |
-| Franja elegida | «✅ Asignada a Rosa · 📞 Llama a Rosa: 300…» + [✅ Recogida] [❌ Rechazada] | `POST /v1/ordenes/{id}/asignacion` (`forma_aviso: llamada`) |
-| Recogida / Rechazada + motivo | Confirmación; el vecino recibe puntos o el consejo | `POST /v1/ordenes/{id}/resultado` |
-| «BANDEJA» / «ASIGNADAS» | Listas de órdenes nuevas o por cerrar | `GET /v1/ordenes?estado=` |
+| Asignar sin horario | «✅ Asignada a Rosa · 📞 Llama a Rosa: 300…». La orden queda pendiente de programar. | `POST /v1/ordenes/{id}/asignacion` |
+| Programar | Elegir la franja y confirmar cómo se acordó con el vecino. A continuación aparecen las opciones para reportar el resultado. | `POST /v1/ordenes/{id}/asignacion` con `inicio`, `fin` y `acuerdo_canal` |
+| Recogida | Enviar los códigos de los materiales recogidos, separados por comas, con el comando que muestra el bot. | `POST /v1/ordenes/{id}/resultado` con los UUID de los materiales confirmados |
+| Rechazada | Elegir el motivo; la API registra el rechazo sin materiales confirmados. | `POST /v1/ordenes/{id}/resultado` |
+| BANDEJA / ASIGNADAS / PROGRAMADAS | Órdenes nuevas, pendientes de programar o pendientes de cerrar. | `GET /v1/ordenes?estado=` |
 
 Los botones llevan la orden en su `id` (`C_ASG:<orden>`, `C_OK:<orden>`…), así el flujo no depende
 de memoria. Si la orden cambió (otra persona la atendió), la API responde `409` y Brisa lo explica.
-El recolector no usa el sistema: la coordinadora lo llama con el teléfono que muestra Brisa.
+La coordinadora puede llamar al recolector con el teléfono que muestra Brisa.
 
 ## 5. Probar sin WhatsApp
 

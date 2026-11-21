@@ -16,6 +16,7 @@ from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy import and_, case, distinct, func, or_, select, union
 from sqlalchemy.orm import Session
 
@@ -37,11 +38,12 @@ from app.models import (
     Torre,
     Unidad,
 )
+from app.modulos.certificado import generar_certificado
 from app.modulos.comun import obtener
 
 router = APIRouter(tags=["liga y reportes"])
 
-ESTADOS = ("nueva", "asignada", "recogida", "rechazada")
+ESTADOS = ("nueva", "asignada", "programada", "recogida", "rechazada", "cancelada")
 FORMULA_LIGA = "participacion_hogares_v1"
 
 
@@ -361,5 +363,32 @@ def get_liga(
             "cobertura": "kg solo de pesajes con torre de origen comprobada",
         }
     }
+
+
+@router.get(
+    "/reportes/certificado",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}, "description": "PDF del Certificado Verde"}},
+)
+def get_certificado(
+    conjunto_id: uuid.UUID = Query(...),
+    mes: str = Query(..., description="Mes calendario AAAA-MM"),
+    actor: Actor = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> Response:
+    """PDF mensual por conjunto. Apoyo documental: no determina la tarifa ni sustituye el aforo.
+
+    Solo Fundación o administración. La coordinación no ve el cruce de gremios de este informe.
+    """
+    if not (actor.es_fundacion or actor.es_admin):
+        raise prohibido(
+            "El Certificado Verde reúne todos los gremios del conjunto. Lo emite la Fundación o la administración."
+        )
+    contenido, nombre = generar_certificado(db, conjunto_id, mes)
+    return Response(
+        content=contenido,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+    )
 
 

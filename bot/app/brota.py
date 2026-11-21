@@ -94,6 +94,9 @@ class Brota:
     async def puntos(self, celular: str) -> dict[str, Any]:
         return (await self._pedir("GET", "/v1/me/puntos", celular))["data"]
 
+    async def movimientos_puntos(self, celular: str) -> list[dict[str, Any]]:
+        return (await self._pedir("GET", "/v1/me/movimientos-puntos", celular))["data"]
+
     async def solicitudes_abiertas(self, celular: str) -> list[dict[str, Any]]:
         return (await self._pedir("GET", "/v1/solicitudes", celular, params={"abiertas": "true", "limit": 5}))["data"]
 
@@ -133,13 +136,25 @@ class Brota:
 
     async def crear_solicitud(
         self, celular: str, clave: str, tipo_servicio_ids: list[str] | None = None,
-        residuos: list[dict[str, Any]] | None = None,
+        residuos: list[dict[str, Any]] | None = None, *,
+        preferencia_sin_restriccion: bool = False,
+        preferencia_inicio: str | None = None,
+        preferencia_fin: str | None = None,
+        unidad_id: str | None = None,
     ) -> dict[str, Any]:
+        """Una sola alternativa de horario: la bandera, o inicio y fin. Nunca las dos."""
         cuerpo: dict[str, Any] = {}
         if tipo_servicio_ids:
             cuerpo["tipo_servicio_ids"] = tipo_servicio_ids
         if residuos:
             cuerpo["residuos"] = residuos
+        if preferencia_sin_restriccion:
+            cuerpo["preferencia_sin_restriccion"] = True
+        elif preferencia_inicio and preferencia_fin:
+            cuerpo["preferencia_inicio"] = preferencia_inicio
+            cuerpo["preferencia_fin"] = preferencia_fin
+        if unidad_id:
+            cuerpo["unidad_id"] = unidad_id
         return (await self._pedir("POST", "/v1/solicitudes", celular, clave=clave, json=cuerpo))["data"]
 
     async def crear_caso(
@@ -175,21 +190,23 @@ class Brota:
 
     async def asignar(
         self, celular: str, clave: str, orden_id: str, version: int, recolector_id: str,
-        inicio: str | None, fin: str | None,
+        inicio: str | None, fin: str | None, acuerdo_canal: str | None,
     ) -> dict[str, Any]:
         cuerpo: dict[str, Any] = {"version_esperada": version, "recolector_id": recolector_id, "forma_aviso": "llamada"}
         if inicio and fin:
-            cuerpo |= {"inicio": inicio, "fin": fin}
+            cuerpo |= {"inicio": inicio, "fin": fin, "acuerdo_canal": acuerdo_canal}
         return (await self._pedir("POST", f"/v1/ordenes/{orden_id}/asignacion", celular, clave=clave, json=cuerpo))[
             "data"
         ]
 
     async def registrar_resultado(
-        self, celular: str, clave: str, orden_id: str, version: int, resultado: str, motivo_id: str | None = None,
+        self, celular: str, clave: str, orden_id: str, version: int, resultado: str,
+        materiales_confirmados: list[str], motivo_id: str | None = None,
     ) -> dict[str, Any]:
         cuerpo: dict[str, Any] = {
             "version_esperada": version,
             "resultado": resultado,
+            "materiales_confirmados": materiales_confirmados,
             "ocurrido_at": datetime.now(timezone.utc).isoformat(),
         }
         if motivo_id:

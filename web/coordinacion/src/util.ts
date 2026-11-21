@@ -4,10 +4,10 @@ import type { Sesion } from "./tipos";
 
 const CLAVE_SESION = "brota.coordinacion.sesion";
 
-export function leerSesion(): Sesion | null {
+export function leerSesion(incluirVencida = false): Sesion | null {
   try {
     const s = JSON.parse(sessionStorage.getItem(CLAVE_SESION) ?? "null") as Sesion | null;
-    return s && s.expira > Date.now() ? s : null;
+    return s && (incluirVencida || s.expira > Date.now()) ? s : null;
   } catch {
     return null;
   }

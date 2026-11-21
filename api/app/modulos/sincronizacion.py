@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.core.errores import AppError
+from app.core.errores import AppError, prohibido
 from app.core.idempotencia import ejecutar_idempotente
 from app.core.seguridad import Actor, actor_operador
 from app.core.tipos import Entrada, InstanteEntrada, ahora
@@ -34,6 +34,7 @@ Accion = Literal[
     "confirmar_pesaje",
     "registrar_entrega_directa",
     "asignar_orden",
+    "programar_orden",
     "registrar_resultado_orden",
 ]
 
@@ -55,6 +56,7 @@ class SyncIn(Entrada):
 
 # accion -> (modelo de datos, crea recurso, función)
 _ACCIONES: dict[str, tuple[type[BaseModel], bool, Callable[..., BaseModel]]] = {
+    "programar_orden": (coordinacion.ProgramacionIn, False, lambda db, a, rid, d: coordinacion.programar(db, a, rid, d)),
     "crear_pesaje": (pesajes.PesajeIn, True, lambda db, a, rid, d: pesajes.crear_pesaje(db, a, d)),
     "registrar_entrega_directa": (
         pesajes.EntregaDirectaIn, True, lambda db, a, rid, d: pesajes.registrar_entrega_directa(db, a, d)
@@ -112,6 +114,8 @@ def _resolver(db: Session, ambito: str, valor: str | None, locales: dict[str, uu
 
 
 def sincronizar(db: Session, actor: Actor, lote: SyncIn) -> dict[str, Any]:
+    if not actor.gremios_coordinados and actor.trabajador_id is None:
+        raise prohibido("La sincronización operativa es para coordinación o para el trabajador asignado.")
     s = get_settings()
     if len(lote.operaciones) > s.sync_max_operaciones:
         raise AppError(400, "BAD_REQUEST", f"Máximo {s.sync_max_operaciones} operaciones por lote.")
@@ -135,6 +139,8 @@ def sincronizar(db: Session, actor: Actor, lote: SyncIn) -> dict[str, Any]:
         else:
             modelo, crea, fn = _ACCIONES[op.accion]
             try:
+                if actor.trabajador_id is not None and not actor.gremios_coordinados and op.accion != "registrar_resultado_orden":
+                    raise prohibido("El trabajador solo registra el resultado de su asignación.")
                 datos = TypeAdapter(modelo).validate_python(op.datos)
                 recurso = None if crea else _resolver(db, ambito, op.recurso_id, locales)
                 if not crea and recurso is None:

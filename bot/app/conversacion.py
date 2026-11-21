@@ -105,6 +105,35 @@ def _numero(d: str | None) -> str:
     return d.rstrip("0").rstrip(".") if "." in d else d
 
 
+def mensaje_puntos(saldo: str, movimientos: list[dict[str, Any]]) -> str:
+    """Saldo y, si hay movimientos, el detalle_calculo que ya guardó la API. Brisa no recalcula."""
+    texto = T.PUNTOS.format(saldo=_numero(saldo))
+    lineas = [x for x in (_linea_detalle(m.get("detalle_calculo")) for m in movimientos) if x]
+    if lineas:
+        texto += "\n\n" + "\n\n".join(lineas)
+    return texto
+
+
+def _linea_detalle(detalle: Any) -> str | None:
+    if not isinstance(detalle, dict):
+        return None
+    modalidad = detalle.get("modalidad")
+    por_entrega = detalle.get("puntos_por_entrega")
+    total = detalle.get("total")
+    if modalidad is None or por_entrega is None or total is None:
+        nota = detalle.get("nota")
+        return str(nota) if nota else None
+    linea = T.PUNTOS_DETALLE.format(
+        modalidad=modalidad,
+        puntos_por_entrega=_numero(str(por_entrega)),
+        total=_numero(str(total)),
+    )
+    nota = detalle.get("nota")
+    if nota:
+        linea = f"{linea}\n{nota}"
+    return linea
+
+
 class Brisa:
     def __init__(self, wa: WhatsApp, api: Brota, memoria: Memoria | None = None) -> None:
         self.wa = wa
@@ -249,8 +278,7 @@ class Brisa:
         elif opcion == "M_ESTADO" or comando in ("estado", "mis solicitudes"):
             await self._estado(m.de)
         elif opcion == "M_PUNTOS" or comando in ("puntos", "mis puntos"):
-            p = await self.api.puntos(m.de)
-            await self.wa.texto(m.de, T.PUNTOS.format(saldo=_numero(p["saldo"])))
+            await self._puntos(m.de)
         elif opcion == "M_LIGA" or comando == "liga":
             await self._liga(m.de, me)
         elif opcion == "M_QUEJA":
@@ -368,8 +396,7 @@ class Brisa:
         if intencion == "estado":
             await self._estado(m.de)
         elif intencion == "puntos":
-            p = await self.api.puntos(m.de)
-            await self.wa.texto(m.de, T.PUNTOS.format(saldo=_numero(p["saldo"])))
+            await self._puntos(m.de)
         elif intencion == "liga":
             await self._liga(m.de, me)
         elif intencion == "cancelar":
@@ -408,6 +435,11 @@ class Brisa:
             n = len(b.items)
             filas.insert(0, Fila("P_SEGUIR", "📝 Seguir mi pedido", f"{n} material{'es' if n != 1 else ''} sin enviar"))
         await self.wa.lista(celular, cuerpo, "Ver opciones", "Brisa", filas, T.MENU_LISTA_PIE)
+
+    async def _puntos(self, celular: str) -> None:
+        p = await self.api.puntos(celular)
+        movimientos = await self.api.movimientos_puntos(celular)
+        await self.wa.texto(celular, mensaje_puntos(p["saldo"], movimientos))
 
     async def _estado(self, celular: str) -> None:
         abiertas = await self.api.solicitudes_abiertas(celular)

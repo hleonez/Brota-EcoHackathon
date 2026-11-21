@@ -1,29 +1,120 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api, cuandoExpire, ErrorApi, fijarToken } from "./api";
+import Indicadores from "./Indicadores";
+import Administracion from "./Administracion";
+import Comunidad from "./Comunidad";
+import { Aliados, Marca } from "./portal";
 import Panel from "./Panel";
+import { MarcoPanel, enlaceCuenta, nombresPerfil, type CuentaPanel } from "./MarcoPanel";
 import type { Sesion } from "./tipos";
 import { guardarSesion, leerSesion } from "./util";
 
 export default function App() {
-  const [sesion, setSesion] = useState<Sesion | null>(leerSesion);
+  const [sesion, setSesion] = useState<Sesion | null>(() => leerSesion());
+  const [comunidad, setComunidad] = useState(false);
+  const [perfil, setPerfil] = useState("");
+  const [pagina, setPagina] = useState<"vencida" | null>(() => {
+    const guardada = leerSesion(true);
+    return guardada && guardada.expira <= Date.now() ? "vencida" : null;
+  });
   fijarToken(sesion?.token ?? null); // antes de que el panel pida datos
 
   useEffect(() => {
     cuandoExpire(() => {
       guardarSesion(null);
       setSesion(null);
+      setPagina("vencida");
     });
   }, []);
 
   const cambiar = (s: Sesion | null) => {
+    setPerfil("");
+    setPagina(null);
     guardarSesion(s);
     setSesion(s);
   };
 
-  return sesion ? <Panel sesion={sesion} onSalir={() => cambiar(null)} /> : <Login onEntrar={cambiar} />;
+  useEffect(() => {
+    if (!sesion) return;
+    const timer = window.setTimeout(() => {
+      guardarSesion(null);
+      setSesion(null);
+      setPagina("vencida");
+    }, Math.max(0, sesion.expira - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [sesion]);
+
+  if (!sesion && pagina === "vencida")
+    return <EstadoAcceso titulo="Sesión vencida" accion="Volver a entrar" volver={() => cambiar(null)}>
+      Vuelve a ingresar con tu usuario y PIN.
+    </EstadoAcceso>;
+  if (!sesion)
+    return comunidad ? (
+      <Comunidad volver={() => setComunidad(false)} />
+    ) : (
+      <Login onEntrar={cambiar} comunidad={() => setComunidad(true)} />
+    );
+  const roles = [...new Set(sesion.cuenta.permisos.map((p) => p.rol))];
+  const actual = roles.includes(perfil) ? perfil : roles[0];
+  const salir = () => cambiar(null);
+  const nombre = sesion.cuenta.nombre;
+  if (!actual || !["admin", "coordinacion", "fundacion", "huertero", "reciclador"].includes(actual))
+    return <EstadoAcceso titulo="Acceso restringido" accion="Volver al inicio" volver={salir}>
+      Consulta con administración para habilitar el acceso de tu cuenta.
+    </EstadoAcceso>;
+  const cuenta: CuentaPanel = {
+    nombre,
+    rol: actual,
+    salir,
+    cambioPerfil: roles.length > 1 && (
+      <label className="panel-perfil">
+        Trabajar como
+        <select value={actual} onChange={(e) => setPerfil(e.target.value)}>
+          {roles.map((r) => <option value={r} key={r}>{nombresPerfil[r] ?? r}</option>)}
+        </select>
+      </label>
+    ),
+  };
+  if (actual === "admin") return <Administracion cuenta={cuenta} />;
+  if (actual === "fundacion") return <Fundacion cuenta={cuenta} />;
+  return <Panel key={actual} sesion={sesion} cuenta={cuenta} />;
 }
 
-function Login({ onEntrar }: { onEntrar: (s: Sesion) => void }) {
+const seccionesFundacion = [{ enlaces: [{ id: "impacto", texto: "Impacto del programa" }] }];
+
+function Fundacion({ cuenta }: { cuenta: CuentaPanel }) {
+  const [activo, navegar] = useState("impacto");
+  return (
+    <MarcoPanel grupos={seccionesFundacion} activo={activo} navegar={navegar} cuenta={cuenta}
+      contexto="Fundación Santo Domingo" titulo={activo === enlaceCuenta.id ? enlaceCuenta.texto : "Impacto del programa"}>
+      <Indicadores />
+    </MarcoPanel>
+  );
+}
+
+function EstadoAcceso({ titulo, accion, volver, children }: {
+  titulo: string;
+  accion: string;
+  volver: () => void;
+  children: string;
+}) {
+  return <main className="login">
+    <section className="login-caja">
+      <Marca />
+      <h1>{titulo}</h1>
+      <p>{children}</p>
+      <button className="btn primario grande" onClick={volver}>{accion}</button>
+    </section>
+  </main>;
+}
+
+function Login({
+  onEntrar,
+  comunidad,
+}: {
+  onEntrar: (s: Sesion) => void;
+  comunidad: () => void;
+}) {
   const [usuario, setUsuario] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -35,9 +126,17 @@ function Login({ onEntrar }: { onEntrar: (s: Sesion) => void }) {
     setError(null);
     try {
       const r = await api.iniciarSesion(usuario.trim(), pin);
-      onEntrar({ token: r.token, expira: Date.now() + r.expira_en * 1000, cuenta: r.cuenta });
+      onEntrar({
+        token: r.token,
+        expira: Date.now() + r.expira_en * 1000,
+        cuenta: r.cuenta,
+      });
     } catch (err) {
-      setError(err instanceof ErrorApi && err.status === 401 ? "Usuario o PIN incorrectos." : (err as Error).message);
+      setError(
+        err instanceof ErrorApi && err.status === 401
+          ? "Usuario o PIN incorrectos."
+          : (err as Error).message,
+      );
       setPin("");
     } finally {
       setEnviando(false);
@@ -45,20 +144,35 @@ function Login({ onEntrar }: { onEntrar: (s: Sesion) => void }) {
   }
 
   return (
-    <main className="login">
-      <form className="login-caja" onSubmit={entrar}>
-        <div className="marca">🌱 Brota</div>
-        <h1>Panel de coordinación</h1>
-        <p className="tenue">Solicitudes, recolectores y cierres del día.</p>
+    <main className="login acceso">
+      <header className="acceso-cabecera">
+        <Marca />
+        <h1>Entra a Brota</h1>
+        <p className="tenue">Ingresa con la cuenta que te asignó el equipo de EcoConecta.</p>
+      </header>
+      <div className="acceso-columnas">
+        <section className="acceso-ilustracion">
+          <h2>Recolección comunitaria</h2>
+          <p>Organiza las solicitudes y el aprovechamiento de materiales en Villas de San Pablo.</p>
+          <img src="/marca/huerta.png" alt="" />
+        </section>
+        <form className="login-caja" onSubmit={entrar}>
+          <h2>Ingresa a tu cuenta</h2>
         <label>
           Usuario
-          <input value={usuario} onChange={(e) => setUsuario(e.target.value)} autoComplete="username" autoCapitalize="none" required />
+          <input
+            value={usuario}
+            onChange={(e) => setUsuario(e.target.value)}
+            autoComplete="username"
+            autoCapitalize="none"
+            required
+          />
         </label>
         <label>
           PIN
           <input
             value={pin}
-            onChange={(e) => setPin(e.target.value)}
+            onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ""))}
             type="password"
             inputMode="numeric"
             autoComplete="current-password"
@@ -67,11 +181,30 @@ function Login({ onEntrar }: { onEntrar: (s: Sesion) => void }) {
             required
           />
         </label>
-        {error && <p className="error" role="alert">{error}</p>}
+        <div className="teclado-pin" role="group" aria-label="Teclado numérico del PIN">
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "Borrar", "0", "⌫"].map((tecla) =>
+            <button key={tecla} type="button" className="btn" disabled={enviando}
+              aria-label={tecla === "⌫" ? "Borrar último dígito" : tecla}
+              onClick={() => setPin((actual) => tecla === "Borrar" ? "" : tecla === "⌫" ? actual.slice(0, -1) : (actual + tecla).slice(0, 12))}>
+              {tecla}
+            </button>
+          )}
+        </div>
+        {error && (
+          <p className="aviso aviso-error" data-motion="notice" role="alert">
+            {error}
+          </p>
+        )}
         <button className="btn primario grande" disabled={enviando}>
           {enviando ? "Entrando…" : "Entrar"}
         </button>
-      </form>
+        <p>¿Olvidaste tu PIN? Pídelo a la administración.</p>
+        <button type="button" className="btn" onClick={comunidad}>
+          Guía para hogares y negocios
+        </button>
+        </form>
+      </div>
+      <Aliados />
     </main>
   );
 }

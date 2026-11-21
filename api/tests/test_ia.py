@@ -23,6 +23,7 @@ def gemini(monkeypatch):
         return respuesta
 
     monkeypatch.setattr(get_settings(), "gemini_api_key", "clave-de-prueba")
+    monkeypatch.setattr(ia, "proveedor_autorizado", lambda: True)  # Solo prueba aislada con proveedor simulado.
     monkeypatch.setattr(ia, "llamar_gemini", falso)
     return llamadas, respuesta
 

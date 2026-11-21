@@ -20,13 +20,13 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core.errores import no_encontrado, transicion_invalida
 from app.core.paginacion import Paginacion, paginacion, paginar
-from app.core.seguridad import Actor, actor_bot, actor_operador, get_actor
+from app.core.seguridad import Actor, actor_admin, actor_bot, actor_operador, get_actor_opcional
 from app.core.tipos import Entrada, Instante, Salida, ahora
 from app.db import get_db
 from app.models import (
@@ -37,6 +37,7 @@ from app.models import (
     EventoSalida,
     Participante,
 )
+from app.modulos.configuracion import ContenidoOut as ContenidoGestionOut
 from app.modulos.coordinacion import orden_de_coordinacion
 
 router = APIRouter(tags=["educación y avisos"])
@@ -89,6 +90,8 @@ class ResultadoAvisoIn(Entrada):
 
 class ContenidoOut(Salida):
     id: uuid.UUID
+    tema: str
+    version: int
     titulo: str
     tipo: str
     recurso: str | None
@@ -118,10 +121,11 @@ def reservar(db: Session, limite: int) -> list[AvisoOut]:
     """Toma avisos pendientes (o con reserva vencida) sin bloquear a otros consumidores."""
     s = get_settings()
     t = ahora()
+    # now() de Postgres, el mismo reloj con el que nace la fila.
     filas = (
         db.execute(
             select(EventoSalida)
-            .where(EventoSalida.estado.in_(("pendiente", "en_envio")), EventoSalida.proximo_intento_at <= t)
+            .where(EventoSalida.estado.in_(("pendiente", "en_envio")), EventoSalida.proximo_intento_at <= func.now())
             .order_by(EventoSalida.proximo_intento_at, EventoSalida.created_at)
             .limit(limite)
             .with_for_update(skip_locked=True)
@@ -239,15 +243,38 @@ def get_avisos_orden(
     return paginar(db, stmt, pag, lambda e: AvisoEstadoOut.model_validate(e).model_dump(mode="json"))
 
 
-@router.get("/contenidos-educativos")
-def get_contenidos(
-    material_id: uuid.UUID | None = Query(None),
-    motivo_rechazo_id: uuid.UUID | None = Query(None),
-    actor: Actor = Depends(get_actor),
+@router.get("/contenidos-educativos/gestion")
+def get_contenidos_gestion(
+    tema: Literal["separacion", "huerta", "horarios_rutas", "servicio"] | None = Query(None),
+    _actor: Actor = Depends(actor_admin),
     pag: Paginacion = Depends(paginacion),
     db: Session = Depends(get_db),
 ):
-    stmt = select(ContenidoEducativo).where(ContenidoEducativo.activo.is_(True))
+    """Lectura de administración: incluye borradores, retirados y contenidos fuera de vigencia."""
+    stmt = select(ContenidoEducativo)
+    if tema:
+        stmt = stmt.where(ContenidoEducativo.tema == tema)
+    stmt = stmt.order_by(ContenidoEducativo.created_at.desc(), ContenidoEducativo.id)
+    return paginar(db, stmt, pag, lambda c: ContenidoGestionOut.model_validate(c).model_dump(mode="json"))
+
+
+@router.get("/contenidos-educativos")
+def get_contenidos(
+    tema: Literal["separacion", "huerta", "horarios_rutas", "servicio"] | None = Query(None),
+    material_id: uuid.UUID | None = Query(None),
+    motivo_rechazo_id: uuid.UUID | None = Query(None),
+    _actor: Actor | None = Depends(get_actor_opcional),
+    pag: Paginacion = Depends(paginacion),
+    db: Session = Depends(get_db),
+):
+    stmt = select(ContenidoEducativo).where(
+        ContenidoEducativo.activo.is_(True),
+        ContenidoEducativo.publicado.is_(True),
+        or_(ContenidoEducativo.vigente_desde.is_(None), ContenidoEducativo.vigente_desde <= ahora()),
+        or_(ContenidoEducativo.vigente_hasta.is_(None), ContenidoEducativo.vigente_hasta > ahora()),
+    )
+    if tema:
+        stmt = stmt.where(ContenidoEducativo.tema == tema)
     if motivo_rechazo_id:
         stmt = stmt.where(
             or_(
