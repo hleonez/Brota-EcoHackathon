@@ -34,6 +34,9 @@ const trazos: Record<string, string> = {
   calendario: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
   entregas: "M12 3 4 7v10l8 4 8-4V7zM4 7l8 4 8-4M12 11v10",
   campana:"M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0",
+  ubicacion: "M12 21s-6.5-6.2-6.5-11.5a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21ZM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
+  abajo: "M6 9l6 6 6-6",
+  check: "M5 12.5l4.5 4.5L19 7.5",
 };
 
 export function Icono({ nombre, className }: { nombre: string; className?: string }) {

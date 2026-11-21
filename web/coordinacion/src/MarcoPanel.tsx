@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Icono } from "./Iconos";
+import { useDatos } from "./portal";
 
 export interface EnlacePanel {
   id: string;
@@ -10,6 +11,14 @@ export interface EnlacePanel {
 export interface GrupoPanel {
   titulo?: string;
   enlaces: readonly EnlacePanel[];
+}
+
+/** Aviso de la campana: qué está pendiente y a qué sección lleva. */
+export interface AvisoPanel {
+  id: string;
+  texto: string;
+  destino: string;
+  icono?: string;
 }
 
 export interface CuentaPanel {
@@ -49,7 +58,7 @@ export function MarcaBrota() {
   );
 }
 
-export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, acciones, portada, children }: {
+export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, acciones, portada, avisos = [], children }: {
   grupos: readonly GrupoPanel[];
   activo: string;
   titulo: string;
@@ -59,6 +68,8 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
   acciones?: ReactNode;
   /** Home views render their own greeting; the h1 stays for focus and screen readers. */
   portada?: boolean;
+  /** Pendientes propios del perfil (se suman a los contadores del menú en la campana). */
+  avisos?: AvisoPanel[];
   children: ReactNode;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -95,9 +106,10 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
     boton.current?.focus();
   }
 
+  let orden = 0;
   function enlace(item: EnlacePanel) {
     return (
-      <li key={item.id}>
+      <li key={item.id} style={{ "--i": orden++ } as CSSProperties}>
         <button type="button" className="panel-enlace"
           aria-current={activo === item.id ? "page" : undefined}
           onClick={() => {
@@ -134,12 +146,15 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
         inert={movil && !abierto}
         data-motion="nav" data-state={abierto ? "open" : "closed"}>
         <div className="panel-logo"><MarcaBrota /></div>
-        {grupos.map(({ titulo: grupo, enlaces }) => (
-          <div className="panel-grupo" key={grupo ?? enlaces[0]?.id}>
-            {grupo && <h2>{grupo}</h2>}
-            <ul>{enlaces.map(enlace)}</ul>
-          </div>
-        ))}
+        {/* Las opciones se desplazan aquí y se desvanecen antes de llegar a las plantas. */}
+        <div className="panel-nav-lista">
+          {grupos.map(({ titulo: grupo, enlaces }) => (
+            <div className="panel-grupo" key={grupo ?? enlaces[0]?.id}>
+              {grupo && <h2>{grupo}</h2>}
+              <ul>{enlaces.map(enlace)}</ul>
+            </div>
+          ))}
+        </div>
       </nav>
       <div className="panel-principal">
         <header className="panel-barra">
@@ -155,6 +170,18 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
             <span className="panel-programa">
               <img src="/acceso/ecoconecta.webp" width={660} height={223} alt="EcoConecta Villas de San Pablo" />
             </span>
+            <SelectorBarrio />
+            <Campana avisos={[
+              ...grupos.flatMap((g) => g.enlaces)
+                .filter((e) => (e.cantidad ?? 0) > 0)
+                .map((e) => ({
+                  id: "menu-" + e.id,
+                  texto: `${e.texto}: ${e.cantidad} pendiente${e.cantidad === 1 ? "" : "s"}`,
+                  destino: e.id,
+                  icono: e.id,
+                })),
+              ...avisos,
+            ]} navegar={navegar} />
             <button type="button" className="panel-avatar" title={`${cuenta.nombre} · ${perfil}`}
               aria-label={`Mi cuenta: ${cuenta.nombre}, ${perfil}`}
               aria-current={activo === enlaceCuenta.id ? "page" : undefined}
@@ -168,7 +195,10 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
             <h1 ref={encabezado} tabIndex={-1}>{titulo}</h1>
             {acciones}
           </div>
-          {activo === enlaceCuenta.id ? <MiCuenta cuenta={cuenta} /> : children}
+          {/* La vista entra con una transición suave cada vez que cambia la sección. */}
+          <div className="panel-vista" key={activo}>
+            {activo === enlaceCuenta.id ? <MiCuenta cuenta={cuenta} /> : children}
+          </div>
         </main>
       </div>
     </div>
@@ -253,5 +283,114 @@ function MiCuenta({ cuenta }: { cuenta: CuentaPanel }) {
         <Icono nombre="salir" />Cerrar sesión
       </button>
     </section>
+  );
+}
+
+/** Abre y cierra un menú flotante: clic afuera o Escape lo cierran y el foco vuelve al botón. */
+function useFlotante() {
+  const [abierto, setAbierto] = useState(false);
+  const caja = useRef<HTMLDivElement>(null);
+  const boton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!abierto) return;
+    const fuera = (e: PointerEvent) => {
+      if (caja.current && !caja.current.contains(e.target as Node)) setAbierto(false);
+    };
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setAbierto(false);
+        boton.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", fuera);
+    document.addEventListener("keydown", tecla);
+    return () => {
+      document.removeEventListener("pointerdown", fuera);
+      document.removeEventListener("keydown", tecla);
+    };
+  }, [abierto]);
+  return { abierto, setAbierto, caja, boton };
+}
+
+type Conjunto = { id: string; nombre: string; etapa?: string; activo?: boolean };
+
+/** Barrio del programa y sus conjuntos (hoy el piloto tiene uno). Informativo: no filtra datos. */
+function SelectorBarrio() {
+  const { abierto, setAbierto, caja, boton } = useFlotante();
+  const id = useId();
+  const conjuntos = useDatos<Conjunto[]>("/v1/conjuntos");
+  const primero = conjuntos.datos?.[0];
+  const torres = useDatos<unknown[]>(abierto && primero ? `/v1/conjuntos/${primero.id}/torres` : "");
+  return (
+    <div className="panel-flotante" ref={caja}>
+      <button type="button" className="panel-barrio" ref={boton} aria-expanded={abierto} aria-controls={id}
+        onClick={() => setAbierto(!abierto)}>
+        <Icono nombre="ubicacion" />
+        <span>Villas de San Pablo</span>
+        <Icono nombre="abajo" className="panel-barrio-flecha" />
+      </button>
+      {abierto && (
+        <div className="panel-globo" id={id} role="dialog" aria-label="Barrio y conjuntos del programa">
+          <p className="panel-globo-titulo">Megabarrio Villas de San Pablo</p>
+          <p className="panel-globo-nota">Barranquilla · conjuntos del programa</p>
+          {conjuntos.error && <p className="panel-globo-nota">No pudimos cargar los conjuntos.</p>}
+          {!conjuntos.datos && !conjuntos.error && <p className="panel-globo-nota">Cargando…</p>}
+          <ul>
+            {conjuntos.datos?.map((c) => (
+              <li key={c.id} className="panel-globo-fila es-actual">
+                <span className="panel-globo-icono"><Icono nombre="unidades" /></span>
+                <span>
+                  <strong>{c.nombre}</strong>
+                  <small>{c.etapa ?? "Piloto"}{c === primero && torres.datos ? ` · ${torres.datos.length} torres` : ""}</small>
+                </span>
+                <Icono nombre="check" className="panel-globo-check" />
+              </li>
+            ))}
+          </ul>
+          <p className="panel-globo-pie">El piloto opera en este conjunto; los nuevos se suman desde administración.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Campana: junta los pendientes del perfil y lleva a la sección de cada uno. */
+function Campana({ avisos, navegar }: { avisos: AvisoPanel[]; navegar: (id: string) => void }) {
+  const { abierto, setAbierto, caja, boton } = useFlotante();
+  const id = useId();
+  const hay = avisos.length > 0;
+  const etiqueta = hay
+    ? `Notificaciones: ${avisos.length} pendiente${avisos.length === 1 ? "" : "s"}`
+    : "Notificaciones: todo al día";
+  return (
+    <div className="panel-flotante" ref={caja}>
+      <button type="button" className={"panel-campana" + (hay ? " con-avisos" : "")} ref={boton}
+        aria-expanded={abierto} aria-controls={id} aria-label={etiqueta} title={etiqueta}
+        onClick={() => setAbierto(!abierto)}>
+        <Icono nombre="campana" />
+        {hay && <span className="panel-campana-punto" aria-hidden="true">{avisos.length}</span>}
+      </button>
+      {abierto && (
+        <div className="panel-globo panel-globo-avisos" id={id} role="dialog" aria-label="Notificaciones">
+          <p className="panel-globo-titulo">Notificaciones</p>
+          {hay ? (
+            <ul>
+              {avisos.map((a) => (
+                <li key={a.id}>
+                  <button type="button" className="panel-globo-fila"
+                    onClick={() => { setAbierto(false); navegar(a.destino); }}>
+                    <span className="panel-globo-icono"><Icono nombre={a.icono ?? "campana"} /></span>
+                    <span>{a.texto}</span>
+                    <Icono nombre="chevron" className="panel-globo-check" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="panel-globo-vacio"><Icono nombre="check" />Todo al día. No hay pendientes.</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

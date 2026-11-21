@@ -1,4 +1,4 @@
-import { MarcoPanel, Portada, TarjetaAccion, enlaceCuenta, type CuentaPanel } from "./MarcoPanel";
+import { MarcoPanel, Portada, TarjetaAccion, enlaceCuenta, type AvisoPanel, type CuentaPanel } from "./MarcoPanel";
 import { useState } from "react";
 import { pedir } from "./api";
 import { BotonBaja, Campo, Formulario, Pildoras, type Operacion, type Valores } from "./Formulario";
@@ -150,6 +150,27 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
     "/v1/catalogos",
   );
   const cap = useDatos<Capacidades>("/v1/capacidades");
+  // Campana de administración: lo que conviene revisar sin entrar a cada sección.
+  const habilitaciones = useDatos<Fila[]>("/v1/piloto/habilitaciones");
+  const contenidos = useDatos<Fila[]>("/v1/contenidos-educativos/gestion?limit=100");
+  const avisosAdmin: AvisoPanel[] = [];
+  {
+    const ahora = Date.now();
+    const semana = 7 * 24 * 3600 * 1000;
+    const activas = (habilitaciones.datos ?? []).filter((h) => h.activo && h.vigente_hasta);
+    const vencidas = activas.filter((h) => Date.parse(h.vigente_hasta!) <= ahora).length;
+    const porVencer = activas.filter((h) => {
+      const fin = Date.parse(h.vigente_hasta!);
+      return fin > ahora && fin - ahora <= semana;
+    }).length;
+    const borradores = (contenidos.datos ?? []).filter((c) => c.activo !== false && c.publicado === false).length;
+    if (vencidas) avisosAdmin.push({ id: "piloto-vencidas", destino: "Piloto", icono: "piloto",
+      texto: `${vencidas} habilitación${vencidas === 1 ? "" : "es"} del piloto vencida${vencidas === 1 ? "" : "s"}` });
+    if (porVencer) avisosAdmin.push({ id: "piloto-vence", destino: "Piloto", icono: "piloto",
+      texto: `${porVencer} habilitación${porVencer === 1 ? "" : "es"} vence${porVencer === 1 ? "" : "n"} esta semana` });
+    if (borradores) avisosAdmin.push({ id: "educacion-borradores", destino: "Educación", icono: "educación",
+      texto: `${borradores} contenido${borradores === 1 ? "" : "s"} educativo${borradores === 1 ? "" : "s"} sin publicar` });
+  }
   const lista = useDatos<Fila[]>(rutas[vista] ? "/v1/" + rutas[vista] : "");
   const vinculados = new Set(
     vista === "Cuentas" ? lista.datos?.map((fila) => fila.trabajador_id) : [],
@@ -374,7 +395,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
   return (
     <MarcoPanel grupos={secciones} activo={cuentaActiva ? enlaceCuenta.id : vista}
       titulo={cuentaActiva ? enlaceCuenta.texto : vista === "Inicio" ? "Administración" : vista}
-      contexto="Administración de EcoConecta" cuenta={cuentaSesion} navegar={navegar}
+      contexto="Administración de EcoConecta" cuenta={cuentaSesion} navegar={navegar} avisos={avisosAdmin}
       portada={!cuentaActiva && vista === "Inicio"}>
       {conflicto && (
         <p role="alert">Este registro cambió. Vuelve a seleccionarlo para revisar la versión actual.</p>
