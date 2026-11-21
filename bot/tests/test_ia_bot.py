@@ -123,6 +123,35 @@ def test_audio_con_peligro_y_consulta_de_puntos(lab):
     assert "🎤 Te escuché: «tengo pilas viejas»\n⚠ Las pilas tienen metales pesados." in cuerpo
 
 
+def test_audio_fuera_del_catalogo_nombra_el_objeto_y_lo_recuerda(lab):
+    c, api = lab
+    api.ia = {"intencion": "pedir", "transcripcion": "un mueble de madera", "residuos": [],
+              "no_reconocidos": ["mueble de madera"]}
+    r = _media(c, "audio/ogg")
+    cuerpo = _texto(r[0])
+    assert "Te escuché: «un mueble de madera»" in cuerpo
+    assert "podría aprovecharse" in cuerpo
+    assert "No alcancé a entender" not in cuerpo
+    assert "¿Qué vas a entregar?" not in cuerpo
+    assert _botones(r[0]) == ["M_PERSONA", "M_PEDIR"]
+
+    api.ia = {"intencion": "pedir", "residuos": [], "no_reconocidos": ["mueble de madera"]}
+    resp = c.post("/lab/mensaje", json={"de": LAURA, "texto": "Es eso"})
+    assert resp.status_code == 200, resp.text
+    enviado = api.cuerpos_ia[-1]["texto"]
+    assert enviado == "El vecino dijo antes: «un mueble de madera». Ahora escribe: «Es eso»"
+
+
+def test_texto_fuera_del_catalogo_no_abre_la_lista(entorno):
+    c, api = entorno
+    api.registrados[CEL] = "Carmen"
+    api.ia = {"intencion": "pedir", "residuos": [], "no_reconocidos": ["mueble de madera"]}
+    r = enviar(c, "un mueble de madera")
+    assert "mueble de madera" in _texto(r[0]) and "podría aprovecharse" in _texto(r[0])
+    assert "¿Qué vas a entregar?" not in _texto(r[0])
+    assert _botones(r[0]) == ["M_PERSONA", "M_PEDIR"]
+
+
 def test_foto_sin_ia_o_sin_material_reconocible(lab):
     c, api = lab
     assert "no puedo escuchar audios ni ver fotos" in _texto(_media(c, "image/png")[0])  # IA no disponible

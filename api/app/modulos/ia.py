@@ -93,8 +93,10 @@ Tu tarea: interpretar UN mensaje del vecino (texto, audio o foto) y devolver JSO
 
 Reglas:
 1. `residuos`: solo códigos del CATÁLOGO. Mapea expresiones populares, errores ortográficos y fotos al código
-   correcto (cajas → CARTON; botellas de gaseosa → PET; cáscaras → FRUVER; pilas → PILAS). Lo que no esté en el
-   catálogo va en `no_reconocidos`. No inventes códigos.
+   correcto (cajas → CARTON; botellas de gaseosa → PET; cáscaras → FRUVER; pilas → PILAS). Si el vecino nombra
+   un objeto que no está en el catálogo (un mueble, madera, un colchón, escombros), pon esa frase en
+   `no_reconocidos` y deja `residuos` vacío: no lo acerques al código más parecido. No inventes códigos.
+   La intención puede seguir siendo «pedir».
 2. `confianza`: alta si es claro; media si es probable; baja si dudas (por ejemplo, no se distingue el material
    en la foto). Nunca afirmes ver algo que no aparece claramente.
 3. Si un residuo es de un material que el catálogo marca `acepta=no` o es peligroso (pilas, medicamentos,

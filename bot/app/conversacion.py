@@ -26,7 +26,7 @@ from app.brota import Brota, ErrorBrota
 from app.catalogo import buscar
 from app.coordinacion import Coordinacion
 from app.ia import interpretar
-from app.pedido import Pedido
+from app.pedido import Pedido, guardar_dicho, texto_con_recuerdo
 from app.soporte import Soporte
 from app.whatsapp import Boton, Entrante, ErrorWhatsApp, Fila, WhatsApp
 
@@ -62,6 +62,7 @@ class Estado:
     torres: dict[str, dict[str, Any]] = field(default_factory=dict)
     torre_id: str | None = None
     unidad: dict[str, Any] | None = None
+    dicho: str | None = None  # última frase entendida (audio o algo fuera del catálogo)
     actualizado: float = field(default_factory=time.monotonic)
 
 
@@ -82,6 +83,16 @@ class Memoria:
 
     def borrar(self, celular: str) -> None:
         self._datos.pop(celular, None)
+
+    def renovar_registro(self, celular: str) -> None:
+        """Borra el alta a medias y deja solo la última frase entendida."""
+        anterior = self._datos.get(celular)
+        dicho = None
+        if anterior is not None and time.monotonic() - anterior.actualizado <= self.ttl:
+            dicho = anterior.dicho
+        self.borrar(celular)
+        if dicho:
+            self.obtener(celular).dicho = dicho
 
 
 def normalizar(texto: str | None) -> str:
@@ -151,7 +162,7 @@ class Brisa:
             if me.get("tipo_actor") == "operador":
                 await self.coordinacion.atender(m, me)
             elif me["registrado"]:
-                self.memoria.borrar(m.de)  # el registro terminó; ya no hace falta estado
+                self.memoria.renovar_registro(m.de)  # el alta ya no hace falta; la frase sí
                 await self._registrado(m, me)
             else:
                 await self._registro(m, me)
@@ -305,7 +316,7 @@ class Brisa:
             await self._duda(m)
         elif m.tipo in ("audio", "image"):
             await self._media(m, me, nombre)
-        elif await self.pedido.atender(m, me):
+        elif await self.pedido.atender(m, me, self.memoria.obtener(m.de)):
             pass
         elif m.tipo == "text" and m.texto:
             await self._texto_libre(m, me, nombre)
@@ -323,7 +334,8 @@ class Brisa:
         await self.pedido.responder_duda(m.de, encontradas, respuesta=(r or {}).get("respuesta"))
 
     async def _texto_libre(self, m: Entrante, me: dict[str, Any], nombre: str) -> None:
-        r = await interpretar(self.api, m.de, texto=m.texto)
+        estado = self.memoria.obtener(m.de)
+        r = await interpretar(self.api, m.de, texto=texto_con_recuerdo(m.texto, estado.dicho))
         if r is None:  # sin IA: si menciona materiales, primero se le enseña; si no, el menú
             encontradas = buscar(m.texto, await self.api.residuos(m.de))
             if encontradas:
@@ -331,6 +343,7 @@ class Brisa:
             else:
                 await self._menu(m.de, nombre)
             return
+        guardar_dicho(estado, r, m.texto)
         await self._rutear(m, me, nombre, r, "texto")
 
     async def _media(self, m: Entrante, me: dict[str, Any], nombre: str) -> None:
@@ -354,6 +367,7 @@ class Brisa:
         if r is None:
             await self.wa.texto(m.de, T.IA_MEDIA_SIN_IA)
             return
+        guardar_dicho(self.memoria.obtener(m.de), r, m.texto)
         caso = self.soporte.esperando(m.de)
         if caso and es_audio and r.get("transcripcion"):  # el detalle de un reporte, dictado
             await self.soporte.registrar(m.de, m.wamid, caso, r["transcripcion"])
@@ -369,6 +383,8 @@ class Brisa:
         if r["residuos"] and (en_pedido or r["intencion"] in ("pedir", "otro", "saludo")):
             await self.pedido.proponer(m.de, [x["codigo"] for x in r["residuos"]], fuente, encabezado)
         elif not r["residuos"] and r["intencion"] in ("pedir", "otro"):
+            if await self.pedido.avisar_desconocido(m.de, r, encabezado):
+                return
             no_entendi = r.get("aclaracion") or (T.IA_NO_ENTENDI_AUDIO if es_audio else T.IA_NO_ENTENDI_FOTO)
             await self.wa.texto(m.de, f"{encabezado}\n\n{no_entendi}" if encabezado else no_entendi)
         else:
@@ -384,7 +400,7 @@ class Brisa:
         if intencion == "pedir":
             if codigos:
                 await self.pedido.proponer(m.de, codigos, fuente, encabezado)
-            else:
+            elif not await self.pedido.avisar_desconocido(m.de, r, encabezado):
                 await self._decir(m.de, encabezado)
                 await self.pedido.empezar(m.de)
             return
