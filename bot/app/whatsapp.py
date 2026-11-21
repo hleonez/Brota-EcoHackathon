@@ -109,6 +109,8 @@ class WhatsApp:
     # Laboratorio (solo desarrollo): registra las conversaciones y se queda con los mensajes
     # a celulares simulados, que nunca salen a Meta. Ver app/laboratorio.py.
     lab: Any = None
+    # Registro de la conversación en la API (app/registro.py). Opcional: sin él no se registra nada.
+    registro: Any = None
 
     @property
     def dry_run(self) -> bool:
@@ -117,11 +119,23 @@ class WhatsApp:
     async def _post(self, cuerpo: dict[str, Any]) -> str:
         a = cuerpo.get("to")
         if self.lab is not None and a and self.lab.simulado(a):
-            return self.lab.saliente(cuerpo)
+            wamid = self.lab.saliente(cuerpo)
+            self._registrar(cuerpo, None)  # id local del laboratorio: no es de Meta
+            return wamid
         wamid = await self._enviar(cuerpo)
         if self.lab is not None and a:
             self.lab.saliente(cuerpo, wamid)
+        self._registrar(cuerpo, None if self.dry_run else wamid)
         return wamid
+
+    def _registrar(self, cuerpo: dict[str, Any], wamid: str | None) -> None:
+        """Registra en segundo plano lo enviado; nunca interrumpe el envío."""
+        if self.registro is None:
+            return
+        try:
+            self.registro.saliente(cuerpo, wamid or None)
+        except Exception:  # noqa: BLE001
+            log.exception("No se pudo registrar un mensaje saliente")
 
     async def _enviar(self, cuerpo: dict[str, Any]) -> str:
         if self.dry_run:

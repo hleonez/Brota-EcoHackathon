@@ -166,7 +166,7 @@ class Brisa:
 
         if e.paso == "INICIO":
             e.paso = "PIDE_NOMBRE"
-            await self.wa.texto(m.de, T.BIENVENIDA)
+            await self.wa.texto(m.de, await self._bienvenida())
             return
 
         if e.paso == "PIDE_NOMBRE":
@@ -228,6 +228,22 @@ class Brisa:
         # Paso desconocido: reiniciar.
         self.memoria.borrar(m.de)
         await self._registro(m, me)
+
+    async def _bienvenida(self) -> str:
+        """Saludo del primer contacto: el `mensaje_bienvenida` que editó Administración o el de siempre.
+
+        Si el texto editado no termina en pregunta, se le agrega «¿Cómo te llamas?», porque el
+        siguiente paso del registro espera el nombre. Si la API falla, se usa el texto de siempre.
+        """
+        try:
+            programa = await self.api.programa()
+        except Exception as err:  # noqa: BLE001 - el saludo nunca debe fallar
+            log.info("Sin mensaje de bienvenida de la API (%s); uso el de siempre.", type(err).__name__)
+            return T.BIENVENIDA
+        propio = str((programa or {}).get("mensaje_bienvenida") or "").strip()
+        if not propio:
+            return T.BIENVENIDA
+        return propio if propio.endswith("?") else f"{propio}\n\n{T.PREGUNTA_NOMBRE}"
 
     async def _preguntar_torre(self, celular: str, e: Estado) -> None:
         conjuntos = await self.api.conjuntos(celular)

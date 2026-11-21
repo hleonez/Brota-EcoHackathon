@@ -48,6 +48,9 @@ class APIFalsa:
         self.solicitudes: list[dict] = []  # abiertas, para ESTADO y CANCELAR
         self.movimientos_puntos: list[dict] = []
         self.piloto_habilitado = True
+        self.mensajes: list[dict] = []  # registros de POST /v1/canal/mensajes
+        self.mensajes_falla = False  # true: la API responde 500 al registrar mensajes
+        self.programa: dict | None = None  # GET /v1/programa; None = la API no lo tiene (404)
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.llamadas.append(req)
@@ -125,6 +128,14 @@ class APIFalsa:
         if p == "/v1/canal/avisos/reservas":
             lote, self.avisos = self.avisos, []
             return _ok(lote)
+        if p == "/v1/canal/mensajes" and m == "POST":
+            assert cel is None  # se registra como servicio, nunca en nombre del vecino
+            if self.mensajes_falla:
+                return httpx.Response(500, json={"error": {"code": "INTERNAL_ERROR", "message": "caída"}})
+            self.mensajes.append(json.loads(req.content))
+            return _ok({"id": f"m{len(self.mensajes)}"}, 201)
+        if p == "/v1/programa" and self.programa is not None:
+            return _ok(self.programa)
         if p.startswith("/v1/canal/avisos/") and p.endswith("/resultado"):
             self.confirmaciones.append((p.split("/")[4], json.loads(req.content)))
             return _ok({"estado": "ok"})

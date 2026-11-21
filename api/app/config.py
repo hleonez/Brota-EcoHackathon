@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     avisos_modo: Literal["pull", "webhook"] = "pull"
     bot_webhook_url: str = ""
     bot_webhook_secret: str = ""
+    # Conversaciones de Brisa guardadas para Administración: se borran pasados estos días.
+    conversaciones_retencion_dias: int = Field(default=30, ge=1)
     avisos_max_intentos: int = 8
     avisos_reserva_segundos: int = 60
 

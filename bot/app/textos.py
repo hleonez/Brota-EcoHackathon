@@ -1,7 +1,8 @@
 """Textos de Brisa. Reglas: frases cortas, tuteo cálido, un emoji como ícono, sin tecnicismos."""
 
 BIENVENIDA = "¡Hola, vecino! 👋 Soy Brisa, de los recicladores y la huerta de Villas de San Pablo.\n¿Cómo te llamas?"
-PIDE_NOMBRE_OTRA_VEZ = "Cuéntame tu nombre escribiéndolo, por favor 🙂"
+PREGUNTA_NOMBRE = "¿Cómo te llamas?"  # se agrega al saludo editado en Administración si no pregunta
+PIDE_NOMBRE_OTRA_VEZ ="Cuéntame tu nombre escribiéndolo, por favor 🙂"
 ELIGE_TORRE = "Gracias, {nombre}. ¿En qué torre vives?"
 ELIGE_TORRE_TEXTO = "Gracias, {nombre}. Escribe el número de tu torre (por ejemplo: 3)."
 TORRE_NO_VALIDA = "No reconocí esa torre. Elige una de la lista o escribe su número 🙂"

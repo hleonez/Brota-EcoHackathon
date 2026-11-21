@@ -854,3 +854,41 @@ class Huerta(Base):
     activo: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = _ts_now()
+
+
+# --------------------------------------------------------------------------- conversaciones y programa
+
+
+class MensajeConversacion(Base):
+    """Mensaje entrante o saliente de Brisa, para que Administración vea la conversación.
+
+    Guarda el celular normalizado para agrupar; la API nunca lo devuelve completo. Se borra
+    pasado `CONVERSACIONES_RETENCION_DIAS`.
+    """
+
+    __tablename__ = "mensaje_conversacion"
+    __table_args__ = (
+        CheckConstraint("direccion IN ('entrante','saliente')", name="direccion"),
+        CheckConstraint("tipo IN ('texto','audio','imagen','interactivo','plantilla','sistema')", name="tipo"),
+        Index("ix_mensaje_conversacion_celular_creado", "celular_normalizado", "created_at"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    celular_normalizado: Mapped[str] = mapped_column(String(20))
+    participante_id: Mapped[uuid.UUID | None] = _fk("participante.id", nullable=True)
+    direccion: Mapped[str] = mapped_column(String(10))
+    tipo: Mapped[str] = mapped_column(String(15))
+    texto: Mapped[str] = mapped_column(Text)
+    wamid: Mapped[str | None] = mapped_column(String(120), unique=True)
+    created_at: Mapped[datetime] = _ts_now()
+
+
+class ParametroPrograma(Base):
+    """Datos editables del programa (nombre, horario, contacto, saludo de Brisa)."""
+
+    __tablename__ = "parametro_programa"
+    clave: Mapped[str] = mapped_column(String(40), primary_key=True)
+    valor: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    actualizado_por: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cuenta_operadora.id"), nullable=True)
