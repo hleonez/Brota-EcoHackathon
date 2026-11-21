@@ -825,9 +825,38 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   (10 nuevas). De punta a punta con una Brisa temporal en modo simulado: dos vecinos del laboratorio
   conversaron y sus chats aparecieron en el panel; guardar Programa quedó en Actividad. El trabajo del
   servidor lo hizo un agente en una copia aislada y se unió a `dev/jeremy` tras revisarlo.
-- **Al desplegar:** Render debe correr la migración 0014 (`MIGRAR_AL_INICIAR=true` ya está en
+- **Al desplegar (ver entrada 27):** Render debe correr la migración 0014 (`MIGRAR_AL_INICIAR=true` ya está en
   `render.yaml`) y conviene definir `CONVERSACIONES_RETENCION_DIAS` si se quiere otro plazo. La política
   de privacidad debe mencionar que las conversaciones se guardan 30 días.
+
+
+## 27 · 20-nov-2026 · Auditoría contra el reto: endpoints, seguridad, requisitos y entregables
+
+- **Endpoints (93 rutas, inventario automático contra la API local):** sin sesión todos responden 401
+  salvo los públicos a propósito (`/health`, `/v1/capacidades`, `/v1/contenidos-educativos`,
+  `/v1/programa`). Los roles se respetan: Conversaciones, Actividad, Participantes, Cuentas,
+  Configuración y Piloto solo administración; órdenes solo coordinación y recolectores; `/v1/canal/*`
+  solo el token del bot; el certificado solo Fundación y administración. Sin `.env` ni claves en el
+  repositorio.
+- **Reglas comprobadas con datos:** RN-01 (cada coordinación solo ve su colectivo: huerta 3 órdenes de
+  Ecorazón, reciclaje 13 de Asorescatar); RN-07 (el reciclador demo solo ve sus 4 órdenes asignadas);
+  §5.3 (la solicitud trae contacto, ubicación, tipo de generador, residuos, observación, preferencia
+  horaria, código `BR-…` y estado); §5.4/§5.6 (programar reutiliza la asignación y encola el aviso al
+  vecino con persona y franja; «Mis solicitudes» muestra estado, recolector y hora; Brisa confirma la
+  recepción con el código). Las pruebas `test_recorrido` cubren los dos recorridos oficiales.
+- **Entregables (§8.2, §8.3, §10):** README reescrito (qué es, URL publicada, arquitectura en Mermaid,
+  cómputo, base, almacenamiento y redes, cumplimiento del reto con evidencia, IA §9, guion de la demo
+  §11, variables de entorno sin valores, estructura). Nuevo `docs/modelo-de-datos.md` generado desde los
+  modelos SQLAlchemy: 44 tablas y 90 relaciones por dominio, con las reglas que protege la base.
+- **Endpoints sin pantalla que sí se agregaron:** Certificado Verde (PDF) en Fundación y en Reportes,
+  con descarga autenticada (`descargarArchivo` en `api.ts`).
+- **Ideas del plan que siguen fuera (no las exige el reto):** pesaje desde foto (Papel Inteligente),
+  entregas directas en la tablet, modo sin señal (`/v1/sync`), canjes (Moneda Verde), hoja de ruta en
+  Excel/PDF, solicitud web sin Brisa y archivos guardados. Las rutas de API de algunas existen; quedan
+  para después del piloto.
+- **Pendiente para la evaluación:** este trabajo vive en `dev/jeremy`; para que lo vea el jurado hay que
+  pasarlo a `develop` (Render y Cloudflare despliegan `develop`) y comprobar en producción que corrió la
+  migración 0014.
 
 ---
 

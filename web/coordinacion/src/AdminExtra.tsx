@@ -4,7 +4,7 @@
  * conversaciones de Brisa (estilo WhatsApp, con privacidad) y datos del programa.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { pedir } from "./api";
+import { descargarArchivo, pedir } from "./api";
 import { Modal } from "./Dialogos";
 import { Campo, Formulario } from "./Formulario";
 import { Icono } from "./Iconos";
@@ -418,6 +418,47 @@ export function LigaTorres() {
   );
 }
 
+// ------------------------------------------------------------------ certificado verde (PDF)
+
+/** Certificado Verde del mes por conjunto (GET /v1/reportes/certificado). Fundación y administración. */
+export function CertificadoVerde() {
+  const conjunto = useConjunto();
+  const meses = useMemo(() => [0, -1, -2].map((d) => {
+    const p = periodoMes(d);
+    return { valor: p.desde.slice(0, 7), nombre: p.nombre };
+  }), []);
+  const [mes, setMes] = useState(meses[0].valor);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <section className="eco-tarjeta certificado">
+      <div className="certificado-contenido">
+        <img src="/panel/estrella.webp" alt="" />
+        <div>
+          <h2>Certificado Verde</h2>
+          <p>PDF con lo aprovechado y la participación de {conjunto?.nombre ?? "el conjunto"} en el mes, listo para compartir.</p>
+        </div>
+      </div>
+      <div className="lista-herramientas">
+        <label className="filtro-select"><span className="visually-hidden">Mes del certificado</span>
+          <select value={mes} onChange={(e) => setMes(e.target.value)}>
+            {meses.map((m) => <option key={m.valor} value={m.valor}>{m.nombre}</option>)}
+          </select>
+        </label>
+        <BotonDescarga onClick={async () => {
+          if (!conjunto) return;
+          setError(null);
+          try {
+            await descargarArchivo(`/v1/reportes/certificado?conjunto_id=${conjunto.id}&mes=${mes}`, `certificado-verde-${mes}.pdf`);
+          } catch (e) {
+            setError((e as Error).message);
+          }
+        }}>Descargar PDF</BotonDescarga>
+      </div>
+      {error && <Estado tipo="error">{error}</Estado>}
+    </section>
+  );
+}
+
 // ------------------------------------------------------------------ reportes (descargas + impacto)
 
 export function Reportes() {
@@ -457,6 +498,7 @@ export function Reportes() {
           }}>Actividad</BotonDescarga>
         </div>
       </section>
+      <CertificadoVerde />
       <Indicadores />
     </>
   );

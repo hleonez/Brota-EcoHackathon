@@ -1345,3 +1345,10 @@ button.panel-globo-fila:hover { background: #f0f8ea; transform: translateX(2px);
   .seccion-nuevo { width: 100%; margin-left: 0; }
   .lista-encabezado { align-items: flex-start; }
 }
+
+/* ------------------------------------------------------------------ certificado verde */
+.certificado { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 22px; background: linear-gradient(135deg, #fffdf6, #fdf0d4); }
+.certificado-contenido { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.certificado-contenido img { width: 72px; height: auto; filter: drop-shadow(0 8px 10px #3c462826); }
+.panel-marco .certificado h2 { margin: 0 0 4px; }
+.certificado p { margin: 0; color: var(--clay-texto); max-width: 52ch; }

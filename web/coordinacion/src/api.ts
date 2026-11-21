@@ -38,6 +38,27 @@ export function fijarToken(t: string | null): void {
   token = t;
 }
 
+/** Descarga un archivo protegido (PDF, CSV) con la sesión actual y lo guarda en el equipo. */
+export async function descargarArchivo(ruta: string, nombre: string): Promise<void> {
+  let r: Response;
+  try {
+    r = await fetch(BASE + ruta, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  } catch {
+    throw new ErrorApi(0, "RED", "No hay conexión con la API de Brota.");
+  }
+  if (!r.ok) {
+    const e = (await r.json().catch(() => null))?.error ?? {};
+    if (r.status === 401 && token) alExpirar();
+    throw new ErrorApi(r.status, e.code ?? "HTTP", e.message ?? `Error ${r.status}`);
+  }
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombre;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function cuandoExpire(fn: () => void): void {
   alExpirar = fn;
 }

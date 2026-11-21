@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { cuandoExpire, fijarToken } from "./api";
 import { EstadoAcceso, FormularioAcceso, PantallaAcceso } from "./Acceso";
+import { CertificadoVerde } from "./AdminExtra";
 import Indicadores from "./Indicadores";
 import Administracion from "./Administracion";
 import Comunidad from "./Comunidad";
@@ -89,6 +90,7 @@ function Fundacion({ cuenta }: { cuenta: CuentaPanel }) {
   return (
     <MarcoPanel grupos={seccionesFundacion} activo={activo} navegar={navegar} cuenta={cuenta}
       contexto="Fundación Santo Domingo" titulo={activo === enlaceCuenta.id ? enlaceCuenta.texto : "Impacto del programa"}>
+      <CertificadoVerde />
       <Indicadores />
     </MarcoPanel>
   );
