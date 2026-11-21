@@ -61,7 +61,7 @@ export function descargarCSV(nombre: string, encabezados: string[], filas: (stri
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function BotonDescarga({ onClick, children }: { onClick: () => void | Promise<void>; children: ReactNode }) {
+export function BotonDescarga({ onClick, children }: { onClick: () => void | Promise<void>; children: ReactNode }) {
   const [ocupado, setOcupado] = useState(false);
   return (
     <button type="button" className="btn boton-descarga" disabled={ocupado}
@@ -72,7 +72,7 @@ function BotonDescarga({ onClick, children }: { onClick: () => void | Promise<vo
 }
 
 /** Cuenta de 0 al valor al aparecer (se apaga con «reducir movimiento»). */
-function useConteo(valor: number) {
+export function useConteo(valor: number) {
   const [mostrado, setMostrado] = useState(0);
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setMostrado(valor); return; }
@@ -93,9 +93,9 @@ function iniciales(texto: string) {
   return texto.split(/\s+/).filter((p) => /^[\p{L}\p{N}]/u.test(p)).slice(0, 2).map((p) => p[0]).join("").toUpperCase() || "·";
 }
 
-const horaBogota = (iso: string) =>
+export const horaBogota = (iso: string) =>
   new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
-const diaBogota = (iso: string) =>
+export const diaBogota = (iso: string) =>
   new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", weekday: "long", day: "numeric", month: "long" }).format(new Date(iso));
 
 // ------------------------------------------------------------------ tablero de inicio
@@ -168,7 +168,10 @@ export function TableroInicio({ navegar }: { navegar: (id: string) => void }) {
           <h2 id="tablero-titulo">Así va {p.nombre}</h2>
           <p>Solicitudes, recolecciones y participación del programa en el mes.</p>
         </div>
-        <button type="button" className="btn" onClick={() => navegar("Reportes")}><Icono nombre="reportes" />Ver reportes</button>
+        <div className="tablero-acciones">
+          <button type="button" className="btn" onClick={() => navegar("Trazabilidad")}><Icono nombre="trazabilidad" />Ver recorrido</button>
+          <button type="button" className="btn" onClick={() => navegar("Reportes")}><Icono nombre="reportes" />Ver reportes</button>
+        </div>
       </div>
       {!d ? <Espera error={r.error} reintentar={r.recargar} /> : (
         <>
@@ -347,15 +350,16 @@ interface Liga {
     porcentaje_participacion: string; kg_aceptados_atribuidos: string; posicion: number }[];
 }
 
-function useConjunto() {
+/** El conjunto elegido (o el primero, si no se elige ninguno). */
+function useConjunto(id?: string) {
   const c = useDatos<{ id: string; nombre: string }[]>("/v1/conjuntos");
-  return c.datos?.[0];
+  return (id ? c.datos?.find((x) => x.id === id) : undefined) ?? c.datos?.[0];
 }
 
-export function LigaTorres() {
+export function LigaTorres({ conjuntoId }: { conjuntoId?: string } = {}) {
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const p = periodos[periodo]();
-  const conjunto = useConjunto();
+  const conjunto = useConjunto(conjuntoId);
   const liga = useDatos<Liga>(conjunto ? `/v1/liga?conjunto_id=${conjunto.id}&desde=${enc(p.desde)}&hasta=${enc(p.hasta)}` : "");
   const torres = liga.datos?.torres ?? [];
   const podio = torres.slice(0, 3);
@@ -421,8 +425,8 @@ export function LigaTorres() {
 // ------------------------------------------------------------------ certificado verde (PDF)
 
 /** Certificado Verde del mes por conjunto (GET /v1/reportes/certificado). Fundación y administración. */
-export function CertificadoVerde() {
-  const conjunto = useConjunto();
+export function CertificadoVerde({ conjuntoId }: { conjuntoId?: string } = {}) {
+  const conjunto = useConjunto(conjuntoId);
   const meses = useMemo(() => [0, -1, -2].map((d) => {
     const p = periodoMes(d);
     return { valor: p.desde.slice(0, 7), nombre: p.nombre };
@@ -511,12 +515,13 @@ interface Evento {
   solicitud_id: string | null; orden_id: string | null; pesaje_id: string | null; datos: Record<string, unknown>;
 }
 
-const nombresEvento: Record<string, [string, string]> = {
+export const nombresEvento: Record<string, [string, string]> = {
   orden_creada: ["Nueva solicitud de recolección", "bandeja"],
   orden_asignada: ["Solicitud asignada a un recolector", "recolectores"],
   orden_reasignada: ["Solicitud reasignada", "recolectores"],
   orden_cancelada: ["Solicitud cancelada", "cerrar"],
   orden_programada: ["Visita programada", "calendario"],
+  orden_reprogramada: ["Visita reprogramada", "calendario"],
   orden_recogida: ["Recolección hecha", "check"],
   orden_rechazada: ["Recolección rechazada", "motivos"],
   solicitud_creada: ["Vecino pidió una recolección", "bandeja"],
@@ -542,10 +547,10 @@ const nombresEvento: Record<string, [string, string]> = {
   solicitud_eliminacion: ["Vecino pidió borrar sus datos", "motivos"],
   programa_actualizado: ["Datos del programa actualizados", "sistema"],
 };
-function nombreEvento(tipo: string) {
+export function nombreEvento(tipo: string) {
   return nombresEvento[tipo]?.[0] ?? tipo.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
 }
-const actorPorTipo: Record<string, string> = { servicio_bot: "Brisa", servicio: "Brisa", participante: "Vecino", operador: "Panel", sistema: "Sistema", no_registrado: "Vecino nuevo" };
+export const actorPorTipo: Record<string, string> = { servicio_bot: "Brisa", servicio: "Brisa", participante: "Vecino", operador: "Panel", sistema: "Sistema", no_registrado: "Vecino nuevo" };
 
 export function Actividad() {
   const [tipo, setTipo] = useState("");

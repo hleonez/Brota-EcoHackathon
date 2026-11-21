@@ -291,12 +291,17 @@ def get_serie(
     agrupacion: Literal["dia", "semana", "mes"] = Query("mes"),
     gremio_id: uuid.UUID | None = Query(None),
     material_id: uuid.UUID | None = Query(None),
+    conjunto_id: uuid.UUID | None = Query(None),
     actor: Actor = Depends(get_actor),
     db: Session = Depends(get_db),
 ):
-    """Kilos por periodo local (America/Bogota) para gráficas del panel."""
+    """Kilos por periodo local (America/Bogota) para gráficas del panel.
+
+    Con `conjunto_id`, solo pesajes con torre de origen comprobada en ese conjunto.
+    """
     periodo = _periodo(desde, hasta)
     gremios = _alcance_gremios(actor, gremio_id)
+    torres_filtro = _torres_filtro(db, conjunto_id, None)
     tz = get_settings().zona_horaria
     trunc = {"dia": "day", "semana": "week", "mes": "month"}[agrupacion]
     local = func.timezone(tz, Pesaje.fecha_medicion)
@@ -312,6 +317,8 @@ def get_serie(
         q = q.where(Pesaje.gremio_id.in_(gremios))
     if material_id is not None:
         q = q.where(LineaPesaje.material_id == material_id)
+    if torres_filtro is not None:
+        q = q.where(Pesaje.torre_origen_id.in_(torres_filtro))
     puntos = [
         {"inicio_local": inicio.date().isoformat(), "kg_aceptados": _kg(a), "kg_rechazados": _kg(r)}
         for inicio, a, r in db.execute(q).all()
@@ -424,6 +431,30 @@ def get_certificado(
             "El Certificado Verde reúne todos los gremios del conjunto. Lo emite la Fundación o la administración."
         )
     contenido, nombre = generar_certificado(db, conjunto_id, mes)
+    return Response(
+        content=contenido,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+    )
+
+
+@router.get(
+    "/reportes/informe-impacto",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}, "description": "PDF del informe de impacto con gráficas"}},
+)
+def get_informe_impacto(
+    desde: InstanteEntrada = Query(...),
+    hasta: InstanteEntrada = Query(...),
+    conjunto_id: uuid.UUID | None = Query(None, description="Sin conjunto: todo el barrio, con la comparación por conjunto"),
+    actor: Actor = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Informe del periodo con gráficas y comparación con el periodo anterior. Fundación o administración."""
+    from app.modulos.informe_impacto import generar_informe
+
+    _periodo(desde, hasta)
+    contenido, nombre = generar_informe(db, actor, desde, hasta, conjunto_id)
     return Response(
         content=contenido,
         media_type="application/pdf",

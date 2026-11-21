@@ -34,6 +34,7 @@ from app.modulos import (
     sistema,
     solicitudes,
     territorio,
+    trazabilidad,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -117,6 +118,7 @@ def crear_app(iniciar_despachador: bool = True) -> FastAPI:
         programa,
         archivos,
         canjes,
+        trazabilidad,
     ):
         app.include_router(m.router, prefix="/v1")
     app.include_router(avisos.canal, prefix="/v1")

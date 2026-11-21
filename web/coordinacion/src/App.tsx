@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { cuandoExpire, fijarToken } from "./api";
 import { EstadoAcceso, FormularioAcceso, PantallaAcceso } from "./Acceso";
-import { CertificadoVerde } from "./AdminExtra";
-import Indicadores from "./Indicadores";
 import Administracion from "./Administracion";
 import Comunidad from "./Comunidad";
 import Panel from "./Panel";
-import { MarcoPanel, enlaceCuenta, nombresPerfil, type CuentaPanel } from "./MarcoPanel";
+import { nombresPerfil, type CuentaPanel } from "./MarcoPanel";
+import { PanelFundacion } from "./Fundacion";
 import type { Sesion } from "./tipos";
 import { guardarSesion, leerSesion } from "./util";
 
@@ -79,19 +78,7 @@ export default function App() {
     ),
   };
   if (actual === "admin") return <Administracion cuenta={cuenta} />;
-  if (actual === "fundacion") return <Fundacion cuenta={cuenta} />;
+  if (actual === "fundacion") return <PanelFundacion cuenta={cuenta} />;
   return <Panel key={actual} sesion={sesion} cuenta={cuenta} />;
 }
 
-const seccionesFundacion = [{ enlaces: [{ id: "impacto", texto: "Impacto del programa" }] }];
-
-function Fundacion({ cuenta }: { cuenta: CuentaPanel }) {
-  const [activo, navegar] = useState("impacto");
-  return (
-    <MarcoPanel grupos={seccionesFundacion} activo={activo} navegar={navegar} cuenta={cuenta}
-      contexto="Fundación Santo Domingo" titulo={activo === enlaceCuenta.id ? enlaceCuenta.texto : "Impacto del programa"}>
-      <CertificadoVerde />
-      <Indicadores />
-    </MarcoPanel>
-  );
-}

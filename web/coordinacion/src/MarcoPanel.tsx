@@ -26,6 +26,9 @@ export interface CuentaPanel {
   rol: string;
   cambioPerfil?: ReactNode;
   salir: () => void;
+  /** Personaje del perfil en el avatar (public/panel/retrato-*.webp) y su cargo junto al nombre. */
+  retrato?: string;
+  cargo?: string;
 }
 
 export const nombresPerfil: Record<string, string> = {
@@ -58,7 +61,7 @@ export function MarcaBrota() {
   );
 }
 
-export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, acciones, portada, avisos = [], children }: {
+export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, acciones, portada, avisos = [], ilustracionLateral, children }: {
   grupos: readonly GrupoPanel[];
   activo: string;
   titulo: string;
@@ -70,6 +73,8 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
   portada?: boolean;
   /** Pendientes propios del perfil (se suman a los contadores del menú en la campana). */
   avisos?: AvisoPanel[];
+  /** Ilustración al pie de la barra lateral en lugar de las plantas (por ejemplo, la caneca). */
+  ilustracionLateral?: string;
   children: ReactNode;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -142,7 +147,8 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
         </button>
       </header>
       {movil && abierto && <div className="panel-velo" aria-hidden="true" onClick={cerrarMenu} />}
-      <nav id={id} ref={nav} className="panel-nav" aria-label="Secciones del panel"
+      <nav id={id} ref={nav} className={"panel-nav" + (ilustracionLateral ? " con-ilustracion" : "")} aria-label="Secciones del panel"
+        style={ilustracionLateral ? { "--lateral-imagen": `url("${ilustracionLateral}")` } as CSSProperties : undefined}
         inert={movil && !abierto}
         data-motion="nav" data-state={abierto ? "open" : "closed"}>
         <div className="panel-logo"><MarcaBrota /></div>
@@ -182,11 +188,16 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
                 })),
               ...avisos,
             ]} navegar={navegar} />
-            <button type="button" className="panel-avatar" title={`${cuenta.nombre} · ${perfil}`}
-              aria-label={`Mi cuenta: ${cuenta.nombre}, ${perfil}`}
+            <button type="button" className={"panel-avatar" + (cuenta.retrato ? " con-retrato" : "")}
+              title={`${cuenta.nombre} · ${cuenta.cargo ?? perfil}`}
+              aria-label={`Mi cuenta: ${cuenta.nombre}, ${cuenta.cargo ?? perfil}`}
               aria-current={activo === enlaceCuenta.id ? "page" : undefined}
               onClick={() => navegar(enlaceCuenta.id)}>
-              <Icono nombre="cuenta" />
+              {cuenta.retrato ? <>
+                <img src={cuenta.retrato} alt="" width={128} height={128} />
+                <span className="panel-avatar-texto"><strong>{cuenta.nombre}</strong><small>{cuenta.cargo ?? perfil}</small></span>
+                <Icono nombre="abajo" />
+              </> : <Icono nombre="cuenta" />}
             </button>
           </div>
         </header>
@@ -207,15 +218,19 @@ export function MarcoPanel({ grupos, activo, titulo, contexto, cuenta, navegar, 
 
 /** Saludo de cada inicio (diseño clay): franja menta con la ilustración del perfil a la derecha y,
  *  debajo, las acciones como tarjetas grandes. */
-export function Portada({ saludo, texto, imagen, children }: {
+export function Portada({ saludo, texto, imagen, lado = "derecha", mancha = "lila", children }: {
   saludo: string;
   texto: string;
   imagen?: string;
+  /** Dónde va el personaje: a la derecha (por defecto) o a la izquierda del saludo. */
+  lado?: "derecha" | "izquierda";
+  /** Color de la mancha detrás del personaje. */
+  mancha?: "lila" | "verde";
   children?: ReactNode;
 }) {
   return (
     <>
-      <section className={"portada" + (imagen ? " con-imagen" : "")}>
+      <section className={"portada" + (imagen ? " con-imagen" : "") + (lado === "izquierda" ? " imagen-izquierda" : "") + " mancha-" + mancha}>
         <span className="portada-chispas" aria-hidden="true" />
         <div className="portada-texto">
           <p className="portada-saludo">{saludo} <span className="portada-mano" aria-hidden="true">👋</span></p>
@@ -233,10 +248,12 @@ export function Portada({ saludo, texto, imagen, children }: {
 }
 
 /** Featured task card (organic-flow mockup). Informational: the actions sit next to it. */
-export function TareaPrincipal({ icono, titulo, texto }: { icono: string; titulo: string; texto: string }) {
+export function TareaPrincipal({ icono, imagen, titulo, texto }: { icono: string; imagen?: string; titulo: string; texto: string }) {
   return (
-    <div className="tarea-principal">
-      <span className="tarea-principal-icono"><Icono nombre={icono} /></span>
+    <div className={"tarea-principal" + (imagen ? " con-imagen" : "")}>
+      {imagen
+        ? <img className="tarea-principal-imagen" src={imagen} alt="" />
+        : <span className="tarea-principal-icono"><Icono nombre={icono} /></span>}
       <div className="tarea-principal-texto">
         <span className="tarea-principal-etiqueta"><Icono nombre="hoja" />Tarea principal de hoy</span>
         <strong>{titulo}</strong>

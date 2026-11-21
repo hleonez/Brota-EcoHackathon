@@ -899,6 +899,86 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   verifican «etiqueta, valor» en celdas seguidas (`_fila`) en vez de «Etiqueta: valor» en una línea.
   Las cifras comprobadas son las mismas. API 115/119 (las 4 de `develop`).
 
+## 30 · 21-nov-2026 · Trazabilidad: tablero Kanban para Administración
+
+- **API** (`api/app/modulos/trazabilidad.py`, solo administración, solo lectura):
+  - `GET /v1/trazabilidad`: órdenes de todos los gremios con un resumen por estado.
+    - Sin fechas trae las abiertas y las cerradas de los últimos 30 días.
+    - Filtros: `gremio_id`, `desde`/`hasta` y `q` (código BR-… o ubicación). Máximo 500 tarjetas.
+    - Arma las tarjetas en pocas consultas, no una por tarjeta.
+  - `GET /v1/trazabilidad/{orden_id}`: la historia de la orden.
+    - Une `evento_dominio` con los avisos de Brisa (`evento_salida`): a quién, qué texto y si llegó.
+    - Incluye las otras órdenes de la misma solicitud, los pesajes y los puntos abonados.
+  - Sin celulares: el contacto va por nombre y los textos pasan por el mismo enmascarado de Actividad.
+  - Asignar, programar y cerrar sigue siendo de la coordinación de cada gremio (RN-01).
+- **Panel** (`Trazabilidad.tsx`, en Seguimiento):
+  - Seis columnas: sin asignar, asignadas, programadas, recogidas, rechazadas y canceladas.
+  - Cada tarjeta muestra código, gremio, ubicación, vecino, qué entrega, recolector y franja.
+  - Alertas: espera recolector más de 24 h, sin hora más de 48 h, visita vencida sin cerrar y aviso
+    de WhatsApp que no llegó.
+  - Ficha en ventana modal: barra de avance, datos y «paso a paso» con los mensajes de Brisa como
+    burbujas.
+  - Se actualiza sola cada 30 s, exporta a CSV y en celular las columnas se deslizan.
+  - El tablero de Inicio tiene el botón «Ver recorrido».
+- `tests/test_trazabilidad.py`: 3 pruebas (recorrido completo, filtros y validación, solo
+  administración). API 118/122 (las mismas 4 de `develop`). Probado en el navegador (escritorio y
+  celular).
+
+## 31 · 21-nov-2026 · Coordinación con los personajes del diseño y «Recorrido»
+
+- **Ilustraciones** recortadas de los diseños del usuario (fondo quitado con relleno desde el
+  borde) en `web/coordinacion/public/panel/`:
+  - personajes: `coordinadora.webp` y `viviana.webp`;
+  - objetos: `portapapeles.webp`, `bascula.webp`, `balde.webp` y `caneca.webp`;
+  - retratos redondos: `retrato-coordinadora.webp` y `retrato-viviana.webp`.
+- **Inicio de Coordinación de reciclaje:**
+  - la coordinadora va a la izquierda del saludo, sobre una mancha verde;
+  - «Ver solicitudes» lleva el portapapeles y «Registrar pesaje», la báscula;
+  - la caneca reemplaza las plantas al pie de la barra lateral.
+- **Inicio de la Huerta:**
+  - Viviana va a la derecha;
+  - el balde de orgánicos acompaña la «Tarea principal de hoy»;
+  - «Registrar baldes» va en verde y «Ver entregas», en lila.
+- **Encabezado de las dos coordinaciones:** el avatar muestra el retrato, el nombre y el cargo.
+- **Filas pendientes:** etiqueta «Reciclable» u «Orgánico» junto al estado.
+- **Recorrido** (menú Recolección): el tablero Kanban de trazabilidad, ahora también para la
+  coordinación, limitado a su gremio (RN-01).
+  - `GET /v1/trazabilidad` filtra por los gremios que coordina y responde 403 si pide otro gremio.
+  - La historia de una orden ajena responde 404.
+  - En «la misma solicitud también va a…» la otra orden se ve, pero no se abre.
+  - Prueba nueva en `test_trazabilidad.py`: 4/4.
+- Componentes: `Portada` acepta `lado` y `mancha`; `TareaPrincipal` acepta `imagen`; `MarcoPanel`
+  acepta `ilustracionLateral`; `CuentaPanel` acepta `retrato` y `cargo`.
+
+## 32 · 21-nov-2026 · Panel de la Fundación: impacto por barrio y conjunto, informe con gráficas
+
+- **Panel** (`Fundacion.tsx`, reemplaza la vista única anterior). Menú:
+  - Inicio;
+  - Impacto: Por conjunto, Informes y Liga de torres.
+- **Filtros arriba a la derecha:** territorio (todo el barrio Villas de San Pablo o un conjunto) y
+  periodo (este mes, 3 meses, 6 meses o este año). Valen para todas las vistas.
+- **Inicio**, según el diseño «Impacto del programa»:
+  - Tres tarjetas con ilustración: kilos, hogares e ingresos estimados de recicladores.
+  - Cada tarjeta muestra su variación contra el periodo anterior de igual duración.
+  - Gráfica de kilos por mes (o por semana, si el periodo es un mes) con insignia de crecimiento.
+  - La pareja de recicladores con «Ver informes» e indicadores secundarios.
+- **Por conjunto:** total del barrio y una fila por conjunto (kilos, hogares, recolecciones,
+  rechazo y barra comparativa), más los indicadores detallados de siempre.
+- **Informes:** informe de impacto en PDF, Excel del periodo y Certificado Verde del conjunto
+  elegido. La Liga de torres también sigue el conjunto elegido.
+- **API:**
+  - `GET /v1/reportes/informe-impacto?desde&hasta[&conjunto_id]`, solo Fundación y administración.
+    - Es un PDF con el estilo del Certificado: indicadores con variación, gráfica de barras por mes o
+      semana, barras y tabla por material, comparación por conjunto (si es todo el barrio) y
+      metodología.
+    - Reusa `get_resumen` y `get_serie`, así el PDF y la pantalla dan las mismas cifras.
+  - `GET /v1/reportes/serie` acepta `conjunto_id`: solo pesajes con torre de origen en ese conjunto.
+  - `_PDF.pie` es configurable: el certificado conserva su texto y el informe tiene el suyo.
+- **Ilustraciones** del diseño en `public/panel/`: `kpi-reciclaje.webp`, `kpi-casa.webp`,
+  `kpi-monedas.webp` y `recicladores.webp`.
+- **Pruebas:** `tests/test_informe_impacto.py`, 3 pruebas (barrio y conjunto, permisos y validación,
+  serie por conjunto). API 122/126: las 4 de `develop`.
+
 ---
 
 ## Próximos pasos
