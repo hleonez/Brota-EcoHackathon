@@ -72,7 +72,7 @@ export function BotonDescarga({ onClick, children }: { onClick: () => void | Pro
 }
 
 /** Cuenta de 0 al valor al aparecer (se apaga con «reducir movimiento»). */
-function useConteo(valor: number) {
+export function useConteo(valor: number) {
   const [mostrado, setMostrado] = useState(0);
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setMostrado(valor); return; }
@@ -350,15 +350,16 @@ interface Liga {
     porcentaje_participacion: string; kg_aceptados_atribuidos: string; posicion: number }[];
 }
 
-function useConjunto() {
+/** El conjunto elegido (o el primero, si no se elige ninguno). */
+function useConjunto(id?: string) {
   const c = useDatos<{ id: string; nombre: string }[]>("/v1/conjuntos");
-  return c.datos?.[0];
+  return (id ? c.datos?.find((x) => x.id === id) : undefined) ?? c.datos?.[0];
 }
 
-export function LigaTorres() {
+export function LigaTorres({ conjuntoId }: { conjuntoId?: string } = {}) {
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const p = periodos[periodo]();
-  const conjunto = useConjunto();
+  const conjunto = useConjunto(conjuntoId);
   const liga = useDatos<Liga>(conjunto ? `/v1/liga?conjunto_id=${conjunto.id}&desde=${enc(p.desde)}&hasta=${enc(p.hasta)}` : "");
   const torres = liga.datos?.torres ?? [];
   const podio = torres.slice(0, 3);
@@ -424,8 +425,8 @@ export function LigaTorres() {
 // ------------------------------------------------------------------ certificado verde (PDF)
 
 /** Certificado Verde del mes por conjunto (GET /v1/reportes/certificado). Fundación y administración. */
-export function CertificadoVerde() {
-  const conjunto = useConjunto();
+export function CertificadoVerde({ conjuntoId }: { conjuntoId?: string } = {}) {
+  const conjunto = useConjunto(conjuntoId);
   const meses = useMemo(() => [0, -1, -2].map((d) => {
     const p = periodoMes(d);
     return { valor: p.desde.slice(0, 7), nombre: p.nombre };

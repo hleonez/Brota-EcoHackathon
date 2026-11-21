@@ -950,6 +950,35 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
 - Componentes: `Portada` acepta `lado` y `mancha`; `TareaPrincipal` acepta `imagen`; `MarcoPanel`
   acepta `ilustracionLateral`; `CuentaPanel` acepta `retrato` y `cargo`.
 
+## 32 · 21-nov-2026 · Panel de la Fundación: impacto por barrio y conjunto, informe con gráficas
+
+- **Panel** (`Fundacion.tsx`, reemplaza la vista única anterior). Menú:
+  - Inicio;
+  - Impacto: Por conjunto, Informes y Liga de torres.
+- **Filtros arriba a la derecha:** territorio (todo el barrio Villas de San Pablo o un conjunto) y
+  periodo (este mes, 3 meses, 6 meses o este año). Valen para todas las vistas.
+- **Inicio**, según el diseño «Impacto del programa»:
+  - Tres tarjetas con ilustración: kilos, hogares e ingresos estimados de recicladores.
+  - Cada tarjeta muestra su variación contra el periodo anterior de igual duración.
+  - Gráfica de kilos por mes (o por semana, si el periodo es un mes) con insignia de crecimiento.
+  - La pareja de recicladores con «Ver informes» e indicadores secundarios.
+- **Por conjunto:** total del barrio y una fila por conjunto (kilos, hogares, recolecciones,
+  rechazo y barra comparativa), más los indicadores detallados de siempre.
+- **Informes:** informe de impacto en PDF, Excel del periodo y Certificado Verde del conjunto
+  elegido. La Liga de torres también sigue el conjunto elegido.
+- **API:**
+  - `GET /v1/reportes/informe-impacto?desde&hasta[&conjunto_id]`, solo Fundación y administración.
+    - Es un PDF con el estilo del Certificado: indicadores con variación, gráfica de barras por mes o
+      semana, barras y tabla por material, comparación por conjunto (si es todo el barrio) y
+      metodología.
+    - Reusa `get_resumen` y `get_serie`, así el PDF y la pantalla dan las mismas cifras.
+  - `GET /v1/reportes/serie` acepta `conjunto_id`: solo pesajes con torre de origen en ese conjunto.
+  - `_PDF.pie` es configurable: el certificado conserva su texto y el informe tiene el suyo.
+- **Ilustraciones** del diseño en `public/panel/`: `kpi-reciclaje.webp`, `kpi-casa.webp`,
+  `kpi-monedas.webp` y `recicladores.webp`.
+- **Pruebas:** `tests/test_informe_impacto.py`, 3 pruebas (barrio y conjunto, permisos y validación,
+  serie por conjunto). API 122/126: las 4 de `develop`.
+
 ---
 
 ## Próximos pasos

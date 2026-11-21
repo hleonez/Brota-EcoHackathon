@@ -296,6 +296,8 @@ def _hora(d: datetime) -> str:
 
 
 class _PDF(FPDF):
+    pie = f"No sustituye el aforo de la empresa de aseo. Brota · fórmula {FORMULA}"
+
     def footer(self) -> None:
         y = self.h - 21
         self.set_draw_color(*_LINEA)
@@ -315,7 +317,7 @@ class _PDF(FPDF):
         self.set_xy(15, self.h - 10)
         self.set_font("Helvetica", "", 7)
         self.set_text_color(*_GRIS)
-        self.cell(150, 4, _texto(f"No sustituye el aforo de la empresa de aseo. Brota · fórmula {FORMULA}"))
+        self.cell(150, 4, _texto(self.pie))
         self.cell(30, 4, _texto(f"Página {self.page_no()} de {{nb}}"), align="R")
 
 
