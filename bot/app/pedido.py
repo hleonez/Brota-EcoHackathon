@@ -26,6 +26,8 @@ from app.whatsapp import Boton, Entrante, Fila, WhatsApp
 
 INCLUIDOS = ("listo", "revision")
 CONFIRMAR_ENVIO = {"enviar", "enviar solicitud", "enviala", "si", "si enviala", "dale", "confirmo"}
+REFERENCIAS = {"es eso", "eso", "eso mismo", "lo mismo", "eso es", "el mismo"}
+PASOS_SIN_RECUERDO = {"CHEQUEO", "HORARIO", "RESUMEN"}
 # Misma zona fija UTC-5 que usa liga_del_mes (America/Bogota, sin horario de verano).
 ZONA = timezone(timedelta(hours=-5))
 _FRANJA = re.compile(r"^(hoy|manana) (\d{1,2}) a (\d{1,2})$")
@@ -62,6 +64,43 @@ class Borrador:
 
     def pendiente(self) -> Item | None:
         return next((i for i in self.items if i.estado == "pendiente"), None)
+
+
+def frases_desconocidas(r: dict[str, Any] | None) -> list[str]:
+    """Lo que la IA oyó y no está en el catálogo. Vacío si además propuso un código."""
+    if not r or r.get("residuos"):
+        return []
+    vistos: list[str] = []
+    for x in r.get("no_reconocidos") or []:
+        frase = str(x).strip()
+        if frase and frase not in vistos:
+            vistos.append(frase)
+    return vistos
+
+
+def texto_con_recuerdo(texto: str | None, dicho: str | None, paso: str | None = None) -> str | None:
+    """Ante «es eso», la IA recibe la frase anterior. El mensaje del vecino no se reescribe."""
+    if not texto or not dicho or paso in PASOS_SIN_RECUERDO or normalizar(texto) not in REFERENCIAS:
+        return texto
+    return f"El vecino dijo antes: «{dicho}». Ahora escribe: «{texto}»"
+
+
+def guardar_dicho(estado: Any, r: dict[str, Any] | None, texto: str | None) -> None:
+    """Guarda la transcripción, o el texto si nombró algo fuera del catálogo."""
+    if estado is None or not r:
+        return
+    transcripcion = (r.get("transcripcion") or "").strip()
+    if transcripcion:
+        estado.dicho = transcripcion
+        return
+    if frases_desconocidas(r) and (texto or "").strip() and normalizar(texto) not in REFERENCIAS:
+        estado.dicho = texto.strip()
+
+
+def _enumerar(nombres: list[str]) -> str:
+    if len(nombres) == 1:
+        return nombres[0]
+    return ", ".join(nombres[:-1]) + f" y {nombres[-1]}"
 
 
 def ahora_bogota() -> datetime:
@@ -192,7 +231,23 @@ class Pedido:
         self.borradores.borrar(celular)
         await self.wa.texto(celular, T.P_CANCELADA)
 
-    async def atender(self, m: Entrante, me: dict[str, Any]) -> bool:
+    async def avisar_desconocido(
+        self, celular: str, r: dict[str, Any] | None, encabezado: str | None = None
+    ) -> bool:
+        """Si no hay código y sí hay algo fuera del catálogo, lo nombra y ofrece a una persona."""
+        nombres = frases_desconocidas(r)
+        if not nombres:
+            return False
+        cuerpo = T.IA_FUERA_CATALOGO.format(lista=_enumerar(nombres))
+        if encabezado:
+            cuerpo = f"{encabezado}\n\n{cuerpo}"
+        await self.wa.botones(
+            celular, cuerpo,
+            [Boton("M_PERSONA", "Hablar con alguien"), Boton("M_PEDIR", "Elegir material")],
+        )
+        return True
+
+    async def atender(self, m: Entrante, me: dict[str, Any], estado: Any | None = None) -> bool:
         """Atiende botones P_* y el texto mientras hay un borrador. False: no era para el pedido."""
         accion, _, resto = (m.respuesta_id or "").partition(":")
         b = self.borradores.obtener(m.de)
@@ -248,7 +303,7 @@ class Pedido:
         elif accion == "P_SEGUIR":
             await self._seguir(cel, b, fichas, me)
         elif m.tipo == "text":
-            await self._texto(m, b, fichas, me)
+            await self._texto(m, b, fichas, me, estado)
         else:
             await self._seguir(cel, b, fichas, me)
         return True
@@ -284,7 +339,10 @@ class Pedido:
 
     # ------------------------------------------------------------------ pasos
 
-    async def _texto(self, m: Entrante, b: Borrador, fichas: dict[str, dict[str, Any]], me: dict[str, Any]) -> None:
+    async def _texto(
+        self, m: Entrante, b: Borrador, fichas: dict[str, dict[str, Any]], me: dict[str, Any],
+        estado: Any | None = None,
+    ) -> None:
         if b.paso == "HORARIO":
             await self._recibir_horario(m, b, fichas, me)
             return
@@ -300,11 +358,17 @@ class Pedido:
             await self.proponer(m.de, [f["codigo"] for f in encontradas], "texto")
             return
         # Los sinónimos no alcanzaron: que la IA lo intente (si está disponible).
-        r = await interpretar(self.api, m.de, texto=m.texto, contexto="pedido")
+        dicho = getattr(estado, "dicho", None) if estado is not None else None
+        r = await interpretar(
+            self.api, m.de, texto=texto_con_recuerdo(m.texto, dicho, b.paso), contexto="pedido",
+        )
+        guardar_dicho(estado, r, m.texto)
         if r and r["residuos"]:
             await self.proponer(m.de, [x["codigo"] for x in r["residuos"]], "texto")
         elif r and r.get("intencion") == "cancelar":
             await self.cancelar(m.de)
+        elif r and await self.avisar_desconocido(m.de, r):
+            return
         elif r and (r.get("respuesta") or r.get("aclaracion")):
             await self.wa.texto(m.de, r.get("respuesta") or r["aclaracion"])
             await self._elegir(m.de, b, fichas)
