@@ -744,6 +744,29 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
 - Probado: Administración (inicio, Cuentas, Mi cuenta), Coordinación huerta, escritorio 1911×975 y
   móvil con el menú desplegable.
 
+## 24 · 20-nov-2026 · Movimiento, barrio, campana y secciones en clay (solo en `dev/jeremy`)
+
+- **Menú lateral:** las opciones viven en su propia franja con scroll; arriba y abajo se desvanecen
+  (máscara) y terminan antes de las plantas, así ya no se montan sobre la hoja. Al hacer scroll cada
+  opción aparece deslizándose (animación ligada al scroll; sin soporte, aparecen normales).
+- **Selector «Villas de San Pablo»:** muestra el megabarrio y los conjuntos reales de `/v1/conjuntos`
+  con sus torres (hoy «Brisas de San Pablo · piloto · 5 torres»). Es informativo: el piloto tiene un
+  conjunto y no filtra datos.
+- **Campana:** junta los contadores del menú (p. ej. «Bandeja: 2 pendientes» en Coordinación) y avisos
+  propios de Administración: habilitaciones del piloto vencidas o que vencen en 7 días y contenidos
+  educativos sin publicar. Punto lila con el número; cada aviso lleva a su sección. Sin pendientes dice
+  «Todo al día».
+- **Movimiento** (`clay.css`, aparte del contrato `data-motion` de David; todo se apaga con «reducir
+  movimiento»): entrada escalonada del menú y de las tarjetas, transición al cambiar de sección, la
+  vecina flota, la mano saluda, las chispas titilan, la campana suena al llegar avisos, globos que se
+  abren con escala, tarjetas que se levantan con la ilustración inclinada y botones que se hunden.
+- **Secciones de Administración (las 11):** cabecera clay con ilustración o icono, para qué sirve,
+  cuántos registros hay y buscador; filas como tarjetitas con iniciales o icono, datos en píldoras y el
+  estado como etiqueta con icono y texto (no solo color); formularios con campos redondeados, selects y
+  píldoras clay, botones con relieve; estado vacío ilustrado; Sistema como tarjetas de estado.
+- Probado: Cuentas (buscador), Educación, Piloto, Sistema, campana y barrio con Administración y
+  Coordinación, escritorio 1911×975 y móvil.
+
 ---
 
 ## Próximos pasos

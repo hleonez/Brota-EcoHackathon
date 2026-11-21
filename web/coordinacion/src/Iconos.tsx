@@ -37,6 +37,9 @@ const trazos: Record<string, string> = {
   ubicacion: "M12 21s-6.5-6.2-6.5-11.5a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21ZM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
   abajo: "M6 9l6 6 6-6",
   check: "M5 12.5l4.5 4.5L19 7.5",
+  editar: "M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4",
+  llave: "M14 10a4 4 0 1 0-3.5 4L5 19.5V21h3v-2h2v-2h2l1.5-1.5",
+  buscar: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4",
 };
 
 export function Icono({ nombre, className }: { nombre: string; className?: string }) {

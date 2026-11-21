@@ -1,5 +1,6 @@
 import { MarcoPanel, Portada, TarjetaAccion, enlaceCuenta, type AvisoPanel, type CuentaPanel } from "./MarcoPanel";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
+import { Icono } from "./Iconos";
 import { pedir } from "./api";
 import { BotonBaja, Campo, Formulario, Pildoras, type Operacion, type Valores } from "./Formulario";
 import { Espera, Estado, fechaBogota, useDatos } from "./portal";
@@ -88,6 +89,27 @@ const secciones = gruposAdministracion.map((grupo) => ({
   titulo: "titulo" in grupo ? grupo.titulo : undefined,
   enlaces: grupo.enlaces.map((seccion) => ({ id: seccion, texto: seccion })),
 }));
+/** Cabecera de cada sección: ilustración 3D o icono, tono pastel y para qué sirve. */
+const fichasSeccion: Record<Exclude<Seccion, "Inicio">, { imagen?: string; icono: string; tono: string; texto: string }> = {
+  Cuentas: { imagen: "/panel/personas.webp", icono: "cuentas", tono: "verde", texto: "Quién entra al panel y con qué perfil: coordinación, recolectores, fundación y administración." },
+  "Registro asistido": { icono: "registro asistido", tono: "turquesa", texto: "Registra a un vecino con su consentimiento y vincúlalo a su unidad." },
+  Piloto: { icono: "piloto", tono: "amarillo", texto: "Quién participa en el piloto, desde qué unidad y hasta cuándo." },
+  Recolectores: { icono: "recolectores", tono: "verde", texto: "Huerteros y recicladores de cada colectivo que reciben las asignaciones." },
+  Unidades: { icono: "unidades", tono: "lila", texto: "Hogares y negocios del conjunto que pueden pedir recolección." },
+  Educación: { icono: "educación", tono: "amarillo", texto: "Guías de separación que los vecinos ven sin iniciar sesión." },
+  Materiales: { imagen: "/panel/reciclaje.webp", icono: "materiales", tono: "lila", texto: "Tipos de material que se reciben y el colectivo que los atiende." },
+  Puntos: { imagen: "/panel/estrella.webp", icono: "puntos", tono: "verde", texto: "Cuántos puntos gana la comunidad por cada entrega. Cada cambio crea una versión nueva." },
+  Motivos: { icono: "motivos", tono: "turquesa", texto: "Razones para rechazar una entrega. Se desactivan, nunca se borran." },
+  Equivalencias: { imagen: "/panel/monedas.webp", icono: "equivalencias", tono: "amarillo", texto: "Cuántos kilos equivalen a un balde o un bulto, para valorar cada entrega." },
+  Sistema: { icono: "sistema", tono: "verde", texto: "Estado del servidor y de los servicios que usa el panel." },
+};
+const estadosOk = new Set(["Activo", "Vigente", "Publicado"]);
+const estadosAlerta = new Set(["Vencida", "Borrador", "Aún no vigente", "Vínculo sin verificar", "Sin vínculo vigente", "Fuera de vigencia"]);
+const estadosApagados = new Set(["Inactivo", "Inactiva", "Retirado"]);
+function iniciales(texto: string) {
+  return texto.split(/\s+/).filter((p) => /^[\p{L}\p{N}]/u.test(p)).slice(0, 2).map((p) => p[0]).join("").toUpperCase() || "·";
+}
+
 const rutas: Partial<Record<Seccion, string>> = {
   Cuentas: "cuentas-operadoras?limit=100",
   Recolectores: "recolectores?limit=100",
@@ -133,6 +155,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
   const [aviso, setAviso] = useState<{ tipo: "exito" | "error"; texto: string } | null>(null);
   const [rol, setRol] = useState("");
   const [participanteId, setParticipanteId] = useState("");
+  const [busqueda, setBusqueda] = useState("");
   const participantes = useDatos<ParticipantePiloto[]>(
     vista === "Piloto" ? "/v1/participantes" : "",
   );
@@ -390,25 +413,36 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
     setAviso(null);
     setRol("");
     setParticipanteId("");
+    setBusqueda("");
   }
 
   return (
     <MarcoPanel grupos={secciones} activo={cuentaActiva ? enlaceCuenta.id : vista}
       titulo={cuentaActiva ? enlaceCuenta.texto : vista === "Inicio" ? "Administración" : vista}
       contexto="Administración de EcoConecta" cuenta={cuentaSesion} navegar={navegar} avisos={avisosAdmin}
-      portada={!cuentaActiva && vista === "Inicio"}>
+      portada={!cuentaActiva}>
+      {vista !== "Inicio" && (
+        <CabeceraSeccion vista={vista} cantidad={vista === "Sistema" || vista === "Registro asistido" ? undefined : filas?.length}
+          busqueda={vista === "Sistema" || vista === "Registro asistido" ? undefined : busqueda} alBuscar={setBusqueda} />
+      )}
       {conflicto && (
-        <p role="alert">Este registro cambió. Vuelve a seleccionarlo para revisar la versión actual.</p>
+        <p className="aviso aviso-error" role="alert">Este registro cambió. Vuelve a seleccionarlo para revisar la versión actual.</p>
       )}
       {vista === "Sistema" ? (
         <section className="eco-tarjeta">
           <h2>Estado del sistema</h2>
           {cap.datos ? (
-            <>
-              <p>Versión del contrato: {cap.datos.version_contrato}</p>
-              <p>Modo de avisos: {cap.datos.avisos.modo}</p>
-              <p>IA en este frontend: desactivada.</p>
-            </>
+            <ul className="sistema-estado">
+              <li><span className="registro-avatar tono-verde"><Icono nombre="sistema" /></span>
+                <span><small>Versión del contrato</small><strong>{cap.datos.version_contrato}</strong></span>
+                <span className="registro-estado estado-ok"><Icono nombre="check" />En línea</span></li>
+              <li><span className="registro-avatar tono-lila"><Icono nombre="campana" /></span>
+                <span><small>Avisos a vecinos</small><strong>Modo {cap.datos.avisos.modo}</strong></span>
+                <span className="registro-estado estado-ok"><Icono nombre="check" />Activo</span></li>
+              <li><span className="registro-avatar tono-amarillo"><Icono nombre="hoja" /></span>
+                <span><small>IA en este panel</small><strong>Desactivada</strong></span>
+                <span className="registro-estado estado-apagado">La IA vive en Brisa</span></li>
+            </ul>
           ) : (
             <Espera error={cap.error} reintentar={cap.recargar} />
           )}
@@ -457,65 +491,89 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                   }}
                 />
               ) : filas.length === 0 ? (
-                <p>Sin registros disponibles.</p>
-              ) : (
-                <ul className="registros">
-                  {filas.map((f) => {
-                    const persona = vista === "Piloto"
-                      ? participantes.datos?.find((p) => p.id === f.participante_id)
-                      : undefined;
-                    const unidad = persona?.unidades.find((u) => u.id === f.unidad_id);
+                <div className="vacio-clay">
+                  <img src="/panel/reciclaje.webp" alt="" />
+                  <p>Todavía no hay registros. Crea el primero con el formulario.</p>
+                </div>
+              ) : (() => {
+                const filasVista = filas.map((f) => {
+                  const persona = vista === "Piloto"
+                    ? participantes.datos?.find((p) => p.id === f.participante_id)
+                    : undefined;
+                  const unidad = persona?.unidades.find((u) => u.id === f.unidad_id);
+                  const titulo = (vista === "Unidades" && (f.etiqueta || f.referencia_local)) ||
+                    persona?.nombre || f.nombre || f.titulo || f.referencia_local || f.codigo ||
+                    f.recipiente || f.estado || "Habilitación";
+                  const datos = [
+                    vista === "Piloto" && participantes.datos &&
+                      (unidad?.etiqueta || "Unidad sin vínculo vigente"),
+                    vista === "Unidades" && (f.tipo === "negocio" ? "Negocio" : f.tipo === "hogar" ? "Hogar" : ""),
+                    f.tipo === "huertero" ? "Huertero" : f.tipo === "reciclador" ? "Reciclador" : "",
+                    f.telefono_contacto,
+                    f.codigo && f.nombre ? f.codigo : "",
+                    f.tema && temasEducativos[f.tema],
+                    f.usuario,
+                    f.permisos?.map((p) => p.rol).join(", "),
+                    vista === "Educación"
+                      ? estadoContenido(f)
+                      : vista === "Piloto"
+                      ? estadoPiloto(f, participantes.datos ? Boolean(unidad) : undefined)
+                      : f.activo === undefined
+                      ? ""
+                      : f.activo
+                        ? "Activo"
+                        : "Inactivo",
+                    f.parametros?.puntos !== undefined ? f.parametros.puntos + " puntos" : "",
+                    f.kg_por_unidad ? f.kg_por_unidad + " kg/unidad" : "",
+                    f.vigente_desde && "Desde " + fechaBogota(new Date(f.vigente_desde)),
+                    f.vigente_hasta && "Vence " + fechaBogota(new Date(f.vigente_hasta)),
+                  ].filter((d): d is string => Boolean(d));
+                  return { f, titulo, datos };
+                });
+                const consulta = busqueda.trim().toLocaleLowerCase("es");
+                const visibles = consulta
+                  ? filasVista.filter(({ f, titulo, datos }) =>
+                    [titulo, ...datos, f.texto ?? ""].join(" ").toLocaleLowerCase("es").includes(consulta))
+                  : filasVista;
+                const conPersona = vista === "Cuentas" || vista === "Recolectores" || vista === "Piloto";
+                const ficha = fichasSeccion[vista as Exclude<Seccion, "Inicio">];
+                if (visibles.length === 0)
+                  return <div className="vacio-clay"><p>Nada coincide con «{busqueda.trim()}».</p></div>;
+                return (
+                <ul className="registros registros-clay">
+                  {visibles.map(({ f, titulo, datos }, n) => {
                     const cambio = cambiosEstado[vista];
                     const propia = vista === "Cuentas" && f.nombre === cuentaSesion.nombre;
                     return (
-                    <li key={f.id} className={f.activo === false ? "registro-inactivo" : undefined}>
+                    <li key={f.id} className={f.activo === false ? "registro-inactivo" : undefined}
+                      style={{ "--n": Math.min(n, 12) } as CSSProperties}>
+                      <span className={"registro-avatar tono-" + ficha.tono} aria-hidden="true">
+                        {conPersona ? iniciales(titulo) : <Icono nombre={ficha.icono} />}
+                      </span>
                       <div className="registro-texto">
-                      <strong>
-                        {(vista === "Unidades" && (f.etiqueta || f.referencia_local)) ||
-                          persona?.nombre || f.nombre ||
-                          f.titulo ||
-                          f.referencia_local ||
-                          f.codigo ||
-                          f.recipiente ||
-                          f.estado ||
-                          "Habilitación"}
-                      </strong>
-                      <small>
-                        {[
-                          vista === "Piloto" && participantes.datos &&
-                            (unidad?.etiqueta || "Unidad sin vínculo vigente"),
-                          vista === "Unidades" && (f.tipo === "negocio" ? "Negocio" : f.tipo === "hogar" ? "Hogar" : ""),
-                          f.tipo === "huertero" ? "Huertero" : f.tipo === "reciclador" ? "Reciclador" : "",
-                          f.telefono_contacto,
-                          f.codigo && f.nombre ? f.codigo : "",
-                          f.tema && temasEducativos[f.tema],
-                          f.usuario,
-                          f.permisos?.map((p) => p.rol).join(", "),
-                          vista === "Educación"
-                            ? estadoContenido(f)
-                            : vista === "Piloto"
-                            ? estadoPiloto(f, participantes.datos ? Boolean(unidad) : undefined)
-                            : f.activo === undefined
-                            ? ""
-                            : f.activo
-                              ? "Activo"
-                              : "Inactivo",
-                          f.parametros?.puntos !== undefined
-                            ? f.parametros.puntos + " puntos"
-                            : "",
-                          f.kg_por_unidad ? f.kg_por_unidad + " kg/unidad" : "",
-                          f.vigente_desde && fechaBogota(new Date(f.vigente_desde)),
-                          f.vigente_hasta && "Vence: " + fechaBogota(new Date(f.vigente_hasta)),
-                          f.texto,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </small>
+                        <strong>{titulo}</strong>
+                        <div className="registro-datos">
+                          {datos.map((d, i) => (
+                            <span key={i} className={
+                              estadosOk.has(d) ? "registro-estado estado-ok"
+                                : estadosAlerta.has(d) ? "registro-estado estado-alerta"
+                                : estadosApagados.has(d) ? "registro-estado estado-apagado"
+                                : "registro-dato"}>
+                              {(estadosOk.has(d) || estadosAlerta.has(d) || estadosApagados.has(d)) && (
+                                <Icono nombre={estadosOk.has(d) ? "check" : estadosAlerta.has(d) ? "reloj" : "cerrar"} />
+                              )}
+                              {d}
+                            </span>
+                          ))}
+                        </div>
+                        {f.texto && <p className="registro-descripcion">{f.texto}</p>}
                       </div>
                       <div className="registro-acciones">
                         {(vista === "Piloto" || vista === "Educación" || vista === "Recolectores" ||
                           vista === "Materiales" || vista === "Cuentas") && (
-                          <button className="btn btn-sm" onClick={() => { setConflicto(false); setAviso(null); setSeleccion(f); }}>
+                          <button className="btn btn-sm registro-editar"
+                            onClick={() => { setConflicto(false); setAviso(null); setSeleccion(f); }}>
+                            <Icono nombre={vista === "Cuentas" ? "llave" : "editar"} />
                             {vista === "Piloto" ? "Cambiar" : vista === "Cuentas" ? "Acceso" : "Editar"}
                           </button>
                         )}
@@ -529,7 +587,8 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                     );
                   })}
                 </ul>
-              )}
+                );
+              })()}
             </section>
           </div>
           <div className="col-12 col-lg-6">
@@ -840,3 +899,36 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
   );
 }
 
+
+function CabeceraSeccion({ vista, cantidad, busqueda, alBuscar }: {
+  vista: Exclude<Seccion, "Inicio">;
+  cantidad?: number;
+  busqueda?: string;
+  alBuscar: (texto: string) => void;
+}) {
+  const ficha = fichasSeccion[vista];
+  return (
+    <section className={"seccion-cabecera tono-" + ficha.tono}>
+      {ficha.imagen
+        ? <img className="seccion-cabecera-imagen" src={ficha.imagen} alt="" />
+        : <span className="seccion-cabecera-icono" aria-hidden="true"><Icono nombre={ficha.icono} /></span>}
+      <div className="seccion-cabecera-texto">
+        <p className="seccion-cabecera-titulo">
+          {vista}
+          {cantidad !== undefined && (
+            <span className="seccion-cabecera-cantidad">{cantidad} registro{cantidad === 1 ? "" : "s"}</span>
+          )}
+        </p>
+        <p>{ficha.texto}</p>
+      </div>
+      {busqueda !== undefined && (
+        <label className="seccion-buscar">
+          <Icono nombre="buscar" />
+          <span className="visually-hidden">Buscar en {vista}</span>
+          <input type="search" value={busqueda} onChange={(e) => alBuscar(e.target.value)}
+            placeholder={"Buscar en " + vista.toLowerCase()} />
+        </label>
+      )}
+    </section>
+  );
+}
