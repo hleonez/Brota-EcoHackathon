@@ -14,7 +14,9 @@ from app.config import get_settings
 from app.core.errores import registrar_manejadores
 from app.despachador import Despachador
 from app.modulos import (
+    archivos,
     avisos,
+    canjes,
     casos,
     configuracion,
     coordinacion,
@@ -50,6 +52,7 @@ def crear_app(iniciar_despachador: bool = True) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        archivos.depurar_al_arrancar()
         if iniciar_despachador:
             despachador.iniciar()
         yield
@@ -97,6 +100,8 @@ def crear_app(iniciar_despachador: bool = True) -> FastAPI:
         sincronizacion,
         ia,
         casos,
+        archivos,
+        canjes,
     ):
         app.include_router(m.router, prefix="/v1")
     app.include_router(avisos.canal, prefix="/v1")

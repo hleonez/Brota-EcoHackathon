@@ -113,6 +113,51 @@ export async function pedir<T>(
   }
 }
 
+function nombreAdjunto(dispo: string | null, respaldo: string): string {
+  const citado = /filename="([^"]+)"/.exec(dispo ?? "");
+  if (citado?.[1]) return citado[1];
+  const simple = /filename=([^;]+)/.exec(dispo ?? "");
+  return simple?.[1]?.trim() || respaldo;
+}
+
+/** Descarga un archivo con el Bearer ya guardado. No abre la URL sin Authorization. */
+export async function descargar(ruta: string, nombre: string): Promise<void> {
+  const url = new URL(BASE + ruta);
+  const h: Record<string, string> = {};
+  if (token) h.Authorization = `Bearer ${token}`;
+  let r: Response;
+  try {
+    r = await fetch(url, { method: "GET", headers: h });
+  } catch {
+    throw new ErrorApi(
+      0,
+      "RED",
+      "No hay conexión con la API de Brota. Revisa el internet o el servidor.",
+    );
+  }
+  if (!r.ok) {
+    const datos = await r.json().catch(() => null);
+    const e = datos?.error ?? {};
+    if (r.status === 401 && token) alExpirar();
+    throw new ErrorApi(
+      r.status,
+      e.code ?? "HTTP",
+      e.message ?? `Error ${r.status}`,
+      e.fields,
+    );
+  }
+  const blob = await r.blob();
+  const archivo = nombreAdjunto(r.headers.get("Content-Disposition"), nombre);
+  const local = URL.createObjectURL(blob);
+  const enlace = document.createElement("a");
+  enlace.href = local;
+  enlace.download = archivo;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  URL.revokeObjectURL(local);
+}
+
 interface SesionApi {
   token: string;
   expira_en: number;

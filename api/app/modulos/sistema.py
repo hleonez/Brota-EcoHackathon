@@ -14,6 +14,7 @@ from app.core.seguridad import emitir_token, verificar_pin
 from app.core.tipos import Entrada
 from app.db import get_db, get_engine
 from app.models import CuentaOperadora
+from app.modulos.ia import proveedor_autorizado
 
 CONTRATO_VERSION = "0.3-ecoconecta.2"
 
@@ -39,6 +40,7 @@ def ready() -> JSONResponse:
 @router.get("/capacidades")
 def capacidades() -> dict:
     s = get_settings()
+    ia_activa = proveedor_autorizado()
     return {
         "data": {
             "version_contrato": CONTRATO_VERSION,
@@ -50,9 +52,10 @@ def capacidades() -> dict:
                 "pesajes": True,
                 "entregas_directas": True,
                 "puntos": True,
-                "canjes": False,
-                "archivos_ia": False,
-                "ia_mensajes": False,  # texto, audio y fotos del vecino (M06)
+                "canjes": True,
+                "archivos": True,
+                "archivos_ia": True,
+                "ia_mensajes": ia_activa,  # texto, audio y fotos del vecino (M06)
                 "educacion_avisos": True,
                 "liga": True,
                 "reportes": True,
@@ -79,7 +82,7 @@ def capacidades() -> dict:
             "reglas": {"solicitud_abierta_unica": s.regla_solicitud_abierta},
             "zona_horaria": s.zona_horaria,
             "piloto": "restringido",
-            "ia_disponible": False,
+            "ia_disponible": ia_activa,
             "estados_orden": ["nueva", "asignada", "programada", "recogida", "rechazada", "cancelada"],
         }
     }

@@ -48,6 +48,10 @@ class APIFalsa:
         self.solicitudes: list[dict] = []  # abiertas, para ESTADO y CANCELAR
         self.movimientos_puntos: list[dict] = []
         self.piloto_habilitado = True
+        self.saldo = "25.00"
+        self.catalogo_canjes = [{"id": "item-1", "nombre": "Bolsa de abono", "costo_puntos": "20.00"}]
+        self.canjes: list[dict] = []
+        self.canje_status = 201
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.llamadas.append(req)
@@ -118,8 +122,17 @@ class APIFalsa:
             s = {"id": "s1", "codigo_pasaporte": "BR-00001", "tipo_servicio_ids": ids}
             self.claves_solicitud[clave] = s
             return _ok(s, 201)
+        if p == "/v1/catalogo-canjes":
+            return _ok(self.catalogo_canjes)
+        if p == "/v1/canjes" and m == "POST":
+            if self.canje_status == 409:
+                return httpx.Response(409, json={"error": {"code": "SALDO_INSUFICIENTE", "message": "No alcanza"}})
+            self.canjes.append(json.loads(req.content))
+            self.saldo = "5.00"
+            self.movimientos_puntos = [{"detalle_calculo": {"nota": "Canjeaste Bolsa de abono."}}]
+            return _ok({"id": "cj1", "estado": "reservado"}, 201)
         if p == "/v1/me/puntos":
-            return _ok({"saldo": "25.00", "movimientos": 2})
+            return _ok({"saldo": self.saldo, "movimientos": 2})
         if p == "/v1/me/movimientos-puntos":
             return _ok(self.movimientos_puntos)
         if p == "/v1/canal/avisos/reservas":
@@ -229,7 +242,7 @@ def test_registro_completo_y_menu(entorno):
     assert api.registrados == {CEL: "Carmen"}
     assert "Ya quedaste registrado" in _texto(r[0])
     filas = [row["id"] for row in r[1]["interactive"]["action"]["sections"][0]["rows"]]
-    assert filas == ["M_PEDIR", "M_DUDA", "M_ESTADO", "M_PUNTOS", "M_LIGA", "M_QUEJA", "M_PERSONA"]
+    assert filas == ["M_PEDIR", "M_DUDA", "M_ESTADO", "M_PUNTOS", "M_CANJEAR", "M_LIGA", "M_QUEJA", "M_PERSONA"]
 
 
 @pytest.mark.parametrize("escrito", ["402", "Apto 402", "apartamento #402", "4-02", "apto. 402"])
@@ -279,6 +292,44 @@ def test_mis_puntos_muestra_detalle_y_sin_movimientos_solo_el_saldo(entorno):
     assert "10 puntos por entrega" in texto
     assert "total 10" in texto
     assert "propuesta del equipo" in texto
+
+
+def _botones(msj: dict) -> list[str]:
+    return [b["reply"]["id"] for b in msj["interactive"]["action"]["buttons"]]
+
+
+def test_canjear_pide_confirmacion_y_muestra_el_saldo(entorno):
+    c, api = entorno
+    api.registrados[CEL] = "Carmen"
+    r = enviar(c, lista="M_CANJEAR")
+    assert _botones(r[0]) == ["C:item-1"]
+    assert "Bolsa de abono" in _texto(r[0]) and api.canjes == []
+    r = enviar(c, boton="C:item-1")
+    assert _botones(r[0]) == ["C_SI:item-1", "C_NO"]
+    assert "20" in _texto(r[0])
+    r = enviar(c, boton="C_SI:item-1")
+    assert api.canjes == [{"item_id": "item-1", "cantidad": 1}]
+    assert "Listo" in _texto(r[0]) and "Tienes 5 puntos" in _texto(r[0])
+    assert "Canjeaste Bolsa de abono" in _texto(r[0])
+
+
+def test_canje_sin_puntos_habla_en_cristiano(entorno):
+    c, api = entorno
+    api.registrados[CEL] = "Carmen"
+    api.canje_status = 409
+    enviar(c, lista="M_CANJEAR")
+    enviar(c, boton="C:item-1")
+    texto = _texto(enviar(c, boton="C_SI:item-1")[0])
+    assert "alcanza" in texto
+    assert "409" not in texto and "SALDO" not in texto
+    assert api.canjes == []
+
+
+def test_canje_sin_premios(entorno):
+    c, api = entorno
+    api.registrados[CEL] = "Carmen"
+    api.catalogo_canjes = []
+    assert "no hay premios" in _texto(enviar(c, lista="M_CANJEAR")[0])
 
 
 def _graph(respuestas: list[httpx.Response], enviados: list[dict]):

@@ -96,14 +96,17 @@ uv export --no-dev --no-hashes --format requirements-txt -o requirements.txt
 | `POLITICA_DATOS_VERSION` | Versión de política que acepta el registro (`2026-11`) |
 | `ROOT_PATH` | `/api` detrás del proxy |
 | `CORS_ALLOWED_ORIGINS` | Orígenes exactos de los paneles |
+| `ARCHIVOS_DIR` | Directorio local de la foto del tiquete (por defecto `/var/lib/brota/archivos`, fuera del repositorio). El nombre en disco es un uuid |
+| `ARCHIVOS_RETENCION_DIAS` | Días que se conserva esa foto después de confirmar el pesaje (7). Luego se borra del disco y la fila queda con `eliminado_at` |
 
 ## Pendiente
 
 - Rol de PostgreSQL restringido para la API (hoy, en desarrollo, se usa el administrador).
-- Canjes, exportaciones Excel y hoja de ruta. Papel Inteligente (`POST /v1/pesajes/desde-foto`) y Certificado Verde (`GET /v1/reportes/certificado`) ya están. `POST /v1/ia/interpretar` sigue apagado.
 - Reemplazar los valores de ejemplo de la semilla por datos reales (viviendas, precios, balde).
+
+Canjes (`/v1/canjes`), la hoja de ruta, el Excel, la foto del tiquete y el dictado ya están. Sin clave, la IA responde `503` y no guarda la foto ni el audio del vecino.
 
 
 ## Actualización EcoConecta
 
-Contrato `0.3-ecoconecta.1`: consultar [campos obligatorios, rutas y migraciones](../docs/avance-api-ecoconecta.md). Antes de actualizar una base existente, crear respaldo y probar migraciones sobre copia. Este cambio requiere actualizar los clientes: preferencia horaria, canal de acuerdo y materiales confirmados al cierre. Gemini está desactivado en la API. La migración vigente es 0011.
+Contrato `0.3-ecoconecta.2`: consultar [campos obligatorios, rutas y migraciones](../docs/avance-api-ecoconecta.md). Antes de actualizar una base existente, crear respaldo y probar migraciones sobre copia. Este cambio requiere actualizar los clientes: preferencia horaria, canal de acuerdo y materiales confirmados al cierre. Sin clave, la IA responde `503`; con clave, llama a Gemini. La migración vigente es `0015`.

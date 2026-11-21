@@ -8,8 +8,9 @@ horarios ni puntos: el bot lleva el flujo y la API valida.
 Privacidad: a Gemini solo va el mensaje (texto, audio o foto), nunca el nombre, el celular ni la
 dirección. La foto o el audio no se guardan en Brota.
 
-Papel Inteligente (`extraer_tiquete`) es un flujo aparte: no reabre `POST /ia/interpretar` y
-tampoco guarda la foto del tiquete.
+Papel Inteligente (`extraer_tiquete` y `extraer_dictado`) es un flujo aparte: no reabre
+`POST /ia/interpretar`. Estas funciones no guardan la foto ni el audio; si el tiquete es usable,
+el módulo de pesajes persiste la imagen como evidencia.
 """
 
 from __future__ import annotations
@@ -93,8 +94,10 @@ Tu tarea: interpretar UN mensaje del vecino (texto, audio o foto) y devolver JSO
 
 Reglas:
 1. `residuos`: solo códigos del CATÁLOGO. Mapea expresiones populares, errores ortográficos y fotos al código
-   correcto (cajas → CARTON; botellas de gaseosa → PET; cáscaras → FRUVER; pilas → PILAS). Lo que no esté en el
-   catálogo va en `no_reconocidos`. No inventes códigos.
+   correcto (cajas → CARTON; botellas de gaseosa → PET; cáscaras → FRUVER; pilas → PILAS). Si el vecino nombra
+   un objeto que no está en el catálogo (un mueble, madera, un colchón, escombros), pon esa frase en
+   `no_reconocidos` y deja `residuos` vacío: no lo acerques al código más parecido. No inventes códigos.
+   La intención puede seguir siendo «pedir».
 2. `confianza`: alta si es claro; media si es probable; baja si dudas (por ejemplo, no se distingue el material
    en la foto). Nunca afirmes ver algo que no aparece claramente.
 3. Si un residuo es de un material que el catálogo marca `acepta=no` o es peligroso (pilas, medicamentos,
@@ -275,13 +278,14 @@ def post_interpretar(datos: InterpretarIn, actor: Actor = Depends(get_actor), db
 
 
 def proveedor_autorizado() -> bool:
-    """Gemini no está permitido por el reto; solo se habilitará al migrar el adaptador."""
-    return False
+    """Gemini queda habilitado si el proceso arrancó con GEMINI_API_KEY."""
+    return bool(get_settings().gemini_api_key.strip())
 
 
 # --------------------------------------------------------------------------- Papel Inteligente
-# La foto del tiquete propone un borrador. No confirma el pesaje y no guarda la imagen.
-# A Gemini solo van la foto y los códigos del catálogo: ni celular, ni residente, ni dirección.
+# La foto o el dictado proponen un borrador. No confirman el pesaje.
+# A Gemini solo van la foto o la frase y los códigos del catálogo: ni celular, ni residente, ni dirección.
+# extraer_tiquete no escribe la imagen; pesajes guarda el tiquete usable. extraer_dictado no recibe audio.
 
 UMBRAL_CONFIANZA = Decimal("0.6")
 _FECHA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -436,38 +440,9 @@ def _fusionar(previa: LineaLeida, nueva: LineaLeida) -> LineaLeida:
     return LineaLeida(gana.codigo, gana.kg, gana.confianza, gana.dudosa or previa.kg != nueva.kg)
 
 
-def extraer_tiquete(
-    materiales: list[tuple[str, str]], mime_type: str, datos_base64: str
-) -> ExtraccionTiquete:
-    """Lee la foto con Gemini simulado o real y deja solo códigos del catálogo recibido.
-
-    No persiste la imagen. El llamador debe pasar únicamente códigos y nombres de material,
-    nunca celular, nombre de residente ni dirección.
-    """
-    s = _exigir_ia_tiquete()
-    if not materiales:
-        raise invalido({"gremio_id": "Este gremio no tiene materiales activos en el catálogo"})
-    mime = mime_type.split(";")[0].strip().lower()
-    if not mime.startswith("image/"):
-        raise invalido({"imagen.mime_type": "Envía una imagen (image/*)"})
-    try:
-        crudo_bytes = base64.b64decode(datos_base64, validate=True)
-    except (binascii.Error, ValueError):
-        raise invalido({"imagen.datos_base64": "Base64 inválido"}) from None
-    if not crudo_bytes:
-        raise invalido({"imagen.datos_base64": "La imagen está vacía"})
-    if len(crudo_bytes) > s.ia_media_max_mb * 1024 * 1024:
-        raise invalido({"imagen": f"Máximo {s.ia_media_max_mb} MB"})
-
+def _extraccion_de_crudo(materiales: list[tuple[str, str]], crudo: Any) -> ExtraccionTiquete:
+    """Valida el JSON de Gemini: solo códigos del catálogo recibido y kilos positivos."""
     oficial = {codigo.upper(): codigo for codigo, _nombre in materiales}
-    codigos = [codigo for codigo, _nombre in materiales]
-    partes: list[dict[str, Any]] = [
-        {"inline_data": {"mime_type": mime, "data": datos_base64}},
-        {"text": "Tiquete de pesaje. Extrae solo lo escrito en la imagen."},
-    ]
-    crudo = llamar_gemini(
-        s, f"{INSTRUCCIONES_TIQUETE}\n{_catalogo_materiales(materiales)}", partes, _esquema_tiquete(codigos)
-    )
     if not isinstance(crudo, dict):
         crudo = {}
 
@@ -523,12 +498,6 @@ def extraer_tiquete(
         indice[codigo] = len(lineas)
         lineas.append(nueva)
 
-    log.info(
-        "Tiquete · %s · lineas=%s · descartados=%s",
-        s.gemini_modelo,
-        [linea.codigo for linea in lineas],
-        descartados,
-    )
     return ExtraccionTiquete(
         numero_tiquete=numero,
         fecha=_fecha(crudo.get("fecha")),
@@ -539,3 +508,72 @@ def extraer_tiquete(
         omitidas=omitidas,
         recortes=recortes,
     )
+
+
+def extraer_tiquete(
+    materiales: list[tuple[str, str]], mime_type: str, datos_base64: str
+) -> ExtraccionTiquete:
+    """Lee la foto con Gemini simulado o real y deja solo códigos del catálogo recibido.
+
+    No persiste la imagen. El llamador debe pasar únicamente códigos y nombres de material,
+    nunca celular, nombre de residente ni dirección.
+    """
+    s = _exigir_ia_tiquete()
+    if not materiales:
+        raise invalido({"gremio_id": "Este gremio no tiene materiales activos en el catálogo"})
+    mime = mime_type.split(";")[0].strip().lower()
+    if not mime.startswith("image/"):
+        raise invalido({"imagen.mime_type": "Envía una imagen (image/*)"})
+    try:
+        crudo_bytes = base64.b64decode(datos_base64, validate=True)
+    except (binascii.Error, ValueError):
+        raise invalido({"imagen.datos_base64": "Base64 inválido"}) from None
+    if not crudo_bytes:
+        raise invalido({"imagen.datos_base64": "La imagen está vacía"})
+    if len(crudo_bytes) > s.ia_media_max_mb * 1024 * 1024:
+        raise invalido({"imagen": f"Máximo {s.ia_media_max_mb} MB"})
+
+    codigos = [codigo for codigo, _nombre in materiales]
+    partes: list[dict[str, Any]] = [
+        {"inline_data": {"mime_type": mime, "data": datos_base64}},
+        {"text": "Tiquete de pesaje. Extrae solo lo escrito en la imagen."},
+    ]
+    crudo = llamar_gemini(
+        s, f"{INSTRUCCIONES_TIQUETE}\n{_catalogo_materiales(materiales)}", partes, _esquema_tiquete(codigos)
+    )
+    extraccion = _extraccion_de_crudo(materiales, crudo)
+    log.info(
+        "Tiquete · %s · lineas=%s · descartados=%s",
+        s.gemini_modelo,
+        [linea.codigo for linea in extraccion.lineas],
+        extraccion.descartados,
+    )
+    return extraccion
+
+
+def extraer_dictado(materiales: list[tuple[str, str]], texto: str) -> ExtraccionTiquete:
+    """Lee una frase de la coordinadora con el mismo esquema y validador del tiquete.
+
+    No recibe audio ni lo guarda. A Gemini solo van la frase y los códigos del catálogo.
+    """
+    s = _exigir_ia_tiquete()
+    if not materiales:
+        raise invalido({"gremio_id": "Este gremio no tiene materiales activos en el catálogo"})
+    frase = " ".join((texto or "").split())
+    if not frase:
+        raise invalido({"texto": "Escribe lo que se pesó"})
+    if len(frase) > 2000:
+        raise invalido({"texto": "Máximo 2000 caracteres"})
+    codigos = [codigo for codigo, _nombre in materiales]
+    partes = [{"text": f"Tiquete dictado por la coordinación. Extrae solo lo dicho.\n<<<\n{frase}\n>>>"}]
+    crudo = llamar_gemini(
+        s, f"{INSTRUCCIONES_TIQUETE}\n{_catalogo_materiales(materiales)}", partes, _esquema_tiquete(codigos)
+    )
+    extraccion = _extraccion_de_crudo(materiales, crudo)
+    log.info(
+        "Dictado · %s · lineas=%s · descartados=%s",
+        s.gemini_modelo,
+        [linea.codigo for linea in extraccion.lineas],
+        extraccion.descartados,
+    )
+    return extraccion

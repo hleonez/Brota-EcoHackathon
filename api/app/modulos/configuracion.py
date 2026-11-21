@@ -203,6 +203,37 @@ def patch_material(
     return escritura(request, db, actor, datos, _fn)
 
 
+class MotivoPatch(Entrada):
+    activo: bool
+
+
+@router.get("/motivos-rechazo")
+def get_motivos(
+    _actor: Actor = Depends(actor_admin),
+    pag: Paginacion = Depends(paginacion),
+    db: Session = Depends(get_db),
+):
+    """Catálogo completo para administración, incluidos los inactivos."""
+    stmt = select(MotivoRechazo).order_by(MotivoRechazo.activo.desc(), MotivoRechazo.nombre, MotivoRechazo.id)
+    return paginar(db, stmt, pag, lambda m: MotivoOut.model_validate(m).model_dump(mode="json"))
+
+
+@router.patch("/motivos-rechazo/{motivo_id}")
+def patch_motivo(
+    motivo_id: uuid.UUID, datos: MotivoPatch, request: Request,
+    actor: Actor = Depends(actor_admin), db: Session = Depends(get_db),
+):
+    """Desactiva o reactiva un motivo. Nunca se borra: resultados y pesajes lo referencian."""
+
+    def _fn():
+        m = obtener(db, MotivoRechazo, motivo_id, "motivo", bloquear=True)
+        m.activo = datos.activo
+        db.flush()
+        return MotivoOut.model_validate(m)
+
+    return escritura(request, db, actor, datos, _fn)
+
+
 @router.post("/motivos-rechazo", status_code=201)
 def post_motivo(datos: MotivoIn, request: Request, actor: Actor = Depends(actor_admin), db: Session = Depends(get_db)):
     def _fn():

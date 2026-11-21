@@ -1,7 +1,10 @@
-import { MarcoPanel, enlaceCuenta, type CuentaPanel } from "./MarcoPanel";
+import { CanjesAdmin } from "./Canjes";
+import { MarcoPanel, Portada, TarjetaAccion, enlaceCuenta, type CuentaPanel } from "./MarcoPanel";
 import { useState } from "react";
-import { Campo, Formulario, type Operacion, type Valores } from "./Formulario";
-import { Espera, fechaBogota, useDatos } from "./portal";
+import { pedir } from "./api";
+import { BotonBaja, Campo, Formulario, Pildoras, type Operacion, type Valores } from "./Formulario";
+import { Espera, Estado, fechaBogota, useDatos } from "./portal";
+import { claveNueva } from "./util";
 import { temasEducativos, type TemaEducativo } from "./temasEducativos";
 import type { Catalogo, ItemCatalogo, Recolector } from "./tipos";
 
@@ -68,9 +71,10 @@ function accionesContenido(fila: Fila): [string, string][] {
       ["reactivar", "Reactivar contenido"],
     ];
   }
+  // Only the actions that change something: a published item cannot be published again.
   return [
     ["guardar", "Guardar cambios"],
-    ["publicar", "Publicar en la guía"],
+    ...(fila.publicado === false ? [["publicar", "Publicar en la guía"] as [string, string]] : []),
     ["retirar", "Retirar de la guía"],
   ];
 }
@@ -78,7 +82,7 @@ const gruposAdministracion = [
   { enlaces: ["Inicio"] },
   { titulo: "Personas y acceso", enlaces: ["Cuentas", "Registro asistido", "Piloto"] },
   { titulo: "Contenido y operación", enlaces: ["Recolectores", "Unidades", "Educación", "Materiales"] },
-  { titulo: "Configuración", enlaces: ["Puntos", "Motivos", "Equivalencias", "Sistema"] },
+  { titulo: "Configuración", enlaces: ["Puntos", "Canjes", "Motivos", "Equivalencias", "Sistema"] },
 ] as const;
 type Seccion = (typeof gruposAdministracion)[number]["enlaces"][number];
 const secciones = gruposAdministracion.map((grupo) => ({
@@ -88,13 +92,35 @@ const secciones = gruposAdministracion.map((grupo) => ({
 const rutas: Partial<Record<Seccion, string>> = {
   Cuentas: "cuentas-operadoras?limit=100",
   Recolectores: "recolectores?limit=100",
-  Unidades: "unidades/gestion?limit=100",
+  Unidades: "unidades/gestion?limit=100&incluir_inactivas=true",
   Piloto: "piloto/habilitaciones",
   Puntos: "configuracion?tipo=reglas_incentivo",
   Educación: "contenidos-educativos/gestion?limit=100",
   Materiales: "materiales?limit=100",
+  Motivos: "motivos-rechazo?limit=100",
   Equivalencias: "configuracion?tipo=equivalencias",
 };
+/* "Eliminar" never deletes: records are deactivated so orders, weighings and points keep their history
+   (docs/diseno-base-de-datos.md). Each entry builds the PATCH that switches a row on or off. */
+type CambioEstado = (fila: Fila, activo: boolean) => { ruta: string; cuerpo: unknown } | null;
+const cambiosEstado: Partial<Record<Seccion, CambioEstado>> = {
+  Cuentas: (f, activo) => ({ ruta: "cuentas-operadoras/" + f.id, cuerpo: { version_esperada: f.version, activo } }),
+  Recolectores: (f, activo) => ({
+    ruta: (f.tipo === "huertero" ? "huerteros/" : "recicladores/") + f.id,
+    cuerpo: { version_esperada: f.version, activo },
+  }),
+  Unidades: (f, activo) => ({ ruta: "unidades/" + f.id, cuerpo: { activo } }),
+  Educación: (f, activo) => ({ ruta: "contenidos-educativos/" + f.id, cuerpo: { version_esperada: f.version, activo } }),
+  Materiales: (f, activo) => ({ ruta: "materiales/" + f.id, cuerpo: { version_esperada: f.version, activo } }),
+  Motivos: (f, activo) => ({ ruta: "motivos-rechazo/" + f.id, cuerpo: { activo } }),
+  // A revoked pilot enablement cannot be restored; a new one is created instead.
+  Piloto: (f, activo) => (activo ? null : {
+    ruta: "piloto/habilitaciones/" + f.id,
+    cuerpo: { version_esperada: f.version, activo: false },
+  }),
+};
+const textoBaja: Partial<Record<Seccion, string>> = { Piloto: "Revocar", Educación: "Retirar" };
+const estadosActivo: [string, string][] = [["true", "Activo"], ["false", "Inactivo"]];
 interface Capacidades {
   version_contrato: string;
   avisos: { modo: string };
@@ -105,6 +131,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
   const [vista, setVista] = useState<Seccion>("Inicio");
   const [seleccion, setSeleccion] = useState<Fila | null>(null);
   const [conflicto, setConflicto] = useState(false);
+  const [aviso, setAviso] = useState<{ tipo: "exito" | "error"; texto: string } | null>(null);
   const [rol, setRol] = useState("");
   const [participanteId, setParticipanteId] = useState("");
   const participantes = useDatos<ParticipantePiloto[]>(
@@ -319,16 +346,28 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
         throw Error("Selecciona una operación.");
     }
   }
-  const filas: Fila[] | undefined =
-    vista === "Motivos"
-      ? cat.datos?.motivos_rechazo.map((m) => ({ ...m, version: 0 }))
-      : lista.datos;
+  const filas: Fila[] | undefined = lista.datos;
+  async function cambiarEstado(fila: Fila, activo: boolean) {
+    const cambio = cambiosEstado[vista]?.(fila, activo);
+    if (!cambio) return;
+    setAviso(null);
+    try {
+      await pedir("PATCH", "/v1/" + cambio.ruta, { cuerpo: cambio.cuerpo, clave: claveNueva() });
+      setAviso({ tipo: "exito", texto: activo ? "Registro reactivado." : "Registro desactivado. Su historial se conserva." });
+      if (seleccion?.id === fila.id) setSeleccion(null);
+      lista.recargar();
+      cat.recargar();
+    } catch (e) {
+      setAviso({ tipo: "error", texto: (e as Error).message });
+    }
+  }
   function navegar(id: string) {
     setCuentaActiva(id === enlaceCuenta.id);
     if (id === enlaceCuenta.id || !gruposAdministracion.some((grupo) => grupo.enlaces.some((item) => item === id))) return;
     setVista(id as Seccion);
     setSeleccion(null);
     setConflicto(false);
+    setAviso(null);
     setRol("");
     setParticipanteId("");
   }
@@ -336,11 +375,14 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
   return (
     <MarcoPanel grupos={secciones} activo={cuentaActiva ? enlaceCuenta.id : vista}
       titulo={cuentaActiva ? enlaceCuenta.texto : vista === "Inicio" ? "Administración" : vista}
-      contexto="Administración de EcoConecta" cuenta={cuentaSesion} navegar={navegar}>
+      contexto="Administración de EcoConecta" cuenta={cuentaSesion} navegar={navegar}
+      portada={!cuentaActiva && vista === "Inicio"}>
       {conflicto && (
         <p role="alert">Este registro cambió. Vuelve a seleccionarlo para revisar la versión actual.</p>
       )}
-      {vista === "Sistema" ? (
+      {vista === "Canjes" ? (
+        <CanjesAdmin />
+      ) : vista === "Sistema" ? (
         <section className="eco-tarjeta">
           <h2>Estado del sistema</h2>
           {cap.datos ? (
@@ -354,14 +396,12 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
           )}
         </section>
       ) : vista === "Inicio" ? (
-        <section className="eco-tarjeta">
-          <h2>Administración de EcoConecta</h2>
-          <p>Gestiona accesos, unidades y configuración del programa.</p>
-          <div className="acciones">
-            <button className="btn primario" onClick={() => navegar("Piloto")}>Revisar habilitaciones</button>
-            <button className="btn" onClick={() => navegar("Cuentas")}>Crear cuenta</button>
-          </div>
-        </section>
+        <Portada saludo={`¡Hola, ${cuentaSesion.nombre.trim().split(/\s+/)[0] || cuentaSesion.nombre}!`}
+          texto="Gestiona accesos, unidades y configuración del programa EcoConecta." imagen="/marca/administracion.png">
+          <TarjetaAccion icono="piloto" titulo="Revisar habilitaciones" onClick={() => navegar("Piloto")} />
+          <TarjetaAccion icono="cuentas" titulo="Crear cuenta" tono="turquesa" onClick={() => navegar("Cuentas")} />
+          <TarjetaAccion icono="educación" titulo="Contenido educativo" tono="amarillo" onClick={() => navegar("Educación")} />
+        </Portada>
       ) : vista === "Piloto" && !lista.datos ? (
         <section className="eco-tarjeta">
           <h2>Habilitaciones del piloto</h2>
@@ -376,6 +416,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
           <div className="col-12 col-lg-6">
             <section className="eco-tarjeta">
               <h2>{vista}</h2>
+              {aviso && <Estado tipo={aviso.tipo}>{aviso.texto}</Estado>}
               {vista === "Piloto" && !participantes.datos && (
                 <Espera error={participantes.error} reintentar={participantes.recargar} />
               )}
@@ -401,8 +442,11 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                       ? participantes.datos?.find((p) => p.id === f.participante_id)
                       : undefined;
                     const unidad = persona?.unidades.find((u) => u.id === f.unidad_id);
+                    const cambio = cambiosEstado[vista];
+                    const propia = vista === "Cuentas" && f.nombre === cuentaSesion.nombre;
                     return (
-                    <li key={f.id}>
+                    <li key={f.id} className={f.activo === false ? "registro-inactivo" : undefined}>
+                      <div className="registro-texto">
                       <strong>
                         {(vista === "Unidades" && (f.etiqueta || f.referencia_local)) ||
                           persona?.nombre || f.nombre ||
@@ -444,16 +488,20 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                           .filter(Boolean)
                           .join(" · ")}
                       </small>
-                      {(vista === "Piloto" || vista === "Educación" || vista === "Recolectores" || vista === "Materiales") && (
-                        <button className="btn" onClick={() => { setConflicto(false); setSeleccion(f); }}>
-                          {vista === "Piloto" ? "Cambiar habilitación" : "Editar"}
-                        </button>
-                      )}
-                      {vista === "Cuentas" && (
-                        <button className="btn" onClick={() => { setConflicto(false); setSeleccion(f); }}>
-                          Administrar acceso
-                        </button>
-                      )}
+                      </div>
+                      <div className="registro-acciones">
+                        {(vista === "Piloto" || vista === "Educación" || vista === "Recolectores" ||
+                          vista === "Materiales" || vista === "Cuentas") && (
+                          <button className="btn btn-sm" onClick={() => { setConflicto(false); setAviso(null); setSeleccion(f); }}>
+                            {vista === "Piloto" ? "Cambiar" : vista === "Cuentas" ? "Acceso" : "Editar"}
+                          </button>
+                        )}
+                        {cambio && !propia && (f.activo === false
+                          ? cambio(f, true) && (
+                            <button className="btn btn-sm exito" onClick={() => cambiarEstado(f, true)}>Reactivar</button>
+                          )
+                          : <BotonBaja texto={textoBaja[vista] ?? "Eliminar"} alConfirmar={() => cambiarEstado(f, false)} />)}
+                      </div>
                     </li>
                     );
                   })}
@@ -471,6 +519,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                 lista.recargar();
               }}
               accion="Guardar"
+              alVolver={seleccion ? () => setSeleccion(null) : undefined}
               titulo={
                 seleccion && vista === "Educación"
                   ? seleccion.titulo || "Contenido educativo"
@@ -506,16 +555,8 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
               {vista === "Cuentas" &&
                 (cuenta ? (
                   <>
-                    <label>
-                      Estado
-                      <select
-                        name="activo"
-                        defaultValue={String(cuenta.activo)}
-                      >
-                        <option value="true">Activo</option>
-                        <option value="false">Inactivo</option>
-                      </select>
-                    </label>
+                    <Pildoras nombre="activo" titulo="Estado" opciones={estadosActivo}
+                      valorInicial={String(cuenta.activo)} />
                     <Campo
                       nombre="pin"
                       titulo="Nuevo PIN (opcional)"
@@ -523,13 +564,6 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                       opcional
                       pattern="[0-9]{4,12}"
                     />
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setSeleccion(null)}
-                    >
-                      Volver
-                    </button>
                   </>
                 ) : (
                   <>
@@ -553,7 +587,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                         value={rol}
                         onChange={(e) => setRol(e.target.value)}
                       >
-                        <option value="">Selecciona</option>
+                        <option value="" disabled hidden>Selecciona un perfil</option>
                         <option value="coordinacion">Coordinación</option>
                         <option value="huertero">Huertero</option>
                         <option value="reciclador">Reciclador</option>
@@ -590,14 +624,8 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                       opcional
                       valorInicial={seleccion.telefono_contacto ?? ""}
                     />
-                    <label>
-                      Estado
-                      <select name="activo" defaultValue={String(seleccion.activo)}>
-                        <option value="true">Activo</option>
-                        <option value="false">Inactivo</option>
-                      </select>
-                    </label>
-                    <button type="button" className="btn" onClick={() => setSeleccion(null)}>Volver</button>
+                    <Pildoras nombre="activo" titulo="Estado" opciones={estadosActivo}
+                      valorInicial={String(seleccion.activo)} />
                   </>
                 ) : (
                   <>
@@ -643,9 +671,9 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                   {!cap.datos ? (
                     <Espera error={cap.error} reintentar={cap.recargar} />
                   ) : (
-                    <label>
-                      <input type="checkbox" required /> La persona autorizó
-                      registrar sus datos para coordinar las entregas.
+                    <label className="casilla">
+                      <input type="checkbox" required />
+                      <span>La persona autorizó registrar sus datos para coordinar las entregas.</span>
                     </label>
                   )}
                 </>
@@ -663,7 +691,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                       <label>
                         Participante
                         <select name="participante_id" required value={participanteId} onChange={(e) => setParticipanteId(e.target.value)}>
-                          <option value="">Selecciona un participante</option>
+                          <option value="" disabled hidden>Selecciona un participante</option>
                           {participantes.datos?.filter((p) => p.unidades.length > 0).map((p) => (
                             <option key={p.id} value={p.id}>{p.nombre}</option>
                           ))}
@@ -685,7 +713,6 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                         : ""}
                     />
                   </label>
-                  {seleccion && <button type="button" className="btn" onClick={() => setSeleccion(null)}>Volver</button>}
                 </>
               )}
               {vista === "Puntos" && (
@@ -728,7 +755,6 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                       valorInicial="guardar"
                       opciones={accionesContenido(seleccion)}
                     />
-                    <button type="button" className="btn" onClick={() => setSeleccion(null)}>Volver</button>
                   </>
                 ) : <>
                   <Campo nombre="titulo" titulo="Título" maxLength={160} />
@@ -752,14 +778,8 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                   <>
                     <p>Código: {seleccion.codigo}. El código y el colectivo no cambian.</p>
                     <Campo nombre="nombre" titulo="Nombre" maxLength={120} valorInicial={seleccion.nombre} />
-                    <label>
-                      Estado
-                      <select name="activo" defaultValue={String(seleccion.activo)}>
-                        <option value="true">Activo</option>
-                        <option value="false">Inactivo</option>
-                      </select>
-                    </label>
-                    <button type="button" className="btn" onClick={() => setSeleccion(null)}>Volver</button>
+                    <Pildoras nombre="activo" titulo="Estado" opciones={estadosActivo}
+                      valorInicial={String(seleccion.activo)} />
                   </>
                 ) : (
                   <>
@@ -796,3 +816,4 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
     </MarcoPanel>
   );
 }
+

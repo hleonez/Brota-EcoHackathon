@@ -3,18 +3,25 @@ import { api, ErrorApi } from "./api";
 import { DialogoAsignar, DialogoCierre, DialogoProgramar, Modal } from "./Dialogos";
 import type { Caso, Catalogo, Orden, Recolector, Sesion } from "./tipos";
 import Indicadores from "./Indicadores";
+import { EquipoColectivo } from "./Equipo";
 import { Pesajes } from "./Operacion";
 import { Estado, fechaBogota } from "./portal";
-import { MarcoPanel, enlaceCuenta, nombresPerfil, type CuentaPanel, type GrupoPanel } from "./MarcoPanel";
-import { hace } from "./util";
+import { MarcoPanel, Portada, TarjetaAccion, TareaPrincipal, enlaceCuenta, nombresPerfil, type CuentaPanel, type GrupoPanel } from "./MarcoPanel";
+import { hace, textoFranja } from "./util";
+import { Icono } from "./Iconos";
+import { CanjesReservados } from "./Canjes";
 import { DetalleSolicitud, VistaBandeja, VistaHistorial, VistaMisOrdenes, VistaReportes, VistaRutas } from "./Vistas";
 
 const titulos = {
   inicio: "Inicio", bandeja: "Bandeja", rutas: "Rutas de hoy", historial: "Historial",
   reportes: "Reportes", pesajes: "Baldes y pesajes", indicadores: "Indicadores", equipo: "Equipo",
+  canjes: "Canjes",
 };
 type Vista = keyof typeof titulos | typeof enlaceCuenta.id;
 export type Accion = { tipo: "detalle" | "asignar" | "programar" | "reasignar" | "recogida" | "rechazada" | "cancelar"; orden: Orden };
+
+const estadosOrden: Record<string, string> = { nueva: "Nueva", asignada: "Asignada", programada: "Programada" };
+const iconosOrden: Record<string, string> = { nueva: "nuevo", asignada: "cuenta", programada: "calendario" };
 
 const CADA = 15_000; // la bandeja se actualiza sola
 
@@ -105,11 +112,14 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
     [catalogo, gremioId],
   );
   const nombreGremio = catalogo?.gremios.find((g) => g.id === gremioId)?.nombre ?? "";
-  const imagenColectivo=/huert|orgán/i.test(nombreGremio)?"huerta":"reciclaje";
+  const organico = /huert|orgán/i.test(nombreGremio);
+  const imagenColectivo = organico ? "huerta" : "reciclaje";
   const nuevas = ordenes.filter((o) => o.estado === "nueva");
   const asignadas = ordenes.filter((o) => o.estado === "asignada");
   const programadas = ordenes.filter((o) => o.estado === "programada");
   const abiertas = [...asignadas, ...programadas];
+  const pendientes = campo ? programadas : [...nuevas, ...asignadas];
+  const primerNombre = sesion.cuenta.nombre.trim().split(/\s+/)[0] || sesion.cuenta.nombre;
 
   function listo(o: Orden, texto: string) {
     setOrdenes((l) => l.map((x) => (x.id === o.id ? o : x)));
@@ -157,13 +167,16 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
   ];
   if (!campo) grupos.push({
     titulo: "Colectivo",
-    enlaces: (["pesajes", "indicadores", "equipo"] as const).map((id) => ({ id, texto: titulos[id] })),
+    enlaces: [
+      ...(["pesajes", "indicadores", "equipo"] as const).map((id) => ({ id, texto: titulos[id] })),
+      ...(organico ? [{ id: "canjes", texto: titulos.canjes }] : []),
+    ],
   });
   const titulo = vista === enlaceCuenta.id ? enlaceCuenta.texto : vista === "bandeja" ? bandeja : titulos[vista];
 
   return (
     <>
-      <MarcoPanel grupos={grupos} activo={vista} titulo={titulo} cuenta={cuenta}
+      <MarcoPanel grupos={grupos} activo={vista} titulo={titulo} cuenta={cuenta} portada={vista === "inicio"}
         contexto={nombreGremio || nombresPerfil[rol]} navegar={(id) => setVista(id as Vista)}
         acciones={vista !== enlaceCuenta.id && (
           <div className="panel-actualizar">
@@ -176,13 +189,29 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
           <Estado tipo="carga">Cargando solicitudes…</Estado>
         ) : vista === "inicio" ? (
           <>
-            <section className="inicio-colectivo">
-              <div>
-                <h2>{nombreGremio || nombresPerfil[rol]}</h2>
-                <p>Hola, {sesion.cuenta.nombre}.</p>
-              </div>
-              <img alt="" src={`/marca/${imagenColectivo}.png`} />
-            </section>
+            <Portada saludo={`¡Hola, ${primerNombre}!`} imagen={`/marca/${imagenColectivo}.png`}
+              texto={campo
+                ? `Tus recolecciones con ${nombreGremio || "el colectivo"}, en un solo lugar.`
+                : organico
+                  ? `Gestión de orgánicos – ${nombreGremio || "Huerta"}`
+                  : `Gestiona las recolecciones de ${nombreGremio || "tu colectivo"} de forma fácil y rápida.`}>
+              {campo ? <>
+                <TarjetaAccion icono="bandeja" titulo="Ver mis órdenes" onClick={() => setVista("bandeja")} />
+                <TarjetaAccion icono="historial" titulo="Ver historial" tono="turquesa"
+                  onClick={() => setVista("historial")} />
+              </> : organico ? <>
+                <TareaPrincipal icono="pesajes" titulo="Registrar la entrega de baldes orgánicos"
+                  texto="Lleva el control de los residuos orgánicos que recibe la huerta." />
+                <TarjetaAccion icono="pesajes" titulo="Registrar baldes" tono="solido"
+                  onClick={() => setVista("pesajes")} />
+                <TarjetaAccion icono="entregas" titulo="Ver entregas" tono="turquesa"
+                  onClick={() => setVista("historial")} />
+              </> : <>
+                <TarjetaAccion icono="bandeja" titulo="Ver solicitudes" onClick={() => setVista("bandeja")} />
+                <TarjetaAccion icono="pesajes" titulo="Registrar pesaje" tono="amarillo"
+                  onClick={() => setVista("pesajes")} />
+              </>}
+            </Portada>
             <div className="resumen-operativo">
               <button type="button" onClick={() => setVista("bandeja")} className="resumen-tarea">
                 <strong>{campo ? programadas.length : nuevas.length}</strong>
@@ -196,23 +225,41 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
                 <strong>{reportesPendientes}</strong><span>Reportes por responder</span>
               </button>}
             </div>
+            <section className="eco-tarjeta pendientes">
+              <div className="pendientes-cabeza">
+                <h2><Icono nombre="reciclar" />{campo ? "Próximas recolecciones" : "Solicitudes de recolección pendientes"}</h2>
+                <span className="pendientes-total">
+                  {pendientes.length} {pendientes.length === 1 ? "solicitud" : "solicitudes"}
+                </span>
+              </div>
+              {pendientes.length ? (
+                <ul className="pendientes-lista">
+                  {pendientes.slice(0, 5).map((o) => (
+                    <li key={o.id}>
+                      <button type="button" className="pendiente" onClick={() => setAccion({ tipo: "detalle", orden: o })}>
+                        <span className="pendiente-icono"><Icono nombre="casa" /></span>
+                        <span className="pendiente-lugar">
+                          <strong>{o.contacto_nombre ?? o.ubicacion_operativa}</strong>
+                          <small>{o.contacto_nombre ? o.ubicacion_operativa + " · " : ""}<span className="codigo">{o.codigo_pasaporte}</span></small>
+                        </span>
+                        <span className={"pendiente-tipo estado-" + o.estado}>
+                          <Icono nombre={iconosOrden[o.estado] ?? "nuevo"} />{estadosOrden[o.estado] ?? o.estado}
+                        </span>
+                        <span className="pendiente-hora"><Icono nombre="reloj" />{o.asignacion?.inicio ? textoFranja(o.asignacion.inicio, o.asignacion.fin) : o.preferencia_horaria ?? hace(o.created_at)}</span>
+                        <span className="pendiente-ir"><Icono nombre="chevron" /></span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : <Estado tipo="vacio">No hay solicitudes pendientes por ahora.</Estado>}
+            </section>
           </>
-        ) : vista === "indicadores" ? <Indicadores gremioId={gremioId} />
+        ) : vista === "canjes" ? <CanjesReservados />
+        : vista === "indicadores" ? <Indicadores gremioId={gremioId} />
         : vista === "pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores} />
         : vista === "equipo" ? (
-          <section className="eco-tarjeta">
-            <h2>Integrantes del colectivo</h2>
-            {recolectores.length ? <ul className="lista-equipo">
-              {recolectores.map((r) => {
-                const asignaciones = abiertas.filter((o) => o.asignacion?.recolector_id === r.id).length;
-                return <li key={r.id}>
-                  <div><strong>{r.nombre}</strong>
-                    <span>{asignaciones} {asignaciones === 1 ? "asignación vigente" : "asignaciones vigentes"}</span></div>
-                  {r.telefono_contacto && <a className="btn" href={`tel:${r.telefono_contacto}`} aria-label={`Llamar a ${r.nombre}`}>Llamar</a>}
-                </li>;
-              })}
-            </ul> : <Estado tipo="vacio">Aún no hay integrantes activos.</Estado>}
-          </section>
+          <EquipoColectivo gremioId={gremioId} organico={organico} recolectores={recolectores} abiertas={abiertas}
+            recargar={() => { api.recolectores(gremioId).then(setRecolectores).catch((e: Error) => setError(e.message)); }} />
         )
         : vista === "bandeja" && campo ? (
           <VistaMisOrdenes ordenes={ordenes} {...comunes} />
