@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     ia_timeout_segundos: float = 25
     ia_media_max_mb: int = 10
 
+    # Evidencia operativa en disco local (no el repositorio, ni MinIO, ni S3).
+    # El nombre del fichero es un uuid; el original no se conserva.
+    archivos_dir: str = "/var/lib/brota/archivos"
+    archivos_retencion_dias: int = 7
+
     # Offline / idempotencia.
     idempotencia_retencion_horas: int = 72
     sync_max_operaciones: int = 100

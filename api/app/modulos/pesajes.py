@@ -6,11 +6,14 @@ borrador → confirmado → anulado (por corrección)
 - Vincular órdenes a un lote NO reparte kilos por hogar.
 - `torre_origen_id` y `unidad_medida_id` exigen procedencia coherente con las órdenes enlazadas.
 - Baldes: se conserva la cantidad original y la equivalencia aplicada; los kg se marcan como estimación.
-- Papel Inteligente (`POST /pesajes/desde-foto`): la foto propone un borrador `foto_ia`. No se confirma sola ni se guarda la imagen.
+- Papel Inteligente (`POST /pesajes/desde-foto`): la foto propone un borrador `foto_ia`. No se confirma sola. Si la lectura es usable, la imagen queda en disco y vence después de confirmar.
+- Dictado (`POST /pesajes/desde-dictado`): la frase propone un borrador `dictado`. No guarda audio ni confirma.
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
@@ -47,6 +50,7 @@ from app.core.tipos import (
 )
 from app.db import get_db
 from app.models import (
+    Archivo,
     Asignacion,
     EntregaDirecta,
     Gremio,
@@ -56,7 +60,9 @@ from app.models import (
     Orden,
     Participante,
     Pesaje,
+    PesajeArchivo,
     PesajeOrden,
+    ProcesamientoIA,
     PuntoRecepcion,
     Recolector,
     Solicitud,
@@ -74,7 +80,8 @@ from app.modulos.comun import (
     registrar_evento,
     verificar_version,
 )
-from app.modulos.ia import extraer_tiquete
+from app.modulos.archivos import borrar_disco, depurar_en_sesion_propia, guardar_bytes
+from app.modulos.ia import ExtraccionTiquete, extraer_dictado, extraer_tiquete
 
 router = APIRouter(tags=["pesajes"])
 
@@ -207,7 +214,7 @@ class PesajeOut(Salida):
 
 
 class ImagenTiqueteIn(Entrada):
-    """Foto del tiquete. No se guarda: solo viaja al extractor en esta petición."""
+    """Foto del tiquete. Si la lectura es usable, pesajes la guarda en disco; si no, no queda rastro."""
 
     mime_type: str = Field(pattern=r"^image/[\w.+-]+$", max_length=40)
     datos_base64: str = Field(min_length=4, max_length=20 * 1024 * 1024)
@@ -235,6 +242,19 @@ class DudosoOut(Salida):
 class PesajeDesdeFotoOut(PesajeOut):
     dudosos: list[DudosoOut]
     materiales_descartados: list[str]
+
+
+class PesajeDesdeDictadoIn(Entrada):
+    """Frase de la coordinadora. No hay audio. La IA no confirma ni asigna puntos."""
+
+    gremio_id: uuid.UUID
+    texto: str = Field(min_length=1, max_length=2000)
+    recolector_id: uuid.UUID | None = None
+    fecha_medicion: InstanteEntrada | None = None
+    orden_ids: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+    torre_origen_id: uuid.UUID | None = None
+    unidad_medida_id: uuid.UUID | None = None
+    emisor_tiquete: str | None = Field(default=None, max_length=120)
 
 
 # --------------------------------------------------------------------------- validación
@@ -678,10 +698,12 @@ def confirmar(db: Session, actor: Actor, pesaje_id: uuid.UUID, datos: Confirmaci
     d = DatosPesaje.de_pesaje(p)
     lineas, adv, d = validar(db, actor, d, recolector_obligatorio=not es_entrega, excluir_pesaje_id=p.id)
     _escribir(db, p, d, lineas)  # vuelve a aplicar precios/equivalencias vigentes
+    instante = ahora()
     p.estado = "confirmado"
     p.confirmado_por = actor.cuenta_id
-    p.confirmado_at = ahora()
+    p.confirmado_at = instante
     p.version += 1
+    _cerrar_evidencia(db, p.id, instante)
     db.flush()
     registrar_evento(db, "pesaje_confirmado", actor, pesaje_id=p.id)
     evaluacion = _acreditar_entrega(db, p)
@@ -738,8 +760,8 @@ def _detalle_linea(codigo: str, confianza: Decimal | None, *, en_borrador: bool)
     return f"Línea {codigo}: confianza {cuanto}. No se leyeron los kilos y la línea no quedó en el borrador."
 
 
-def _tiquete_ilegible(descartados: list[str]) -> AppError:
-    fields = {"imagen": "Sin líneas utilizables del catálogo"}
+def _tiquete_ilegible(descartados: list[str], campo: str = "imagen") -> AppError:
+    fields = {campo: "Sin líneas utilizables del catálogo"}
     if descartados:
         fields["materiales"] = ", ".join(descartados)
     return AppError(
@@ -750,24 +772,83 @@ def _tiquete_ilegible(descartados: list[str]) -> AppError:
     )
 
 
-def crear_desde_foto(db: Session, actor: Actor, datos: PesajeDesdeFotoIn) -> PesajeDesdeFotoOut:
-    """Propone un borrador a partir de la foto. No lo confirma y no guarda la imagen."""
-    referencia_activa(db, Gremio, datos.gremio_id, "gremio_id", "Gremio")
-    actor.exigir_coordinacion(datos.gremio_id)
-    materiales = list(
+def _materiales_del_gremio(db: Session, gremio_id: uuid.UUID) -> list[Material]:
+    return list(
         db.execute(
             select(Material)
-            .where(Material.gremio_id == datos.gremio_id, Material.activo.is_(True))
+            .where(Material.gremio_id == gremio_id, Material.activo.is_(True))
             .order_by(Material.codigo)
         ).scalars()
     )
-    extraccion = extraer_tiquete(
-        [(m.codigo, m.nombre) for m in materiales],
-        datos.imagen.mime_type,
-        datos.imagen.datos_base64,
-    )
+
+
+def _propuesta_json(extraccion: ExtraccionTiquete) -> dict:
+    def nota(valor: Decimal | None) -> str | None:
+        return None if valor is None else str(valor)
+
+    return {
+        "numero_tiquete": extraccion.numero_tiquete,
+        "fecha": extraccion.fecha.isoformat() if extraccion.fecha else None,
+        "proveedor": extraccion.proveedor,
+        "observaciones": extraccion.observaciones,
+        "lineas": [
+            {
+                "codigo": linea.codigo,
+                "kg": str(linea.kg),
+                "confianza": nota(linea.confianza),
+                "dudosa": linea.dudosa,
+            }
+            for linea in extraccion.lineas
+        ],
+        "descartados": list(extraccion.descartados),
+        "omitidas": [
+            {"codigo": codigo, "confianza": nota(confianza)} for codigo, confianza in extraccion.omitidas
+        ],
+        "recortes": sorted(extraccion.recortes),
+    }
+
+
+def _cerrar_evidencia(db: Session, pesaje_id: uuid.UUID, instante: datetime) -> None:
+    """Al confirmar: la foto vence a los días configurados y la propuesta pasa a confirmada."""
+    limite = instante + timedelta(days=get_settings().archivos_retencion_dias)
+    archivos = db.execute(
+        select(Archivo)
+        .join(PesajeArchivo, PesajeArchivo.archivo_id == Archivo.id)
+        .where(PesajeArchivo.pesaje_id == pesaje_id, Archivo.eliminado_at.is_(None))
+    ).scalars().all()
+    for archivo in archivos:
+        if archivo.expira_at is None:
+            archivo.expira_at = limite
+    procesos = db.execute(
+        select(ProcesamientoIA).where(
+            ProcesamientoIA.pesaje_id == pesaje_id,
+            ProcesamientoIA.estado == "propuesto",
+        )
+    ).scalars().all()
+    for proceso in procesos:
+        proceso.estado = "confirmado"
+
+
+def _borrador_desde_extraccion(
+    db: Session,
+    actor: Actor,
+    *,
+    gremio_id: uuid.UUID,
+    materiales: list[Material],
+    extraccion: ExtraccionTiquete,
+    origen: str,
+    tarea: str,
+    campo_ilegible: str,
+    recolector_id: uuid.UUID | None,
+    fecha_indicada: datetime | None,
+    orden_ids: list[uuid.UUID],
+    torre_origen_id: uuid.UUID | None,
+    unidad_medida_id: uuid.UUID | None,
+    emisor_tiquete: str | None,
+    imagen: ImagenTiqueteIn | None,
+) -> PesajeDesdeFotoOut:
     if not extraccion.lineas:
-        raise _tiquete_ilegible(extraccion.descartados)
+        raise _tiquete_ilegible(extraccion.descartados, campo_ilegible)
 
     por_codigo = {m.codigo: m for m in materiales}
     propuestas: list[LineaBascula] = []
@@ -797,7 +878,7 @@ def crear_desde_foto(db: Session, actor: Actor, datos: PesajeDesdeFotoIn) -> Pes
                 )
             )
     if not propuestas:
-        raise _tiquete_ilegible(extraccion.descartados)
+        raise _tiquete_ilegible(extraccion.descartados, campo_ilegible)
 
     for codigo, confianza in extraccion.omitidas:
         if codigo is None:
@@ -835,8 +916,8 @@ def crear_desde_foto(db: Session, actor: Actor, datos: PesajeDesdeFotoIn) -> Pes
         )
     if extraccion.fecha is not None:
         fecha_medicion = _inicio_dia(extraccion.fecha)
-    elif datos.fecha_medicion is not None:
-        fecha_medicion = datos.fecha_medicion
+    elif fecha_indicada is not None:
+        fecha_medicion = fecha_indicada
         dudosos.append(
             DudosoOut(
                 campo="fecha",
@@ -844,22 +925,25 @@ def crear_desde_foto(db: Session, actor: Actor, datos: PesajeDesdeFotoIn) -> Pes
             )
         )
     else:
-        raise invalido(
-            {"fecha_medicion": "La foto no trae una fecha legible. Indica fecha_medicion o registra el pesaje a mano."}
+        mensaje = (
+            "La foto no trae una fecha legible. Indica fecha_medicion o registra el pesaje a mano."
+            if origen == "foto_ia"
+            else "El dictado no trae una fecha legible. Indica fecha_medicion o registra el pesaje a mano."
         )
+        raise invalido({"fecha_medicion": mensaje})
 
     d = DatosPesaje(
-        gremio_id=datos.gremio_id,
+        gremio_id=gremio_id,
         fecha_medicion=fecha_medicion,
-        origen_captura="foto_ia",
-        recolector_id=datos.recolector_id,
+        origen_captura=origen,
+        recolector_id=recolector_id,
         lineas=propuestas,
-        orden_ids=list(datos.orden_ids),
-        torre_origen_id=datos.torre_origen_id,
-        unidad_medida_id=datos.unidad_medida_id,
+        orden_ids=list(orden_ids),
+        torre_origen_id=torre_origen_id,
+        unidad_medida_id=unidad_medida_id,
         proveedor_referencia=extraccion.proveedor,
         numero_tiquete=extraccion.numero_tiquete,
-        emisor_tiquete=datos.emisor_tiquete,
+        emisor_tiquete=emisor_tiquete,
         observacion=extraccion.observaciones,
     )
     calculadas, de_validar, d = validar(db, actor, d, recolector_obligatorio=False)
@@ -868,16 +952,103 @@ def crear_desde_foto(db: Session, actor: Actor, datos: PesajeDesdeFotoIn) -> Pes
         advertencias.append(f"Material descartado {codigo}: no está en el catálogo del gremio.")
     if "observaciones" in extraccion.recortes:
         advertencias.append("observaciones: se recortó el texto del tiquete.")
-    if datos.recolector_id is None:
+    if recolector_id is None:
         advertencias.append("Falta el recolector: indícalo en el borrador antes de confirmar.")
     advertencias.extend(de_validar)
-    p = _nuevo_pesaje(db, actor, d, calculadas)
-    registrar_evento(db, "pesaje_borrador_creado", actor, pesaje_id=p.id, datos={"origen": "foto_ia"})
-    base = pesaje_out(db, cargar(db, p.id), advertencias)
-    return PesajeDesdeFotoOut(
-        **{nombre: getattr(base, nombre) for nombre in PesajeOut.model_fields},
-        dudosos=dudosos,
-        materiales_descartados=list(extraccion.descartados),
+
+    clave: str | None = None
+    try:
+        archivo: Archivo | None = None
+        if imagen is not None:
+            mime = imagen.mime_type.split(";")[0].strip().lower()
+            try:
+                contenido = base64.b64decode(imagen.datos_base64, validate=True)
+            except (binascii.Error, ValueError):
+                raise invalido({"imagen.datos_base64": "Base64 inválido"}) from None
+            archivo = guardar_bytes(proposito="tiquete", mime=mime, contenido=contenido)
+            clave = archivo.storage_key
+        p = _nuevo_pesaje(db, actor, d, calculadas)
+        if archivo is not None:
+            db.add(archivo)
+            db.flush()
+            db.add(PesajeArchivo(pesaje_id=p.id, archivo_id=archivo.id))
+        db.add(
+            ProcesamientoIA(
+                archivo_id=archivo.id if archivo is not None else None,
+                pesaje_id=p.id,
+                tarea=tarea,
+                proveedor="gemini",
+                modelo=get_settings().gemini_modelo,
+                propuesta=_propuesta_json(extraccion),
+                estado="propuesto",
+            )
+        )
+        db.flush()
+        registrar_evento(db, "pesaje_borrador_creado", actor, pesaje_id=p.id, datos={"origen": origen})
+        base = pesaje_out(db, cargar(db, p.id), advertencias)
+        return PesajeDesdeFotoOut(
+            **{nombre: getattr(base, nombre) for nombre in PesajeOut.model_fields},
+            dudosos=dudosos,
+            materiales_descartados=list(extraccion.descartados),
+        )
+    except Exception:
+        if clave:
+            borrar_disco(clave)
+        raise
+
+
+def crear_desde_foto(db: Session, actor: Actor, datos: PesajeDesdeFotoIn) -> PesajeDesdeFotoOut:
+    """Propone un borrador a partir de la foto. No lo confirma. Guarda la imagen solo si la lectura es usable."""
+    depurar_en_sesion_propia()
+    referencia_activa(db, Gremio, datos.gremio_id, "gremio_id", "Gremio")
+    actor.exigir_coordinacion(datos.gremio_id)
+    materiales = _materiales_del_gremio(db, datos.gremio_id)
+    extraccion = extraer_tiquete(
+        [(m.codigo, m.nombre) for m in materiales],
+        datos.imagen.mime_type,
+        datos.imagen.datos_base64,
+    )
+    return _borrador_desde_extraccion(
+        db,
+        actor,
+        gremio_id=datos.gremio_id,
+        materiales=materiales,
+        extraccion=extraccion,
+        origen="foto_ia",
+        tarea="leer_tiquete",
+        campo_ilegible="imagen",
+        recolector_id=datos.recolector_id,
+        fecha_indicada=datos.fecha_medicion,
+        orden_ids=list(datos.orden_ids),
+        torre_origen_id=datos.torre_origen_id,
+        unidad_medida_id=datos.unidad_medida_id,
+        emisor_tiquete=datos.emisor_tiquete,
+        imagen=datos.imagen,
+    )
+
+
+def crear_desde_dictado(db: Session, actor: Actor, datos: PesajeDesdeDictadoIn) -> PesajeDesdeFotoOut:
+    """Propone un borrador a partir de una frase. No guarda audio ni confirma el pesaje."""
+    referencia_activa(db, Gremio, datos.gremio_id, "gremio_id", "Gremio")
+    actor.exigir_coordinacion(datos.gremio_id)
+    materiales = _materiales_del_gremio(db, datos.gremio_id)
+    extraccion = extraer_dictado([(m.codigo, m.nombre) for m in materiales], datos.texto)
+    return _borrador_desde_extraccion(
+        db,
+        actor,
+        gremio_id=datos.gremio_id,
+        materiales=materiales,
+        extraccion=extraccion,
+        origen="dictado",
+        tarea="dictado",
+        campo_ilegible="texto",
+        recolector_id=datos.recolector_id,
+        fecha_indicada=datos.fecha_medicion,
+        orden_ids=list(datos.orden_ids),
+        torre_origen_id=datos.torre_origen_id,
+        unidad_medida_id=datos.unidad_medida_id,
+        emisor_tiquete=datos.emisor_tiquete,
+        imagen=None,
     )
 
 
@@ -938,6 +1109,17 @@ def post_pesaje_desde_foto(
 ):
     """La coordinadora fotografía el tiquete. La IA propone un borrador; ella lo confirma aparte."""
     return escritura(request, db, actor, datos, lambda: crear_desde_foto(db, actor, datos), status=201)
+
+
+@router.post("/pesajes/desde-dictado", status_code=201)
+def post_pesaje_desde_dictado(
+    datos: PesajeDesdeDictadoIn,
+    request: Request,
+    actor: Actor = Depends(actor_operador),
+    db: Session = Depends(get_db),
+):
+    """La coordinadora dicta el pesaje en texto. No se guarda audio y el borrador no queda confirmado."""
+    return escritura(request, db, actor, datos, lambda: crear_desde_dictado(db, actor, datos), status=201)
 
 
 @router.get("/pesajes")

@@ -49,6 +49,7 @@ const trazos: Record<string, string> = {
   descargar: "M12 4v11M7 10l5 5 5-5M5 20h14",
   tabla: "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14",
   tarjetas: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+  canjes: "M4 10h16v10H4zM3 6h18v4H3zM12 6v14M12 6c-1.5-3-5-3-5-.5S12 6 12 6ZM12 6c1.5-3 5-3 5-.5S12 6 12 6Z",
 };
 
 export function Icono({ nombre, className }: { nombre: string; className?: string }) {

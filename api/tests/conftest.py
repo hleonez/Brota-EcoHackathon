@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import tempfile
 import time
 import uuid
 
@@ -29,6 +30,8 @@ os.environ.update(
     BOT_WEBHOOK_SECRET="secreto-webhook-pruebas",
     SEED_PIN="2468",
     GEMINI_API_KEY="",  # las pruebas nunca llaman a Gemini de verdad
+    # Fuera del repositorio: la foto del tiquete de las pruebas no cae en /var ni en el árbol del proyecto.
+    ARCHIVOS_DIR=tempfile.mkdtemp(prefix="brota-archivos-"),
 )
 
 import psycopg  # noqa: E402

@@ -1,3 +1,4 @@
+import { CanjesAdmin } from "./Canjes";
 import { MarcoPanel, Portada, TarjetaAccion, enlaceCuenta, type AvisoPanel, type CuentaPanel } from "./MarcoPanel";
 import { useState, type CSSProperties } from "react";
 import { Icono } from "./Iconos";
@@ -86,7 +87,7 @@ const gruposAdministracion = [
   { titulo: "Personas y acceso", enlaces: ["Cuentas", "Participantes", "Registro asistido", "Piloto"] },
   { titulo: "Operación", enlaces: ["Recolectores", "Unidades", "Materiales", "Precios", "Educación"] },
   { titulo: "Seguimiento", enlaces: ["Conversaciones", "Reportes", "Liga de torres", "Actividad"] },
-  { titulo: "Configuración", enlaces: ["Puntos", "Motivos", "Equivalencias", "Programa", "Sistema"] },
+  { titulo: "Configuración", enlaces: ["Puntos", "Canjes", "Motivos", "Equivalencias", "Programa", "Sistema"] },
 ] as const;
 type Seccion = (typeof gruposAdministracion)[number]["enlaces"][number];
 /** Nombres claros en pantalla; el id interno de cada sección no cambia. */
@@ -96,7 +97,7 @@ const nombresVisibles: Partial<Record<string, string>> = {
 };
 const nombreSeccion = (seccion: string) => nombresVisibles[seccion] ?? seccion;
 /** Secciones con pantalla propia (AdminExtra.tsx), no la lista genérica. */
-const seccionesPropias = new Set<string>(["Participantes", "Precios", "Conversaciones", "Reportes", "Liga de torres", "Actividad", "Programa"]);
+const seccionesPropias = new Set<string>(["Canjes", "Participantes", "Precios", "Conversaciones", "Reportes", "Liga de torres", "Actividad", "Programa"]);
 const secciones = gruposAdministracion.map((grupo) => ({
   titulo: "titulo" in grupo ? grupo.titulo : undefined,
   enlaces: grupo.enlaces.map((seccion) => ({ id: seccion, texto: nombreSeccion(seccion) })),
@@ -121,6 +122,7 @@ const fichasSeccion: Record<Exclude<Seccion, "Inicio">, { imagen?: string; icono
   "Liga de torres": { imagen: "/panel/estrella.webp", icono: "liga de torres", tono: "amarillo", texto: "Qué torre participa más: hogares con entregas válidas sobre el total de viviendas." },
   Actividad: { icono: "actividad", tono: "lila", texto: "Quién hizo qué y cuándo: la trazabilidad de solicitudes, cuentas, pesajes y cambios." },
   Programa: { icono: "programa", tono: "verde", texto: "Nombre, horarios, contacto y el saludo con el que Brisa recibe a los vecinos." },
+  Canjes: { imagen: "/panel/estrella.webp", icono: "canjes", tono: "lila", texto: "Moneda Verde: aliados, premios y canjes de puntos que los vecinos piden por WhatsApp." },
 };
 const titulosFormulario: Partial<Record<string, string>> = {
   Cuentas: "Crear cuenta",
@@ -504,7 +506,9 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
       {conflicto && (
         <p className="aviso aviso-error" role="alert">Este registro cambió. Vuelve a seleccionarlo para revisar la versión actual.</p>
       )}
-      {vista === "Sistema" ? (
+      {vista === "Canjes" ? (
+        <CanjesAdmin />
+      ) : vista === "Sistema" ? (
         <section className="eco-tarjeta">
           <h2>Estado del sistema</h2>
           {cap.datos ? (

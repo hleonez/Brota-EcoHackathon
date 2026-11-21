@@ -98,6 +98,13 @@ class Brota:
     async def movimientos_puntos(self, celular: str) -> list[dict[str, Any]]:
         return (await self._pedir("GET", "/v1/me/movimientos-puntos", celular))["data"]
 
+    async def catalogo_canjes(self, celular: str, limite: int = 3) -> list[dict[str, Any]]:
+        return (await self._pedir("GET", "/v1/catalogo-canjes", celular, params={"limit": limite}))["data"]
+
+    async def crear_canje(self, celular: str, clave: str, item_id: str, cantidad: int = 1) -> dict[str, Any]:
+        cuerpo = {"item_id": item_id, "cantidad": cantidad}
+        return (await self._pedir("POST", "/v1/canjes", celular, clave=clave, json=cuerpo))["data"]
+
     async def solicitudes_abiertas(self, celular: str) -> list[dict[str, Any]]:
         return (await self._pedir("GET", "/v1/solicitudes", celular, params={"abiertas": "true", "limit": 5}))["data"]
 

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { api, ErrorApi } from "./api";
-import { Espera, Estado, useDatos } from "./portal";
+import { api, descargar, ErrorApi } from "./api";
+import { Espera, Estado, fechaBogota, useDatos } from "./portal";
 import Pasaporte from "./Pasaporte";
 import { Avisos } from "./Operacion";
 import type { Accion } from "./Panel";
@@ -177,6 +177,27 @@ type FiltroDia = "todas" | "hoy" | "manana" | "sin";
 
 export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asignadas: Orden[]; recolectores: Recolector[] }) {
   const [filtro, setFiltro] = useState<FiltroDia>("hoy");
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const [errorHoja, setErrorHoja] = useState<string | null>(null);
+  const gremioId = recolectores[0]?.gremio_id ?? asignadas[0]?.gremio_id;
+
+  async function imprimirHoy() {
+    setErrorHoja(null);
+    if (!gremioId) {
+      setErrorHoja("No hay un colectivo para imprimir la hoja de hoy.");
+      return;
+    }
+    setImprimiendo(true);
+    try {
+      const fecha = fechaBogota(new Date());
+      const q = new URLSearchParams({ gremio_id: gremioId, fecha });
+      await descargar("/v1/reportes/hoja-ruta?" + q, `hoja-ruta-${fecha}.pdf`);
+    } catch (err) {
+      setErrorHoja(err instanceof Error ? err.message : "No se pudo descargar la hoja.");
+    } finally {
+      setImprimiendo(false);
+    }
+  }
   const visibles = asignadas.filter((o) => {
     if (filtro === "todas") return true;
     const d = diaDe(o.asignacion?.inicio ?? null);
@@ -207,6 +228,12 @@ export function VistaRutas({ asignadas, recolectores, ...c }: Comunes & { asigna
 
   return (
     <div>
+      <div className="filtros">
+        <button type="button" className="btn" onClick={() => { void imprimirHoy(); }} disabled={imprimiendo}>
+          Imprimir hoja de hoy
+        </button>
+      </div>
+      {errorHoja && <p className="aviso aviso-error" role="alert">{errorHoja}</p>}
       <div className="filtros" role="group" aria-label="Día">
         {([["todas", "Todas"], ["hoy", "Hoy"], ["manana", "Mañana"], ["sin", "Sin hora fija"]] as const).map(([k, t]) => (
           <button key={k} className={`chip-filtro ${filtro === k ? "activo" : ""}`} onClick={() => setFiltro(k)}>{t}</button>

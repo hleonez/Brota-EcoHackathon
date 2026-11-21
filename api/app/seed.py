@@ -25,6 +25,7 @@ from app.config import get_settings
 from app.core.seguridad import hash_pin, normalizar_celular
 from app.db import get_sessionmaker
 from app.models import (
+    Aliado,
     CapacidadTorre,
     Conjunto,
     Consentimiento,
@@ -35,6 +36,7 @@ from app.models import (
     Gremio,
     HabilitacionPiloto,
     Huerta,
+    ItemCanje,
     Material,
     MotivoRechazo,
     Participante,
@@ -181,6 +183,27 @@ def _sembrar_participantes(db: Session, conjunto_id) -> str:
     return ", ".join(celular for celular, *_resto in PARTICIPANTES)
 
 
+def _sembrar_canjes(db: Session, gremio_huerta) -> None:
+    """Ejemplo: aliado de la huerta, bolsa de abono, plántula y descuento del corredor.
+
+    El premio colectivo de la torre no es un ítem. Los costos y las existencias son de demostración.
+    """
+    aliado = _uno(db, Aliado, nombre="Huerta Ecorazón")
+    if aliado is None:
+        aliado = Aliado(nombre="Huerta Ecorazón", gremio_id=gremio_huerta.id)
+        db.add(aliado)
+        db.flush()
+    premios = (
+        ("Bolsa de abono", Decimal("20.00"), 40),
+        ("Plántula", Decimal("15.00"), 40),
+        ("Descuento del corredor", Decimal("25.00"), None),
+    )
+    for nombre, costo, existencias in premios:
+        if _uno(db, ItemCanje, aliado_id=aliado.id, nombre=nombre):
+            continue
+        db.add(ItemCanje(aliado_id=aliado.id, nombre=nombre, costo_puntos=costo, existencias=existencias))
+
+
 def sembrar(db: Session) -> dict[str, str]:
     creados: dict[str, str] = {}
     g = {}
@@ -305,6 +328,7 @@ def sembrar(db: Session) -> dict[str, str]:
         db.add(c)
     db.flush()
     creados["celulares"] = _sembrar_participantes(db, conj.id)
+    _sembrar_canjes(db, g["ECORAZON"])
     db.commit()
     creados["cuentas_nuevas"] = ", ".join(nuevas) or "ninguna"
     return creados

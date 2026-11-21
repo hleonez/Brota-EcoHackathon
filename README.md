@@ -122,7 +122,7 @@ y en Neon, nunca en el repositorio (ver [docs/despliegue-nube.md](docs/despliegu
 
 | Carpeta | Contenido |
 | --- | --- |
-| `api/` | API FastAPI, modelos SQLAlchemy, migraciones Alembic (0001–0014) y pruebas (`pytest`) |
+| `api/` | API FastAPI, modelos SQLAlchemy, migraciones Alembic (0001–0016) y pruebas (`pytest`) |
 | `bot/` | Brisa: webhook de WhatsApp, conversación, avisos y registro de conversaciones |
 | `web/coordinacion/` | Panel React + TypeScript (Vite), estilos clay con los colores y fuentes del manual EcoConecta |
 | `infra/` | Docker Compose por capas y variables de ejemplo |

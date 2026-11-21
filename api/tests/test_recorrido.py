@@ -28,7 +28,7 @@ def test_salud(client):
     assert client.get("/health/live").json() == {"status": "ok"}
     assert client.get("/health/ready").json() == {"status": "ready"}
     caps = client.get("/v1/capacidades").json()["data"]
-    assert caps["modulos"]["solicitudes"] and not caps["modulos"]["canjes"]
+    assert caps["modulos"]["solicitudes"] and caps["modulos"]["canjes"]
 
 
 def test_sin_autenticacion(client):

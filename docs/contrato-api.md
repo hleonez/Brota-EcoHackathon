@@ -1,4 +1,4 @@
-> Contrato vigente: `0.3-ecoconecta.2`. La entrada de preferencia cambió y ya no acepta el texto libre obligatorio de `0.3-ecoconecta.1`. El detalle de reglas, la matriz RN y lo que deben enviar el bot y el panel está en [estado de API](avance-api-ecoconecta.md). Gemini sigue desactivado. Donde una sección 0.2 contradiga este aviso o la sección 5, manda `0.3-ecoconecta.2`.
+> Contrato vigente: `0.3-ecoconecta.2`. La entrada de preferencia cambió y ya no acepta el texto libre obligatorio de `0.3-ecoconecta.1`. El detalle de reglas, la matriz RN y lo que deben enviar el bot y el panel está en [estado de API](avance-api-ecoconecta.md). Sin clave, la IA responde `503` y no llama al proveedor; con clave, llama a Gemini. Canjes, hoja de ruta, Excel y la foto del tiquete están en este mismo contrato. Donde una sección 0.2 contradiga este aviso o la sección 5, manda `0.3-ecoconecta.2`.
 
 # Contrato de API · Brota
 
@@ -125,7 +125,9 @@ Regla de solicitud abierta (configurable, `REGLA_SOLICITUD_ABIERTA`): un servici
 | ● | `POST /v1/pesajes/{id}/confirmacion` | Revalida y aplica precios vigentes; solo confirmados cuentan |
 | ● | `POST /v1/pesajes/{id}/correcciones` | Anula y crea reemplazo confirmado (`sustituye_pesaje_id`) |
 | ● | `POST /v1/entregas-directas` | `{punto_recepcion_id, unidad_id?, participante_id?, pesaje}`; puntos al confirmar |
-| ● | `POST /v1/pesajes/desde-foto` | Papel Inteligente. Coordinación del gremio e `Idempotency-Key`. `{gremio_id, imagen: {mime_type: image/*, datos_base64}, recolector_id?, fecha_medicion?, orden_ids?, torre_origen_id?, unidad_medida_id?, emisor_tiquete?}`. Crea borrador `origen_captura=foto_ia`; no lo confirma ni guarda la imagen. La respuesta añade `dudosos` (`campo`, `confianza?`, `detalle`) y `materiales_descartados`. Umbral 0,6: la línea entra al borrador y queda marcada si hay kilos; sin kilos no entra. Un `GET` posterior no repite `dudosos`. Códigos fuera del catálogo del gremio se descartan. `422 TIQUETE_ILEGIBLE` si no hay ninguna línea usable. `503 IA_NO_DISPONIBLE` si la IA está apagada: no se guarda nada y el pesaje se registra a mano. La confirmación sigue en `POST /v1/pesajes/{id}/confirmacion` |
+| ● | `POST /v1/pesajes/desde-foto` | Papel Inteligente. Coordinación del gremio e `Idempotency-Key`. `{gremio_id, imagen: {mime_type: image/*, datos_base64}, recolector_id?, fecha_medicion?, orden_ids?, torre_origen_id?, unidad_medida_id?, emisor_tiquete?}`. Crea borrador `origen_captura=foto_ia`; no lo confirma. Si la extracción es usable, guarda la imagen en disco local (`ARCHIVOS_DIR`, nombre uuid, propósito `tiquete`) y un `procesamiento_ia` en estado `propuesto`, en la misma transacción del borrador. Al confirmar, `expira_at` queda en ahora + `ARCHIVOS_RETENCION_DIAS` (7 por defecto) si aún es nulo y el procesamiento pasa a `confirmado`. `depurar_vencidos` borra el fichero vencido, deja `eliminado_at` y no borra el pesaje. La respuesta añade `dudosos` (`campo`, `confianza?`, `detalle`) y `materiales_descartados`. Umbral 0,6: la línea entra al borrador y queda marcada si hay kilos; sin kilos no entra. Un `GET` posterior no repite `dudosos`. Códigos fuera del catálogo del gremio se descartan. `422 TIQUETE_ILEGIBLE` si no hay ninguna línea usable. `503 IA_NO_DISPONIBLE` si la IA está apagada: no se guarda nada y el pesaje se registra a mano. La confirmación sigue en `POST /v1/pesajes/{id}/confirmacion` |
+| ● | `POST /v1/pesajes/desde-dictado` | Misma coordinación, idempotencia y campos de gremio que `desde-foto`, con `texto` en lugar de la imagen (frase de la coordinadora, por ejemplo «Rosa trajo 9 kg de cartón y 3 de PET»). No guarda audio. Crea borrador `origen_captura=dictado` y un `procesamiento_ia` `tarea=dictado` con `archivo_id` nulo y estado `propuesto`. Mismos `dudosos`, umbral, `422 TIQUETE_ILEGIBLE` y `503 IA_NO_DISPONIBLE`. No confirma ni asigna puntos |
+| ● | `GET /v1/archivos/{id}` | Bytes de la evidencia. Solo la coordinación del gremio del pesaje vinculado. `404` si no existe o está eliminado. Otro gremio: `403` sin bytes. No es público. El nombre de descarga es el uuid, no un nombre original |
 
 ### M06 · IA (Gemini)
 | | Ruta | Notas |
@@ -135,11 +137,20 @@ Regla de solicitud abierta (configurable, `REGLA_SOLICITUD_ABIERTA`): un servici
 ### M07 · Puntos
 | | Ruta | Notas |
 | --- | --- | --- |
-| ● | `GET /v1/me/puntos`, `GET /v1/me/movimientos-puntos` | Saldo = suma del libro |
-| ○ | Canjes (`/catalogo-canjes`, `/canjes`) | Pendiente: titularidad del saldo por validar |
+| ● | `GET /v1/me/puntos`, `GET /v1/me/movimientos-puntos` | Saldo = suma del libro. Titularidad personal |
 
 No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al confirmar recogida) y
 `entrega_directa` (+15, al confirmar el pesaje), únicos por hecho (`clave_aplicacion`).
+
+### M07 · Canjes
+| | Ruta | Notas |
+| --- | --- | --- |
+| ● | `GET /v1/catalogo-canjes` | Ítems activos. Lo ve el participante, la coordinación y administración |
+| ● | `POST /v1/canjes` | `{item_id, cantidad? = 1, participante_id?}`. La persona canjea lo suyo; la coordinación del gremio del aliado indica `participante_id`. Misma transacción: bloquea saldo y existencias, deja el canje `reservado` y un `debito_canje` (`clave_aplicacion = canje:{id}`). Saldo insuficiente o sin unidades: `409`. `Idempotency-Key` |
+| ● | `GET /v1/canjes` | La persona ve los suyos. Coordinación, solo los de su gremio. Otro gremio, al actuar sobre el canje: `403`. Filtro `estado`. La respuesta no incluye celular |
+| ● | `POST /v1/canjes/{id}/entrega` | Coordinación del gremio. Solo `reservado` → `entregado`. No mueve puntos |
+| ● | `POST /v1/canjes/{id}/cancelacion` | Solo `reservado`. Reintegra (`reintegro`, `clave_aplicacion = reintegro:canje:{id}`) y devuelve existencias. Un entregado no se revierte (`409`) |
+| ● | `POST /v1/aliados`, `PATCH /v1/aliados/{id}`, `POST /v1/items-canje`, `PATCH /v1/items-canje/{id}` | Administración. Costo positivo. `existencias` null = sin control de inventario. El premio colectivo de la torre no es un ítem |
 
 ### M08 · Educación y avisos
 | | Ruta | Notas |
@@ -156,7 +167,9 @@ No existe endpoint para «enviar puntos». Abonos: `entrega_valida` (+10, al con
 | ● | `GET /v1/reportes/resumen` | Órdenes por estado, resultados, kg por material (báscula/estimado), valor estimado, hogares, tasas, cobertura |
 | ● | `GET /v1/reportes/serie` | kg por `dia`/`semana`/`mes` local, para gráficas |
 | ● | `GET /v1/reportes/certificado` | Fundación o administración. `conjunto_id` y `mes=AAAA-MM`. Responde `application/pdf` (`certificado-verde-{conjunto}-{mes}.pdf`), generado al vuelo y sin persistir la emisión. Kilos aprovechados (reciclables), compostados (orgánicos), tasa de rechazo, hogares y torres. Solo pesajes `confirmado` del mes en `America/Bogota` con torre del conjunto. Un mes sin datos devuelve PDF en ceros. Coordinación: `403`. Mes inválido: `422`. Conjunto inexistente: `404`. Apoyo documental: no determina la tarifa ni sustituye el aforo |
-| ○ | Exportaciones Excel, hoja de ruta, `/trabajos/{id}` | Pendiente |
+| ● | `GET /v1/reportes/hoja-ruta` | Coordinación de ese gremio o administración. `gremio_id` y `fecha=AAAA-MM-DD` (día en `America/Bogota`). PDF `hoja-ruta-{fecha}.pdf` con órdenes `programada` cuya asignación vigente empieza ese día, agrupadas por recolector: hora local, ubicación operativa, nombre de contacto y tipo de servicio o materiales de la orden. El teléfono del recolector, si está en su ficha, va en el encabezado. Sin celular del residente. Fundación y coordinación de otro gremio: `403`. Fecha inválida: `422`. Gremio inexistente: `404`. Día sin paradas: PDF que lo indica |
+| ● | `GET /v1/reportes/exportacion` | Fundación o administración. `desde` y `hasta` (instantes con zona, misma cohorte que el resumen) y `conjunto_id` opcional. `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`. Hojas: Ordenes (conteos por estado, sin nombres), Materiales (kg aceptados y rechazados de pesajes confirmados), Hogares (cantidad de hogares participantes, sin identificadores). Coordinación: `403`. Fechas inválidas: `422`. Sin celular, teléfono, apartamento ni nombre de contacto |
+| ○ | `/trabajos/{id}` | Pendiente |
 
 ### M10 · Configuración (admin)
 ● `GET /v1/materiales` (admin; incluye inactivos y `version`), `POST /v1/materiales`, `PATCH /v1/materiales/{id}` (nombre y activo), `POST /v1/motivos-rechazo`,
@@ -185,8 +198,8 @@ envío de WhatsApp.
   del gremio; los avisos indican `destino.tipo` (`participante` u `operador`).
 - La Liga usa una fórmula fija identificada (`participacion_hogares_v1`) y el número de viviendas
   vigente al cierre del periodo; `version_regla_liga` queda para cuando se apruebe otra fórmula.
-- No implementados todavía: archivos, canjes, exportaciones Excel y hojas de ruta. El Certificado Verde sí se emite en `GET /v1/reportes/certificado` y no se persiste.
-- `POST /v1/ia/interpretar` responde `503` y no llama a Gemini. `GET /v1/capacidades` informa `ia_disponible: false` y `piloto: restringido`.
+- No implementados todavía: `/trabajos/{id}`. La foto del tiquete usable sí se guarda en disco local (`ARCHIVOS_DIR`) y se borra al vencer; `POST /v1/ia/interpretar` sigue sin guardar la foto ni el audio del vecino. La hoja de ruta (`GET /v1/reportes/hoja-ruta`) y la exportación Excel (`GET /v1/reportes/exportacion`) se generan al vuelo. El Certificado Verde sí se emite en `GET /v1/reportes/certificado` y no se persiste.
+- Sin clave, `POST /v1/ia/interpretar` responde `503` y no llama a Gemini. Con clave, llama a Gemini. `GET /v1/capacidades` informa `ia_disponible` e `ia_mensajes` según esa clave, y `piloto: restringido`.
 
 ## 5. Cambios incompatibles de `0.3-ecoconecta.2`
 

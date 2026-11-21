@@ -825,7 +825,7 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   (10 nuevas). De punta a punta con una Brisa temporal en modo simulado: dos vecinos del laboratorio
   conversaron y sus chats aparecieron en el panel; guardar Programa quedó en Actividad. El trabajo del
   servidor lo hizo un agente en una copia aislada y se unió a `dev/jeremy` tras revisarlo.
-- **Al desplegar (ver entrada 27):** Render debe correr la migración 0014 (`MIGRAR_AL_INICIAR=true` ya está en
+- **Al desplegar (ver entrada 27):** Render debe correr las migraciones 0014–0016 (`MIGRAR_AL_INICIAR=true` ya está en
   `render.yaml`) y conviene definir `CONVERSACIONES_RETENCION_DIAS` si se quiere otro plazo. La política
   de privacidad debe mencionar que las conversaciones se guardan 30 días.
 
@@ -856,7 +856,7 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   para después del piloto.
 - **Pendiente para la evaluación:** este trabajo vive en `dev/jeremy`; para que lo vea el jurado hay que
   pasarlo a `develop` (Render y Cloudflare despliegan `develop`) y comprobar en producción que corrió la
-  migración 0014.
+  migración 0016 (conversaciones; antes 0014, renumerada al unir develop).
 
 ---
 

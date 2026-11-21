@@ -5,7 +5,8 @@ Sigue `diseño de base de datos inicial - brota` (18-nov-2026). Diferencias deli
 - `cuenta_operadora` incluye `usuario` y `pin_hash` (sesión de tablet con PIN corto).
 - `referencia_local` resuelve IDs temporales de la sincronización offline.
 - `solicitud_eliminacion` da seguimiento al derecho de supresión.
-- Se omiten por ahora canjes, archivos/IA, versiones de Liga y certificados emitidos.
+- Canjes de Moneda Verde y la foto del tiquete (archivo local) sí están en el modelo.
+- Se omiten la versión configurable de la Liga y los certificados emitidos.
 """
 
 from __future__ import annotations
@@ -658,6 +659,8 @@ class MovimientoPuntos(Base):
     __table_args__ = (
         CheckConstraint("tipo IN ('abono','debito_canje','reversion','reintegro')", name="tipo"),
         CheckConstraint("tipo <> 'abono' OR delta > 0", name="abono_positivo"),
+        CheckConstraint("tipo <> 'debito_canje' OR delta < 0", name="debito_canje_negativo"),
+        CheckConstraint("tipo <> 'reintegro' OR delta > 0", name="reintegro_positivo"),
         Index("ix_movimiento_participante_fecha", "participante_id", "ocurrido_at"),
     )
     id: Mapped[uuid.UUID] = _pk()
@@ -670,6 +673,7 @@ class MovimientoPuntos(Base):
     resultado_orden_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("resultado_orden.id"))
     entrega_directa_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("entrega_directa.id"))
     pesaje_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("pesaje.id"))
+    canje_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("canje.id"), nullable=True, index=True)
     revierte_movimiento_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("movimiento_puntos.id"))
     clave_aplicacion: Mapped[str] = mapped_column(String(160), unique=True)
     ocurrido_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -892,3 +896,109 @@ class ParametroPrograma(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     actualizado_por: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cuenta_operadora.id"), nullable=True)
+
+
+# --------------------------------------------------------------------------- canjes (Moneda Verde)
+# El premio colectivo de la torre no es un ítem de este catálogo.
+
+
+class Aliado(Base):
+    """Huerta o negocio que ofrece premios. El gremio autoriza a su coordinación."""
+
+    __tablename__ = "aliado"
+    id: Mapped[uuid.UUID] = _pk()
+    nombre: Mapped[str] = mapped_column(String(120))
+    gremio_id: Mapped[uuid.UUID] = _fk("gremio.id")
+    activo: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), default=True)
+    version: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    created_at: Mapped[datetime] = _ts_now()
+
+
+class ItemCanje(Base):
+    """Premio canjeable. `existencias` NULL significa inventario sin control, no cero."""
+
+    __tablename__ = "item_canje"
+    __table_args__ = (
+        CheckConstraint("costo_puntos > 0", name="costo_positivo"),
+        CheckConstraint("existencias IS NULL OR existencias >= 0", name="existencias"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    aliado_id: Mapped[uuid.UUID] = _fk("aliado.id")
+    nombre: Mapped[str] = mapped_column(String(120))
+    costo_puntos: Mapped[Decimal] = mapped_column(PUNTOS)
+    existencias: Mapped[int | None] = mapped_column(Integer)
+    activo: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), default=True)
+    version: Mapped[int] = mapped_column(Integer, server_default="1", default=1)
+    created_at: Mapped[datetime] = _ts_now()
+
+
+class Canje(Base):
+    """Reserva el costo aceptado. Entregado no se revierte; cancelar reintegra con otro movimiento."""
+
+    __tablename__ = "canje"
+    __table_args__ = (
+        CheckConstraint("estado IN ('reservado','entregado','cancelado')", name="estado"),
+        CheckConstraint("cantidad > 0", name="cantidad_positiva"),
+        CheckConstraint("costo_unitario_aplicado > 0", name="costo_positivo"),
+        CheckConstraint("total_puntos > 0", name="total_positivo"),
+        CheckConstraint("total_puntos = costo_unitario_aplicado * cantidad", name="total"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    participante_id: Mapped[uuid.UUID] = _fk("participante.id")
+    item_id: Mapped[uuid.UUID] = _fk("item_canje.id")
+    cantidad: Mapped[int] = mapped_column(Integer)
+    costo_unitario_aplicado: Mapped[Decimal] = mapped_column(PUNTOS)
+    total_puntos: Mapped[Decimal] = mapped_column(PUNTOS)
+    estado: Mapped[str] = mapped_column(String(20), server_default="reservado", default="reservado")
+    registrado_por: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cuenta_operadora.id"), nullable=True)
+    entregado_por: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cuenta_operadora.id"), nullable=True)
+    entregado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _ts_now()
+
+
+# --------------------------------------------------------------------------- archivos e IA de operación
+# La foto del tiquete vive en disco (storage_key), nunca en bytea.
+# La foto y el audio del vecino que entran por interpretar no usan estas tablas.
+
+
+class Archivo(Base):
+    """Metadatos de un fichero en disco local. El nombre guardado es `storage_key`, nunca el original."""
+
+    __tablename__ = "archivo"
+    __table_args__ = (CheckConstraint("proposito IN ('tiquete','video_educativo')", name="proposito"),)
+    id: Mapped[uuid.UUID] = _pk()
+    proposito: Mapped[str] = mapped_column(String(30))
+    mime: Mapped[str] = mapped_column(String(80))
+    tamano: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    storage_key: Mapped[str] = mapped_column(String(80), unique=True)
+    expira_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    eliminado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _ts_now()
+
+
+class ProcesamientoIA(Base):
+    """Propuesta de la IA. No confirma el pesaje ni asigna puntos. `archivo_id` es nulo en un dictado."""
+
+    __tablename__ = "procesamiento_ia"
+    __table_args__ = (
+        CheckConstraint("tarea IN ('leer_tiquete','dictado')", name="tarea"),
+        CheckConstraint("estado IN ('propuesto','confirmado','descartado')", name="estado"),
+    )
+    id: Mapped[uuid.UUID] = _pk()
+    archivo_id: Mapped[uuid.UUID | None] = _fk("archivo.id", nullable=True)
+    pesaje_id: Mapped[uuid.UUID | None] = _fk("pesaje.id", nullable=True)
+    tarea: Mapped[str] = mapped_column(String(30))
+    proveedor: Mapped[str] = mapped_column(String(40))
+    modelo: Mapped[str] = mapped_column(String(120))
+    propuesta: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    estado: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = _ts_now()
+
+
+class PesajeArchivo(Base):
+    __tablename__ = "pesaje_archivo"
+    __table_args__ = (PrimaryKeyConstraint("pesaje_id", "archivo_id"),)
+    pesaje_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pesaje.id", ondelete="CASCADE"))
+    archivo_id: Mapped[uuid.UUID] = _fk("archivo.id")

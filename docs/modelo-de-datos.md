@@ -1,9 +1,9 @@
 # Modelo de datos · Brota (PostgreSQL)
 
-Generado desde `api/app/models.py` (SQLAlchemy) con las migraciones hasta la **0014**. Para el detalle de
+Generado desde `api/app/models.py` (SQLAlchemy) con las migraciones hasta la **0016**. Para el detalle de
 reglas, estados y decisiones, ver [diseno-base-de-datos.md](diseno-base-de-datos.md).
 
-**44 tablas** agrupadas por dominio. `PK` llave primaria, `FK` llave foránea.
+**50 tablas** agrupadas por dominio. `PK` llave primaria, `FK` llave foránea.
 
 ## Territorio y unidades
 
@@ -272,11 +272,11 @@ erDiagram
   }
   solicitud ||--o{ orden : "solicitud_id"
   orden ||--o{ asignacion : "orden_id"
+  solicitud ||--o{ solicitud_residuo : "solicitud_id"
   residuo ||--o{ solicitud_residuo : "residuo_id"
   orden ||--o{ solicitud_residuo : "orden_id"
-  solicitud ||--o{ solicitud_residuo : "solicitud_id"
-  solicitud ||--o{ solicitud_servicio : "solicitud_id"
   orden ||--o{ solicitud_servicio : "orden_id"
+  solicitud ||--o{ solicitud_servicio : "solicitud_id"
   asignacion |o--o{ resultado_orden : "asignacion_id"
   motivo_rechazo |o--o{ resultado_orden : "motivo_rechazo_id"
   orden ||--o| resultado_orden : "orden_id"
@@ -367,14 +367,14 @@ erDiagram
   material ||--o{ version_precio_material : "material_id"
   pesaje |o--o{ pesaje : "sustituye_pesaje_id"
   pesaje ||--o| entrega_directa : "pesaje_id"
-  material ||--o{ linea_pesaje : "material_id"
-  pesaje ||--o{ linea_pesaje : "pesaje_id"
   version_precio_material |o--o{ linea_pesaje : "version_precio_id"
   version_equivalencia |o--o{ linea_pesaje : "version_equivalencia_id"
+  material ||--o{ linea_pesaje : "material_id"
+  pesaje ||--o{ linea_pesaje : "pesaje_id"
   pesaje ||--o{ pesaje_orden : "pesaje_id"
 ```
 
-## Puntos y educación
+## Puntos, canjes y educación
 
 ```mermaid
 erDiagram
@@ -402,9 +402,42 @@ erDiagram
     uuid resultado_orden_id FK
     uuid entrega_directa_id FK
     uuid pesaje_id FK
+    uuid canje_id FK
     uuid revierte_movimiento_id FK
     text clave_aplicacion
     timestamptz ocurrido_at
+    timestamptz created_at
+  }
+  aliado {
+    uuid id PK
+    text nombre
+    uuid gremio_id FK
+    bool activo
+    int version
+    timestamptz created_at
+  }
+  item_canje {
+    uuid id PK
+    uuid aliado_id FK
+    text nombre
+    numeric costo_puntos
+    int existencias
+    bool activo
+    int version
+    timestamptz created_at
+  }
+  canje {
+    uuid id PK
+    uuid participante_id FK
+    uuid item_id FK
+    int cantidad
+    numeric costo_unitario_aplicado
+    numeric total_puntos
+    text estado
+    uuid registrado_por FK
+    uuid entregado_por FK
+    timestamptz entregado_at
+    timestamptz cancelado_at
     timestamptz created_at
   }
   contenido_educativo {
@@ -433,8 +466,45 @@ erDiagram
   }
   contenido_educativo ||--o{ contenido_material : "contenido_id"
   contenido_educativo ||--o{ contenido_motivo : "contenido_id"
+  aliado ||--o{ item_canje : "aliado_id"
+  item_canje ||--o{ canje : "item_id"
   movimiento_puntos |o--o{ movimiento_puntos : "revierte_movimiento_id"
+  canje |o--o{ movimiento_puntos : "canje_id"
   version_regla_incentivo |o--o{ movimiento_puntos : "version_regla_id"
+```
+
+## Archivos e IA de operación
+
+```mermaid
+erDiagram
+  archivo {
+    uuid id PK
+    text proposito
+    text mime
+    int tamano
+    text sha256
+    text storage_key
+    timestamptz expira_at
+    timestamptz eliminado_at
+    timestamptz created_at
+  }
+  procesamiento_ia {
+    uuid id PK
+    uuid archivo_id FK
+    uuid pesaje_id FK
+    text tarea
+    text proveedor
+    text modelo
+    jsonb propuesta
+    text estado
+    timestamptz created_at
+  }
+  pesaje_archivo {
+    uuid pesaje_id PK
+    uuid archivo_id PK
+  }
+  archivo ||--o{ pesaje_archivo : "archivo_id"
+  archivo |o--o{ procesamiento_ia : "archivo_id"
 ```
 
 ## Comunicación, auditoría y operación
@@ -526,6 +596,7 @@ erDiagram
 
 | Desde | Campo | Hacia |
 |---|---|---|
+| `aliado` | `gremio_id` | `gremio` |
 | `contenido_educativo` | `gremio_id` | `gremio` |
 | `huerta` | `gremio_id` | `gremio` |
 | `material` | `gremio_id` | `gremio` |
@@ -537,13 +608,16 @@ erDiagram
 | `recolector` | `huerta_id` | `huerta` |
 | `version_equivalencia` | `punto_recepcion_id` | `punto_recepcion` |
 | `version_equivalencia` | `gremio_id` | `gremio` |
-| `solicitud` | `unidad_id` | `unidad` |
 | `solicitud` | `participante_id` | `participante` |
+| `solicitud` | `unidad_id` | `unidad` |
 | `vinculo_unidad` | `unidad_id` | `unidad` |
-| `caso` | `solicitud_id` | `solicitud` |
-| `caso` | `participante_id` | `participante` |
+| `canje` | `entregado_por` | `cuenta_operadora` |
+| `canje` | `registrado_por` | `cuenta_operadora` |
+| `canje` | `participante_id` | `participante` |
 | `caso` | `gremio_id` | `gremio` |
 | `caso` | `atendido_por` | `cuenta_operadora` |
+| `caso` | `solicitud_id` | `solicitud` |
+| `caso` | `participante_id` | `participante` |
 | `habilitacion_piloto` | `habilitada_por` | `cuenta_operadora` |
 | `habilitacion_piloto` | `unidad_id` | `unidad` |
 | `orden` | `gremio_id` | `gremio` |
@@ -554,9 +628,9 @@ erDiagram
 | `pesaje` | `creado_por` | `cuenta_operadora` |
 | `pesaje` | `unidad_medida_id` | `unidad` |
 | `pesaje` | `torre_origen_id` | `torre` |
-| `asignacion` | `recolector_id` | `recolector` |
 | `asignacion` | `programada_por` | `cuenta_operadora` |
 | `asignacion` | `registrada_por` | `cuenta_operadora` |
+| `asignacion` | `recolector_id` | `recolector` |
 | `entrega_directa` | `punto_recepcion_id` | `punto_recepcion` |
 | `entrega_directa` | `recibida_por` | `cuenta_operadora` |
 | `entrega_directa` | `participante_id` | `participante` |
@@ -569,7 +643,9 @@ erDiagram
 | `evento_salida` | `cuenta_operadora_id` | `cuenta_operadora` |
 | `evento_salida` | `participante_id` | `participante` |
 | `linea_pesaje` | `motivo_rechazo_id` | `motivo_rechazo` |
+| `pesaje_archivo` | `pesaje_id` | `pesaje` |
 | `pesaje_orden` | `orden_id` | `orden` |
+| `procesamiento_ia` | `pesaje_id` | `pesaje` |
 | `solicitud_servicio` | `tipo_servicio_id` | `tipo_servicio` |
 | `resultado_orden` | `trabajador_id` | `recolector` |
 | `resultado_orden` | `confirmado_por` | `cuenta_operadora` |

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { descargar } from "./api";
 import { Espera, Estado, fechaBogota, numero, useDatos } from "./portal";
 import type { Catalogo } from "./tipos";
 import { Icono } from "./Iconos";
@@ -85,7 +86,11 @@ const estados: Record<string, string> = {
 };
 export default function Indicadores({ gremioId }: { gremioId?: string }) {
   const catalogo = useDatos<Catalogo>(gremioId ? "" : "/v1/catalogos");
+  const conjuntos = useDatos<{ id: string }[]>("/v1/conjuntos");
+  const conjuntoId = conjuntos.datos?.[0]?.id;
   const [flujo, setFlujo] = useState("");
+  const [bajando, setBajando] = useState<"certificado" | "excel" | null>(null);
+  const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [inicio, setInicio] = useState(
     fechaBogota(new Date(Date.now() - 6 * 86400000)),
   );
@@ -113,6 +118,36 @@ export default function Indicadores({ gremioId }: { gremioId?: string }) {
     resumen.materiales.length === 0 && resumen.hogares_participantes === 0 &&
     Number(resumen.kg_aceptados) === 0 && Number(resumen.kg_rechazados) === 0 &&
     resumen.valor_estimado === null;
+
+  async function bajar(cual: "certificado" | "excel") {
+    setErrorArchivo(null);
+    if (!conjuntoId) {
+      setErrorArchivo(conjuntos.error ?? "Todavía no hay un conjunto para este informe.");
+      return;
+    }
+    if (cual === "excel" && !valido) {
+      setErrorArchivo("Elige una fecha final igual o posterior a la inicial.");
+      return;
+    }
+    setBajando(cual);
+    try {
+      if (cual === "certificado") {
+        const mes = fechaBogota(new Date()).slice(0, 7);
+        const q = new URLSearchParams({ conjunto_id: conjuntoId, mes });
+        await descargar("/v1/reportes/certificado?" + q, `certificado-verde-${mes}.pdf`);
+      } else {
+        const q = new URLSearchParams(params);
+        q.delete("gremio_id");
+        q.set("conjunto_id", conjuntoId);
+        await descargar("/v1/reportes/exportacion?" + q, "reporte-periodo.xlsx");
+      }
+    } catch (err) {
+      setErrorArchivo(err instanceof Error ? err.message : "No se pudo descargar el archivo.");
+    } finally {
+      setBajando(null);
+    }
+  }
+
   return (
     <section className="impacto" aria-label="Resumen del periodo">
       <fieldset className="eco-tarjeta filtros-impacto">
@@ -152,7 +187,15 @@ export default function Indicadores({ gremioId }: { gremioId?: string }) {
         <button className="btn" onClick={() => { r.recargar(); serie.recargar(); }}>
           Actualizar
         </button>
+        <button type="button" className="btn" disabled={bajando !== null} onClick={() => { void bajar("certificado"); }}>
+          Certificado del mes
+        </button>
+        <button type="button" className="btn" disabled={bajando !== null || !valido} onClick={() => { void bajar("excel"); }}>
+          Exportar periodo
+        </button>
         </div>
+        <p className="tenue">El certificado usa el mes en curso. El Excel usa este periodo, para el conjunto, sin datos de contacto.</p>
+        {errorArchivo && <p className="aviso aviso-error" role="alert">{errorArchivo}</p>}
       </fieldset>
       {catalogo.error && (
         <Espera error={catalogo.error} reintentar={catalogo.recargar} />
