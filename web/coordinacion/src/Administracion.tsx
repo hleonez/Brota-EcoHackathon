@@ -8,6 +8,8 @@ import { claveNueva } from "./util";
 import { temasEducativos, type TemaEducativo } from "./temasEducativos";
 import type { Catalogo, ItemCatalogo, Recolector } from "./tipos";
 import { Paginada } from "./Paginacion";
+import { Modal } from "./Dialogos";
+import { Actividad, Conversaciones, LigaTorres, Participantes, Precios, Programa, Reportes, TableroInicio } from "./AdminExtra";
 
 type Fila = {
   id: string;
@@ -81,20 +83,29 @@ function accionesContenido(fila: Fila): [string, string][] {
 }
 const gruposAdministracion = [
   { enlaces: ["Inicio"] },
-  { titulo: "Personas y acceso", enlaces: ["Cuentas", "Registro asistido", "Piloto"] },
-  { titulo: "Contenido y operación", enlaces: ["Recolectores", "Unidades", "Educación", "Materiales"] },
-  { titulo: "Configuración", enlaces: ["Puntos", "Motivos", "Equivalencias", "Sistema"] },
+  { titulo: "Personas y acceso", enlaces: ["Cuentas", "Participantes", "Registro asistido", "Piloto"] },
+  { titulo: "Operación", enlaces: ["Recolectores", "Unidades", "Materiales", "Precios", "Educación"] },
+  { titulo: "Seguimiento", enlaces: ["Conversaciones", "Reportes", "Liga de torres", "Actividad"] },
+  { titulo: "Configuración", enlaces: ["Puntos", "Motivos", "Equivalencias", "Programa", "Sistema"] },
 ] as const;
 type Seccion = (typeof gruposAdministracion)[number]["enlaces"][number];
+/** Nombres claros en pantalla; el id interno de cada sección no cambia. */
+const nombresVisibles: Partial<Record<string, string>> = {
+  "Registro asistido": "Registrar vecino",
+  Piloto: "Habilitación del piloto",
+};
+const nombreSeccion = (seccion: string) => nombresVisibles[seccion] ?? seccion;
+/** Secciones con pantalla propia (AdminExtra.tsx), no la lista genérica. */
+const seccionesPropias = new Set<string>(["Participantes", "Precios", "Conversaciones", "Reportes", "Liga de torres", "Actividad", "Programa"]);
 const secciones = gruposAdministracion.map((grupo) => ({
   titulo: "titulo" in grupo ? grupo.titulo : undefined,
-  enlaces: grupo.enlaces.map((seccion) => ({ id: seccion, texto: seccion })),
+  enlaces: grupo.enlaces.map((seccion) => ({ id: seccion, texto: nombreSeccion(seccion) })),
 }));
 /** Cabecera de cada sección: ilustración 3D o icono, tono pastel y para qué sirve. */
 const fichasSeccion: Record<Exclude<Seccion, "Inicio">, { imagen?: string; icono: string; tono: string; texto: string }> = {
   Cuentas: { imagen: "/panel/personas.webp", icono: "cuentas", tono: "verde", texto: "Quién entra al panel y con qué perfil: coordinación, recolectores, fundación y administración." },
-  "Registro asistido": { icono: "registro asistido", tono: "turquesa", texto: "Registra a un vecino con su consentimiento y vincúlalo a su unidad." },
-  Piloto: { icono: "piloto", tono: "amarillo", texto: "Quién participa en el piloto, desde qué unidad y hasta cuándo." },
+  "Registro asistido": { icono: "registro asistido", tono: "turquesa", texto: "Inscribe a un vecino que no usa WhatsApp o llega en persona: con su consentimiento y vinculado a su unidad." },
+  Piloto: { icono: "piloto", tono: "amarillo", texto: "El piloto es una prueba controlada: solo los vecinos habilitados, en su unidad y durante unas fechas, pueden pedir recolección." },
   Recolectores: { icono: "recolectores", tono: "verde", texto: "Huerteros y recicladores de cada colectivo que reciben las asignaciones." },
   Unidades: { icono: "unidades", tono: "lila", texto: "Hogares y negocios del conjunto que pueden pedir recolección." },
   Educación: { icono: "educación", tono: "amarillo", texto: "Guías de separación que los vecinos ven sin iniciar sesión." },
@@ -103,6 +114,24 @@ const fichasSeccion: Record<Exclude<Seccion, "Inicio">, { imagen?: string; icono
   Motivos: { icono: "motivos", tono: "turquesa", texto: "Razones para rechazar una entrega. Se desactivan, nunca se borran." },
   Equivalencias: { imagen: "/panel/monedas.webp", icono: "equivalencias", tono: "amarillo", texto: "Cuántos kilos equivalen a un balde o un bulto, para valorar cada entrega." },
   Sistema: { icono: "sistema", tono: "verde", texto: "Estado del servidor y de los servicios que usa el panel." },
+  Participantes: { imagen: "/panel/personas.webp", icono: "participantes", tono: "lila", texto: "Los vecinos y negocios registrados, su unidad y si ya están habilitados en el piloto." },
+  Precios: { imagen: "/panel/monedas.webp", icono: "precios", tono: "amarillo", texto: "Cuánto vale un kilo de cada material. Sirve para estimar el valor de lo aprovechado." },
+  Conversaciones: { imagen: "/panel/vecina.webp", icono: "conversaciones", tono: "verde", texto: "Lo que cada vecino habló con Brisa por WhatsApp, como en el celular." },
+  Reportes: { icono: "reportes", tono: "turquesa", texto: "Indicadores del programa y descargas en CSV para Excel." },
+  "Liga de torres": { imagen: "/panel/estrella.webp", icono: "liga de torres", tono: "amarillo", texto: "Qué torre participa más: hogares con entregas válidas sobre el total de viviendas." },
+  Actividad: { icono: "actividad", tono: "lila", texto: "Quién hizo qué y cuándo: la trazabilidad de solicitudes, cuentas, pesajes y cambios." },
+  Programa: { icono: "programa", tono: "verde", texto: "Nombre, horarios, contacto y el saludo con el que Brisa recibe a los vecinos." },
+};
+const titulosFormulario: Partial<Record<string, string>> = {
+  Cuentas: "Crear cuenta",
+  Recolectores: "Agregar recolector",
+  Unidades: "Crear unidad productiva",
+  Piloto: "Habilitar participante",
+  Puntos: "Nueva versión de regla",
+  Educación: "Nuevo contenido",
+  Materiales: "Agregar material",
+  Motivos: "Agregar motivo",
+  Equivalencias: "Nueva equivalencia",
 };
 const estadosOk = new Set(["Activo", "Vigente", "Publicado"]);
 const estadosAlerta = new Set(["Vencida", "Borrador", "Aún no vigente", "Vínculo sin verificar", "Sin vínculo vigente", "Fuera de vigencia"]);
@@ -157,6 +186,22 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
   const [rol, setRol] = useState("");
   const [participanteId, setParticipanteId] = useState("");
   const [busqueda, setBusqueda] = useState("");
+  const [formularioAbierto, setFormularioAbierto] = useState(false);
+  const [modoLista, setModoLista] = useState<"tarjetas" | "tabla">(() => {
+    try { return localStorage.getItem("brota.admin.modoLista") === "tabla" ? "tabla" : "tarjetas"; } catch { return "tarjetas"; }
+  });
+  const [orden, setOrden] = useState<{ col: "nombre" | "estado"; dir: 1 | -1 } | null>(null);
+  function cambiarModo(m: "tarjetas" | "tabla") {
+    setModoLista(m);
+    try { localStorage.setItem("brota.admin.modoLista", m); } catch { /* sin almacenamiento */ }
+  }
+  function ordenarPor(col: "nombre" | "estado") {
+    setOrden((o) => (o?.col === col ? { col, dir: o.dir === 1 ? -1 : 1 } : { col, dir: 1 }));
+  }
+  function cerrarFormulario() {
+    setSeleccion(null);
+    setFormularioAbierto(false);
+  }
   const participantes = useDatos<ParticipantePiloto[]>(
     vista === "Piloto" ? "/v1/participantes" : "",
   );
@@ -415,16 +460,46 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
     setRol("");
     setParticipanteId("");
     setBusqueda("");
+    setFormularioAbierto(false);
+    setOrden(null);
   }
+
+  const tituloFormulario: string =
+                seleccion && vista === "Educación"
+                  ? seleccion.titulo || "Contenido educativo"
+                  : seleccion && vista === "Piloto"
+                  ? "Cambiar habilitación"
+                  : seleccion && vista === "Recolectores"
+                  ? "Editar " + (seleccion.nombre || "recolector")
+                  : seleccion && vista === "Materiales"
+                  ? "Editar " + (seleccion.nombre || "material")
+                  : cuenta && vista === "Cuentas"
+                  ? "Acceso de " + cuenta.nombre
+                  : ({
+                      Cuentas: "Crear cuenta",
+                      Recolectores: "Agregar recolector",
+                      Unidades: "Crear unidad productiva",
+                      "Registro asistido": "Registrar participante",
+                      Piloto: "Habilitar participante",
+                      Puntos: "Nueva versión de regla",
+                      Educación: "Editor de contenido educativo",
+                      Materiales: "Agregar material",
+                      Motivos: "Agregar motivo",
+                      Equivalencias: "Nueva equivalencia",
+                    } as Partial<Record<string, string>>)[vista] ?? "Formulario";
 
   return (
     <MarcoPanel grupos={secciones} activo={cuentaActiva ? enlaceCuenta.id : vista}
-      titulo={cuentaActiva ? enlaceCuenta.texto : vista === "Inicio" ? "Administración" : vista}
+      titulo={cuentaActiva ? enlaceCuenta.texto : vista === "Inicio" ? "Administración" : nombreSeccion(vista)}
       contexto="Administración de EcoConecta" cuenta={cuentaSesion} navegar={navegar} avisos={avisosAdmin}
       portada={!cuentaActiva}>
       {vista !== "Inicio" && (
-        <CabeceraSeccion vista={vista} cantidad={vista === "Sistema" || vista === "Registro asistido" ? undefined : filas?.length}
-          busqueda={vista === "Sistema" || vista === "Registro asistido" ? undefined : busqueda} alBuscar={setBusqueda} />
+        <CabeceraSeccion vista={vista}
+          cantidad={rutas[vista] ? filas?.length : undefined}
+          busqueda={rutas[vista] ? busqueda : undefined} alBuscar={setBusqueda}
+          nuevo={rutas[vista] && titulosFormulario[vista]
+            ? { texto: titulosFormulario[vista]!, onClick: () => { setSeleccion(null); setAviso(null); setFormularioAbierto(true); } }
+            : undefined} />
       )}
       {conflicto && (
         <p className="aviso aviso-error" role="alert">Este registro cambió. Vuelve a seleccionarlo para revisar la versión actual.</p>
@@ -448,6 +523,14 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
             <Espera error={cap.error} reintentar={cap.recargar} />
           )}
         </section>
+      ) : seccionesPropias.has(vista) ? (
+        vista === "Participantes" ? <Participantes navegar={navegar} />
+          : vista === "Precios" ? <Precios />
+          : vista === "Conversaciones" ? <Conversaciones />
+          : vista === "Reportes" ? <Reportes />
+          : vista === "Liga de torres" ? <LigaTorres />
+          : vista === "Actividad" ? <Actividad />
+          : <Programa />
       ) : vista === "Inicio" ? (
         <Portada saludo={`¡Hola, ${cuentaSesion.nombre.trim().split(/\s+/)[0] || cuentaSesion.nombre}!`}
           texto="Aquí puedes configurar la información general de Brota." imagen="/panel/vecina.webp">
@@ -460,7 +543,11 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
           <TarjetaAccion icono="puntos" imagen="/panel/estrella.webp" titulo="Reglas de puntos"
             texto="Establece cómo se otorgan los puntos a la comunidad." onClick={() => navegar("Puntos")} />
         </Portada>
-      ) : vista === "Piloto" && !lista.datos ? (
+      ) : null}
+      {vista === "Inicio" && !cuentaActiva ? (
+        <TableroInicio navegar={navegar} />
+      ) : vista === "Inicio" || vista === "Sistema" || seccionesPropias.has(vista) ? null
+      : vista === "Piloto" && !lista.datos ? (
         <section className="eco-tarjeta">
           <h2>Habilitaciones del piloto</h2>
           <p>
@@ -471,9 +558,21 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
         </section>
       ) : (
         <div className="row g-3">
-          <div className="col-12 col-lg-6">
+          <div className={vista === "Registro asistido" ? "col-12 col-lg-6" : "col-12"}>
             <section className="eco-tarjeta">
-              <h2>{vista}</h2>
+              <div className="lista-encabezado">
+                <h2>{nombreSeccion(vista)}</h2>
+                {rutas[vista] && (
+                  <div className="lista-modo" role="group" aria-label="Ver la lista como">
+                    <button type="button" aria-pressed={modoLista === "tarjetas"} onClick={() => cambiarModo("tarjetas")}>
+                      <Icono nombre="tarjetas" />Tarjetas
+                    </button>
+                    <button type="button" aria-pressed={modoLista === "tabla"} onClick={() => cambiarModo("tabla")}>
+                      <Icono nombre="tabla" />Tabla
+                    </button>
+                  </div>
+                )}
+              </div>
               {aviso && <Estado tipo={aviso.tipo}>{aviso.texto}</Estado>}
               {vista === "Piloto" && !participantes.datos && (
                 <Espera error={participantes.error} reintentar={participantes.recargar} />
@@ -497,7 +596,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                   <p>Todavía no hay registros. Crea el primero con el formulario.</p>
                 </div>
               ) : (() => {
-                const filasVista = filas.map((f) => {
+                const filasVista = [...filas].map((f) => {
                   const persona = vista === "Piloto"
                     ? participantes.datos?.find((p) => p.id === f.participante_id)
                     : undefined;
@@ -533,20 +632,94 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                 });
                 const consulta = busqueda.trim().toLocaleLowerCase("es");
                 const visibles = consulta
-                  ? filasVista.filter(({ f, titulo, datos }) =>
+                  ? [...filasVista].filter(({ f, titulo, datos }) =>
                     [titulo, ...datos, f.texto ?? ""].join(" ").toLocaleLowerCase("es").includes(consulta))
-                  : filasVista;
+                  : [...filasVista];
+                const estadoDe = (datos: string[]) =>
+                  datos.find((d) => estadosOk.has(d) || estadosAlerta.has(d) || estadosApagados.has(d)) ?? "";
+                if (orden) {
+                  const clave = (x: (typeof visibles)[number]) => (orden.col === "nombre" ? x.titulo : estadoDe(x.datos));
+                  visibles.sort((a, b) => orden.dir * clave(a).localeCompare(clave(b), "es", { numeric: true }));
+                }
                 const conPersona = vista === "Cuentas" || vista === "Recolectores" || vista === "Piloto";
                 const ficha = fichasSeccion[vista as Exclude<Seccion, "Inicio">];
                 if (visibles.length === 0)
                   return <div className="vacio-clay"><p>Nada coincide con «{busqueda.trim()}».</p></div>;
+                const accionesFila = (f: Fila) => {
+                  const cambio = cambiosEstado[vista];
+                  const propia = vista === "Cuentas" && f.nombre === cuentaSesion.nombre;
+                  return (
+                    <div className="registro-acciones">
+                      {(vista === "Piloto" || vista === "Educación" || vista === "Recolectores" ||
+                        vista === "Materiales" || vista === "Cuentas") && (
+                        <button className="btn btn-sm registro-editar"
+                          onClick={() => { setConflicto(false); setAviso(null); setSeleccion(f); setFormularioAbierto(true); }}>
+                          <Icono nombre={vista === "Cuentas" ? "llave" : "editar"} />
+                          {vista === "Piloto" ? "Cambiar" : vista === "Cuentas" ? "Acceso" : "Editar"}
+                        </button>
+                      )}
+                      {cambio && !propia && (f.activo === false
+                        ? cambio(f, true) && (
+                          <button className="btn btn-sm exito" onClick={() => cambiarEstado(f, true)}>Reactivar</button>
+                        )
+                        : <BotonBaja texto={textoBaja[vista] ?? "Eliminar"} alConfirmar={() => cambiarEstado(f, false)} />)}
+                    </div>
+                  );
+                };
+                const flecha = (col: "nombre" | "estado") => (orden?.col === col ? (orden.dir === 1 ? " ▲" : " ▼") : "");
+                if (modoLista === "tabla")
+                  return (
+                    <Paginada key={vista + "|" + consulta + "|" + (orden ? orden.col + orden.dir : "")} items={visibles} porPagina={10} etiqueta={nombreSeccion(vista)}>
+                      {(pagina) => (
+                        <div className="tabla-envoltura">
+                          <table className="tabla-clay">
+                            <thead>
+                              <tr>
+                                <th aria-sort={orden?.col === "nombre" ? (orden.dir === 1 ? "ascending" : "descending") : undefined}>
+                                  <button type="button" className="tabla-orden" onClick={() => ordenarPor("nombre")}>Nombre{flecha("nombre")}</button>
+                                </th>
+                                <th>Detalles</th>
+                                <th aria-sort={orden?.col === "estado" ? (orden.dir === 1 ? "ascending" : "descending") : undefined}>
+                                  <button type="button" className="tabla-orden" onClick={() => ordenarPor("estado")}>Estado{flecha("estado")}</button>
+                                </th>
+                                <th><span className="visually-hidden">Acciones</span></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {pagina.map(({ f, titulo, datos }, n) => {
+                                const estado = estadoDe(datos);
+                                return (
+                                  <tr key={f.id} className={f.activo === false ? "registro-inactivo" : undefined}
+                                    style={{ "--n": Math.min(n, 12) } as CSSProperties}>
+                                    <td>
+                                      <span className="celda-persona">
+                                        <span className={"registro-avatar tono-" + ficha.tono} aria-hidden="true">
+                                          {conPersona ? iniciales(titulo) : <Icono nombre={ficha.icono} />}
+                                        </span>
+                                        <strong>{titulo}</strong>
+                                      </span>
+                                    </td>
+                                    <td><span className="registro-datos">{datos.filter((d) => d !== estado).map((d, i) => (
+                                      <span key={i} className="registro-dato">{d}</span>))}</span></td>
+                                    <td>{estado && (
+                                      <span className={"registro-estado " + (estadosOk.has(estado) ? "estado-ok" : estadosAlerta.has(estado) ? "estado-alerta" : "estado-apagado")}>
+                                        <Icono nombre={estadosOk.has(estado) ? "check" : estadosAlerta.has(estado) ? "reloj" : "cerrar"} />{estado}
+                                      </span>)}</td>
+                                    <td className="celda-acciones">{accionesFila(f)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </Paginada>
+                  );
                 return (
-                <Paginada key={vista + "|" + consulta} items={visibles} porPagina={6} etiqueta={vista}>
+                <Paginada key={vista + "|" + consulta + "|" + (orden ? orden.col + orden.dir : "")} items={visibles} porPagina={6} etiqueta={nombreSeccion(vista)}>
                 {(pagina) => (
                 <ul className="registros registros-clay">
                   {pagina.map(({ f, titulo, datos }, n) => {
-                    const cambio = cambiosEstado[vista];
-                    const propia = vista === "Cuentas" && f.nombre === cuentaSesion.nombre;
                     return (
                     <li key={f.id} className={f.activo === false ? "registro-inactivo" : undefined}
                       style={{ "--n": Math.min(n, 12) } as CSSProperties}>
@@ -571,21 +744,7 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                         </div>
                         {f.texto && <p className="registro-descripcion">{f.texto}</p>}
                       </div>
-                      <div className="registro-acciones">
-                        {(vista === "Piloto" || vista === "Educación" || vista === "Recolectores" ||
-                          vista === "Materiales" || vista === "Cuentas") && (
-                          <button className="btn btn-sm registro-editar"
-                            onClick={() => { setConflicto(false); setAviso(null); setSeleccion(f); }}>
-                            <Icono nombre={vista === "Cuentas" ? "llave" : "editar"} />
-                            {vista === "Piloto" ? "Cambiar" : vista === "Cuentas" ? "Acceso" : "Editar"}
-                          </button>
-                        )}
-                        {cambio && !propia && (f.activo === false
-                          ? cambio(f, true) && (
-                            <button className="btn btn-sm exito" onClick={() => cambiarEstado(f, true)}>Reactivar</button>
-                          )
-                          : <BotonBaja texto={textoBaja[vista] ?? "Eliminar"} alConfirmar={() => cambiarEstado(f, false)} />)}
-                      </div>
+                      {accionesFila(f)}
                     </li>
                     );
                   })}
@@ -596,7 +755,8 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
               })()}
             </section>
           </div>
-          <div className="col-12 col-lg-6">
+          {(() => {
+          const formulario = (
             <Formulario
               key={vista + (cuenta?.id || "")}
               preparar={preparar}
@@ -606,32 +766,10 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                 lista.recargar();
               }}
               accion="Guardar"
-              alVolver={seleccion ? () => setSeleccion(null) : undefined}
-              titulo={
-                seleccion && vista === "Educación"
-                  ? seleccion.titulo || "Contenido educativo"
-                  : seleccion && vista === "Piloto"
-                  ? "Cambiar habilitación"
-                  : seleccion && vista === "Recolectores"
-                  ? "Editar " + (seleccion.nombre || "recolector")
-                  : seleccion && vista === "Materiales"
-                  ? "Editar " + (seleccion.nombre || "material")
-                  : cuenta && vista === "Cuentas"
-                  ? "Acceso de " + cuenta.nombre
-                  : {
-                      Cuentas: "Crear cuenta",
-                      Recolectores: "Agregar recolector",
-                      Unidades: "Crear unidad productiva",
-                      "Registro asistido": "Registrar participante",
-                      Piloto: "Habilitar participante",
-                      Puntos: "Nueva versión de regla",
-                      Educación: "Editor de contenido educativo",
-                      Materiales: "Agregar material",
-                      Motivos: "Agregar motivo",
-                      Equivalencias: "Nueva equivalencia",
-                    }[vista]
-              }
+              alVolver={seleccion ? cerrarFormulario : undefined}
+              titulo={tituloFormulario}
               alGuardar={() => {
+                setFormularioAbierto(false);
                 if (vista === "Cuentas" && !cuenta) setRol("");
                 if (vista === "Piloto") setParticipanteId("");
                 setSeleccion(null);
@@ -897,7 +1035,11 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
                 </>
               )}
             </Formulario>
-          </div>
+          );
+          if (vista === "Registro asistido") return <div className="col-12 col-lg-6">{formulario}</div>;
+          if (!formularioAbierto && !seleccion) return null;
+          return <Modal titulo={tituloFormulario} onCerrar={cerrarFormulario}>{formulario}</Modal>;
+          })()}
         </div>
       )}
     </MarcoPanel>
@@ -905,11 +1047,12 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
 }
 
 
-function CabeceraSeccion({ vista, cantidad, busqueda, alBuscar }: {
+function CabeceraSeccion({ vista, cantidad, busqueda, alBuscar, nuevo }: {
   vista: Exclude<Seccion, "Inicio">;
   cantidad?: number;
   busqueda?: string;
   alBuscar: (texto: string) => void;
+  nuevo?: { texto: string; onClick: () => void };
 }) {
   const ficha = fichasSeccion[vista];
   return (
@@ -919,7 +1062,7 @@ function CabeceraSeccion({ vista, cantidad, busqueda, alBuscar }: {
         : <span className="seccion-cabecera-icono" aria-hidden="true"><Icono nombre={ficha.icono} /></span>}
       <div className="seccion-cabecera-texto">
         <p className="seccion-cabecera-titulo">
-          {vista}
+          {nombreSeccion(vista)}
           {cantidad !== undefined && (
             <span className="seccion-cabecera-cantidad">{cantidad} registro{cantidad === 1 ? "" : "s"}</span>
           )}
@@ -929,10 +1072,15 @@ function CabeceraSeccion({ vista, cantidad, busqueda, alBuscar }: {
       {busqueda !== undefined && (
         <label className="seccion-buscar">
           <Icono nombre="buscar" />
-          <span className="visually-hidden">Buscar en {vista}</span>
+          <span className="visually-hidden">Buscar en {nombreSeccion(vista)}</span>
           <input type="search" value={busqueda} onChange={(e) => alBuscar(e.target.value)}
-            placeholder={"Buscar en " + vista.toLowerCase()} />
+            placeholder={"Buscar en " + nombreSeccion(vista).toLowerCase()} />
         </label>
+      )}
+      {nuevo && (
+        <button type="button" className="btn primario seccion-nuevo" onClick={nuevo.onClick}>
+          <Icono nombre="nuevo" />{nuevo.texto}
+        </button>
       )}
     </section>
   );

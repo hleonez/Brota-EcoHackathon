@@ -40,6 +40,15 @@ const trazos: Record<string, string> = {
   editar: "M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4",
   llave: "M14 10a4 4 0 1 0-3.5 4L5 19.5V21h3v-2h2v-2h2l1.5-1.5",
   buscar: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4",
+  participantes: "M8 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0 0-6M17.5 14.2A5.5 5.5 0 0 1 22 20",
+  precios: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM14.8 8.6c-.5-.9-1.6-1.4-2.8-1.4-1.6 0-2.8.9-2.8 2.1 0 2.9 5.6 1.5 5.6 4.5 0 1.2-1.2 2.1-2.8 2.1-1.3 0-2.4-.6-2.9-1.5M12 5.5v1.7M12 16.8v1.7",
+  conversaciones: "M4 5h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3.5V15H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM18 9h2a2 2 0 0 1 2 2v9l-3.5-3H12",
+  "liga de torres": "M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4",
+  actividad: "M3 12h4l3-8 4 16 3-8h4",
+  programa: "M4 4h16v16H4zM8 8h8M8 12h8M8 16h5",
+  descargar: "M12 4v11M7 10l5 5 5-5M5 20h14",
+  tabla: "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14",
+  tarjetas: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
 };
 
 export function Icono({ nombre, className }: { nombre: string; className?: string }) {
