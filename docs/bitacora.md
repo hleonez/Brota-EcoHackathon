@@ -712,6 +712,12 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   (la semilla las agregó después y en local no corre sola). Se aplicó `python -m app.seed` dentro del
   contenedor de la API con el PIN de desarrollo; las 6 cuentas inician sesión. En producción el PIN es
   el `SEED_PIN` de Render, no el de desarrollo.
+- **«No pudimos conectar» en local:** el usuario abría el panel en `http://127.0.0.1:3000`; para el
+  navegador es otro origen que `localhost:3000` y la API solo permitía `localhost` por CORS, así que
+  bloqueaba la petición. Se agregó `127.0.0.1:3000/3001` al CORS local (`api/.env`, `.env.example` y el
+  valor por defecto de `config.py`; producción usa su propia variable en Render). Además: mientras hay
+  un aviso, la línea de vecinos se oculta para que el aviso no se salga de la tarjeta, y el mensaje de
+  conexión ya no culpa al internet del usuario.
 - **Pendiente:** «Correo o usuario» acepta el usuario; las cuentas no tienen correo todavía. Revocar
   sesiones en el servidor al salir (lista de `jti`) y PIN más largo para cuentas de administración.
 

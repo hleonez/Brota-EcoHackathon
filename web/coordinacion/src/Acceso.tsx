@@ -191,7 +191,7 @@ function mensajeDeError(err: unknown): string {
     if (err.status === 401) return "Usuario o contraseña incorrectos. Revísalos e inténtalo de nuevo.";
     if (err.status === 429) return err.message;
     if (err.status === 422) return "Revisa el usuario y la contraseña (la contraseña tiene de 4 a 12 caracteres).";
-    if (err.status === 0 || err.status >= 500) return "No pudimos conectar con Brota. Revisa tu internet e inténtalo en un momento.";
+    if (err.status === 0 || err.status >= 500) return "No pudimos conectar con el servidor de Brota. Inténtalo en un momento; si sigue, avisa a administración.";
     return err.message;
   }
   return "No pudimos iniciar sesión. Inténtalo de nuevo.";

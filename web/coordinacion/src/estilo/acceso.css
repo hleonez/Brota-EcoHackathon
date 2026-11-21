@@ -369,14 +369,16 @@
   display: flex;
   flex-direction: column;
   gap: calc(10 * var(--u));
-  margin-top: calc(18 * var(--u));
+  margin-top: calc(14 * var(--u));
 }
+/* En escritorio la tarjeta tiene alto fijo: mientras hay un aviso, cede su lugar a la línea de vecinos. */
+.acceso-pie:has(.acceso-aviso) .acceso-vecinos { display: none; }
 .acceso-aviso {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   margin: 0;
-  padding: calc(10 * var(--u)) calc(16 * var(--u));
+  padding: calc(8 * var(--u)) calc(16 * var(--u));
   border-radius: calc(16 * var(--u));
   font-size: max(13px, calc(20 * var(--u)));
   line-height: 1.35;
@@ -506,6 +508,7 @@
   .acceso-entrar { height: 56px; margin-top: 16px; gap: 12px; font-size: 18px; }
   .acceso-entrar-icono { width: 26px; height: 26px; }
   .acceso-pie { margin-top: 14px; gap: 10px; }
+  .acceso-pie:has(.acceso-aviso) .acceso-vecinos { display: block; }
   .acceso-aviso, .acceso-vecinos { font-size: 14px; }
   .acceso-aviso { padding: 10px 12px; border-radius: 12px; }
   .acceso-estado { padding: 26px 0 0; }

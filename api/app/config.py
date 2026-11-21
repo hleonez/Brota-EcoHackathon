@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     port: int = 8000
     # "/api" detrás del proxy; vacío en desarrollo directo.
     root_path: str = ""
-    cors_allowed_origins: str = "http://localhost:3000,http://localhost:3001"
+    cors_allowed_origins: str = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
 
     db_host: str = "127.0.0.1"
     db_port: int = 5432
