@@ -3,6 +3,7 @@ import { api, ErrorApi } from "./api";
 import { DialogoAsignar, DialogoCierre, DialogoProgramar, Modal } from "./Dialogos";
 import type { Caso, Catalogo, Orden, Recolector, Sesion } from "./tipos";
 import Indicadores from "./Indicadores";
+import { EquipoColectivo } from "./Equipo";
 import { Pesajes } from "./Operacion";
 import { Estado, fechaBogota } from "./portal";
 import { MarcoPanel, Portada, TarjetaAccion, TareaPrincipal, enlaceCuenta, nombresPerfil, type CuentaPanel, type GrupoPanel } from "./MarcoPanel";
@@ -251,19 +252,8 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
         ) : vista === "indicadores" ? <Indicadores gremioId={gremioId} />
         : vista === "pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores} />
         : vista === "equipo" ? (
-          <section className="eco-tarjeta">
-            <h2>Integrantes del colectivo</h2>
-            {recolectores.length ? <ul className="lista-equipo">
-              {recolectores.map((r) => {
-                const asignaciones = abiertas.filter((o) => o.asignacion?.recolector_id === r.id).length;
-                return <li key={r.id}>
-                  <div><strong>{r.nombre}</strong>
-                    <span>{asignaciones} {asignaciones === 1 ? "asignación vigente" : "asignaciones vigentes"}</span></div>
-                  {r.telefono_contacto && <a className="btn" href={`tel:${r.telefono_contacto}`} aria-label={`Llamar a ${r.nombre}`}>Llamar</a>}
-                </li>;
-              })}
-            </ul> : <Estado tipo="vacio">Aún no hay integrantes activos.</Estado>}
-          </section>
+          <EquipoColectivo gremioId={gremioId} organico={organico} recolectores={recolectores} abiertas={abiertas}
+            recargar={() => { api.recolectores(gremioId).then(setRecolectores).catch((e: Error) => setError(e.message)); }} />
         )
         : vista === "bandeja" && campo ? (
           <VistaMisOrdenes ordenes={ordenes} {...comunes} />

@@ -37,9 +37,11 @@
   background: var(--eco-forest);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--eco-green) 60%, var(--eco-forest)) transparent;
+  /* The nav still scrolls (wheel, touch, keyboard focus); the system scrollbar would draw
+     arrows over the rounded edge, so it stays hidden. */
+  scrollbar-width: none;
 }
+.panel-nav::-webkit-scrollbar { display: none; }
 .panel-logo { padding: 0 0 6px; }
 .panel-grupo h2 {
   margin: 0 12px 6px;

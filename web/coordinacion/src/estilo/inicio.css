@@ -57,7 +57,8 @@
 .portada-acciones {
   grid-area: acciones;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  /* 17rem keeps the longest label ("habilitaciones") clear of the arrow; narrower rows wrap. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
   gap: 12px;
 }
 @media (min-width: 760px) {
@@ -127,7 +128,7 @@
 .tono-solido .tarjeta-accion-icono { background: color-mix(in srgb, var(--eco-white) 16%, transparent); color: var(--eco-white); }
 .tarjeta-accion-icono .icono { width: 28px; height: 28px; }
 .tarjeta-accion-texto { display: grid; gap: 2px; flex: 1; min-width: 0; }
-.tarjeta-accion-texto strong { font: 700 clamp(17px, 1.8vw, 21px)/1.2 var(--font-heading); }
+.tarjeta-accion-texto strong { font: 700 clamp(17px, 1.6vw, 20px)/1.2 var(--font-heading); overflow-wrap: break-word; hyphens: auto; }
 .tarjeta-accion-texto span { color: var(--eco-muted); font-size: 14px; }
 .tono-solido .tarjeta-accion-texto span { color: var(--eco-white); }
 .tarjeta-accion-flecha {
