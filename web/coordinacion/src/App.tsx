@@ -145,19 +145,23 @@ function Login({
 
   return (
     <main className="login acceso">
-      <header className="acceso-cabecera">
-        <Marca />
-        <h1>Entra a Brota</h1>
-        <p className="tenue">Ingresa con la cuenta que te asignó el equipo de EcoConecta.</p>
-      </header>
-      <div className="acceso-columnas">
+      <div className="acceso-tarjeta">
         <section className="acceso-ilustracion">
-          <h2>Recolección comunitaria</h2>
-          <p>Organiza las solicitudes y el aprovechamiento de materiales en Villas de San Pablo.</p>
-          <img src="/marca/huerta.png" alt="" />
+          <Marca />
+          <div className="acceso-mensaje">
+            <h1>Entra a Brota</h1>
+            <p>Organiza las solicitudes y el aprovechamiento de materiales en Villas de San Pablo.</p>
+          </div>
+          <div className="acceso-personajes" aria-hidden="true">
+            <img src="/marca/reciclaje.png" alt="" />
+            <img src="/marca/huerta.png" alt="" />
+          </div>
         </section>
-        <form className="login-caja" onSubmit={entrar}>
-          <h2>Ingresa a tu cuenta</h2>
+        <form className="login-caja acceso-form" onSubmit={entrar}>
+          <div className="acceso-form-cabeza">
+            <h2>Ingresa a tu cuenta</h2>
+            <p className="tenue">Usa la cuenta que te asignó el equipo de EcoConecta.</p>
+          </div>
         <label>
           Usuario
           <input
@@ -198,8 +202,8 @@ function Login({
         <button className="btn primario grande" disabled={enviando}>
           {enviando ? "Entrando…" : "Entrar"}
         </button>
-        <p>¿Olvidaste tu PIN? Pídelo a la administración.</p>
-        <button type="button" className="btn" onClick={comunidad}>
+        <p className="acceso-ayuda">¿Olvidaste tu PIN? Pídelo a la administración.</p>
+        <button type="button" className="btn acceso-comunidad" onClick={comunidad}>
           Guía para hogares y negocios
         </button>
         </form>

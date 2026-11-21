@@ -79,6 +79,7 @@ class UnidadResumen(Salida):
     torre_id: uuid.UUID | None
     torre_codigo: str | None = None
     conjunto_id: uuid.UUID | None = None
+    activo: bool = True
 
 
 class ConsentimientoOut(Salida):
@@ -193,6 +194,7 @@ def unidad_resumen(u: Unidad) -> UnidadResumen:
         torre_id=u.torre_id,
         torre_codigo=u.torre.codigo if u.torre else None,
         conjunto_id=u.torre.conjunto_id if u.torre else None,
+        activo=u.activo,
     )
 
 
@@ -491,6 +493,8 @@ def patch_cuenta(
     def _fn() -> CuentaOut:
         c = obtener(db, CuentaOperadora, cuenta_id, "cuenta", bloquear=True)
         verificar_version(datos.version_esperada, c.version)
+        if datos.activo is False and c.id == actor.cuenta_id:
+            raise AppError(409, "CONFLICT", "No puedes desactivar tu propia cuenta.")
         if datos.activo is not None:
             c.activo = datos.activo
         if datos.pin is not None:

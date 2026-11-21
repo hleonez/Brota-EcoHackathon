@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal } from "./Dialogos";
-import { Campo, Formulario } from "./Formulario";
+import { Campo, Formulario, Pildoras } from "./Formulario";
 import { Espera, fechaBogota, useDatos } from "./portal";
 import type { ItemCatalogo, Recolector } from "./tipos";
 interface CatalogoPesaje {
@@ -101,18 +101,11 @@ export function Pesajes({
                 titulo="Material"
                 opciones={c.datos.materiales.map((m) => [m.id, m.nombre])}
               />
-              <label>
-                Método
-                <select
-                  value={metodo}
-                  onChange={(e) => setMetodo(e.target.value)}
-                >
-                  <option value="bascula">Báscula</option>
-                  {c.datos.equivalencias.length > 0 && (
-                    <option value="balde">Conversión de baldes</option>
-                  )}
-                </select>
-              </label>
+              <Pildoras nombre="metodo" titulo="Método" valorInicial={metodo} onChange={setMetodo}
+                opciones={[
+                  ["bascula", "Báscula"],
+                  ...(c.datos.equivalencias.length > 0 ? [["balde", "Conversión de baldes"] as [string, string]] : []),
+                ]} />
               {metodo === "balde" && (
                 <Campo
                   nombre="equivalencia"

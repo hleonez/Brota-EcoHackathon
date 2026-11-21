@@ -1,0 +1,158 @@
+/* Form controls in the brand style: dropdowns, pill choices, consent checkbox, form actions
+   and the row actions used to edit, remove (deactivate) or restore records. */
+
+/* ---------- dropdowns: brand chevron everywhere; a styled option list where the browser
+   supports customizable selects (appearance: base-select), the native list elsewhere. */
+select {
+  appearance: none;
+  width: 100%;
+  min-height: 50px;
+  padding: 11px 44px 11px 14px;
+  border: 1.5px solid var(--eco-line-strong);
+  border-radius: var(--eco-radius-sm);
+  background: var(--eco-white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23063b2e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center;
+  color: var(--eco-charcoal);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+select:hover { border-color: var(--eco-green); }
+select:has(option[value=""]:checked) { color: var(--eco-muted); }
+
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select {
+    display: flex;
+    align-items: center;
+    background-image: none;
+    padding-right: 14px;
+  }
+  select::picker-icon {
+    margin-left: auto;
+    color: var(--eco-forest);
+    transition: rotate 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  select:open::picker-icon { rotate: 180deg; }
+  select:open { border-color: var(--eco-green); box-shadow: 0 0 0 4px color-mix(in srgb, var(--eco-green) 18%, transparent); }
+  ::picker(select) {
+    margin-block: 6px;
+    padding: 6px;
+    border: 1px solid var(--eco-line);
+    border-radius: 16px;
+    background: var(--eco-white);
+    box-shadow: var(--eco-shadow-raised);
+    max-height: min(320px, 60dvh);
+  }
+  select option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    color: var(--eco-charcoal);
+    font-weight: 500;
+    cursor: pointer;
+  }
+  /* The "Selecciona…" placeholder only shows in the closed control, never as a choice. */
+  select option[hidden] { display: none; }
+  select option:hover, select option:focus-visible { background: var(--eco-green-50); outline: none; }
+  select option:checked { background: var(--eco-leaf-100); color: var(--eco-forest); font-weight: 600; }
+  select option::checkmark { order: 1; margin-left: auto; color: var(--eco-green); }
+}
+
+/* ---------- pill choices (short required choices: estado, método, acción…) */
+.pildoras { min-width: 0; margin: 0; padding: 0; border: 0; }
+.pildoras legend { float: left; width: 100%; margin: 0 0 6px; padding: 0; font-weight: 600; font-size: 15px; }
+.pildoras-opciones { clear: both; display: flex; flex-wrap: wrap; gap: 8px; }
+.pildora, .formulario .pildora {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0;
+  font-weight: 600;
+}
+.pildora input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.pildora span {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--eco-line-strong);
+  border-radius: 999px;
+  background: var(--eco-white);
+  color: var(--eco-forest);
+  text-align: center;
+  /* Pills wrap as a whole onto the next row instead of breaking their label. */
+  white-space: nowrap;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.pildora input:checked + span { border-color: var(--eco-green); background: var(--eco-green); color: var(--eco-white); }
+.pildora input:checked + span::before { content: "✓"; font-weight: 700; }
+.pildora input:focus-visible + span { outline: 3px solid var(--eco-forest); outline-offset: 3px; }
+@media (hover: hover) {
+  .pildora input:not(:checked):hover + span { border-color: var(--eco-green); background: var(--eco-green-50); }
+}
+
+/* ---------- consent checkbox: box and text side by side */
+.casilla, .formulario label.casilla {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--eco-line);
+  border-radius: var(--eco-radius-sm);
+  background: var(--eco-green-50);
+  font-weight: 500;
+  cursor: pointer;
+}
+.casilla input[type="checkbox"] {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  padding: 0;
+  accent-color: var(--eco-green);
+  cursor: pointer;
+}
+
+/* ---------- form actions: "Volver" and the primary action share one row */
+.formulario-acciones { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.formulario-acciones > .btn { flex: 1 1 9rem; }
+.formulario-acciones > .btn.primario { flex-grow: 2; }
+
+/* ---------- compact buttons and the two-step remove confirmation */
+.btn.btn-sm { min-height: 38px; padding: 6px 14px; font-size: 14px; }
+.btn.peligro-solido { border-color: var(--eco-danger); background: var(--eco-danger); color: var(--eco-white); }
+.confirmar-baja { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- record rows: text on the left, actions on the right */
+.registros li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+}
+.registro-texto { display: grid; gap: 4px; min-width: 0; }
+.registro-acciones { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.registro-inactivo .registro-texto { opacity: 0.6; }
+.lista-equipo li { flex-wrap: nowrap; }
+.lista-equipo li > div:first-child { flex: 1; min-width: 0; }
+.lista-equipo .registro-acciones { flex-wrap: nowrap; margin-left: auto; }
+@media (max-width: 560px) {
+  .registros li { grid-template-columns: minmax(0, 1fr); }
+  .registro-acciones { justify-content: flex-start; }
+}
