@@ -858,6 +858,28 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   pasarlo a `develop` (Render y Cloudflare despliegan `develop`) y comprobar en producción que corrió la
   migración 0016 (conversaciones; antes 0014, renumerada al unir develop).
 
+
+## 28 · 20-nov-2026 · develop al día en `dev/jeremy` (canjes, cierre, archivos de IA)
+
+- `develop` (`dbc6842`) traía: canjes de Moneda Verde (aliados, premios, reservas), exportación del
+  cierre y hoja de ruta, archivos e IA de operación (tiquete y dictado), mejoras de Brisa (nombrar lo
+  que no está en el catálogo) y el arreglo del despliegue de la IA.
+- **Conflictos (5) resueltos conservando ambos lados:** `api/app/main.py` (routers nuestros y de develop),
+  `api/app/models.py` (conversaciones y programa + canjes y archivos), `bot/tests/test_bot.py`,
+  `web/coordinacion/src/Administracion.tsx` (menú nuevo + «Canjes» en Configuración, con cabecera clay y
+  como sección propia) y `Operacion.tsx` (importaciones de ambos).
+- **Migraciones:** develop ya usa 0014 (archivos de IA) y 0015 (canjes); la nuestra de conversaciones
+  pasa a **0016** (`down_revision = "0015"`). En local se deshizo nuestra 0014 y la base subió limpia
+  0013 → 0014 → 0015 → 0016. En producción subirá desde la versión que tenga hasta 0016.
+- **Pruebas:** bot 77/77; panel compila; API 115/119. Las 4 que fallan fallan igual en `develop` solo
+  (comprobado en una copia aparte): `test_sync_offline_sin_duplicar` (ya conocida) y, por el orden de
+  ejecución, `test_pesaje_de_lote_borrador_y_confirmacion`, `test_liga_de_torres` y
+  `test_correccion_excluye_el_anulado`, que pasan si `test_recorrido.py` corre solo. Avisar al equipo:
+  las pruebas nuevas de develop dejan datos en la base compartida de pruebas.
+- **Seguridad:** los 15 endpoints nuevos de develop dan 401 sin sesión y respetan roles (aliados e
+  ítems solo administración; canjes administración y coordinación; exportación administración y
+  Fundación). `docs/modelo-de-datos.md` regenerado: 50 tablas y 101 relaciones.
+
 ---
 
 ## Próximos pasos
