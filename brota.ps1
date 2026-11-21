@@ -64,7 +64,10 @@ function Show-Estado {
     Write-Host "  Brota" -ForegroundColor Green
     Write-Host "  Panel de coordinación : http://localhost:$panel"
     Write-Host "  API                   : http://localhost:$api"
-    if ($salud -and $salud.url_publica) {
+    if ($salud -and $salud.webhook_fijo) {
+        Write-Host "  Brisa en WhatsApp     : la atiende producción ($($salud.webhook_fijo))" -ForegroundColor Green
+        Write-Host "                          Aquí no llega WhatsApp real: prueba en http://localhost:$bot/lab" -ForegroundColor Gray
+    } elseif ($salud -and $salud.url_publica) {
         Write-Host "  Brisa en WhatsApp     : $($salud.url_publica)/webhook (registrado en Meta)" -ForegroundColor Green
     } else {
         Write-Host "  Brisa en WhatsApp     : conectando... (revisa: .\brota.ps1 logs bot)" -ForegroundColor Yellow
@@ -85,8 +88,9 @@ switch ($Accion) {
         Write-Host "Esperando a que Brisa registre la dirección nueva en Meta..." -ForegroundColor Cyan
         for ($i = 0; $i -lt 40; $i++) {
             try {
-                $url = (Invoke-RestMethod "http://localhost:$bot/health" -TimeoutSec 5).url_publica
-                if ($url -and $url -ne $anterior) { break }
+                $h = Invoke-RestMethod "http://localhost:$bot/health" -TimeoutSec 5
+                if ($h.webhook_fijo) { break }
+                if ($h.url_publica -and $h.url_publica -ne $anterior) { break }
             } catch { }
             Start-Sleep -Seconds 3
         }

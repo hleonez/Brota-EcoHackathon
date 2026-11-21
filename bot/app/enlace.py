@@ -31,6 +31,14 @@ class ErrorEnlace(Exception):
     pass
 
 
+class WebhookFijo(ErrorEnlace):
+    """Meta ya apunta a una URL fija (producción) y el túnel local no la reemplaza."""
+
+    def __init__(self, url: str, mensaje: str) -> None:
+        super().__init__(mensaje)
+        self.url = url
+
+
 async def url_del_tunel(cliente: httpx.AsyncClient, metricas: str) -> str | None:
     r = await cliente.get(f"{metricas.rstrip('/')}/quicktunnel", timeout=5)
     host = (r.json() if r.status_code == 200 else {}).get("hostname")
@@ -76,7 +84,8 @@ async def registrar_webhook(cliente: httpx.AsyncClient, s: Settings, callback: s
         return False
     anterior = actual.get("callback_url") or ""
     if anterior and TUNEL_RAPIDO in callback and TUNEL_RAPIDO not in anterior and not s.enlace_reemplazar_fijo:
-        raise ErrorEnlace(
+        raise WebhookFijo(
+            anterior,
             f"Meta envía los mensajes a {anterior} (URL fija, p. ej. producción): el túnel local no la "
             "reemplaza. Brisa local sigue sin WhatsApp real (usa /lab o el simulador). Para quitársela a "
             "producción a propósito: ENLACE_REEMPLAZAR_FIJO=true en bot/.env."
@@ -112,6 +121,12 @@ async def bucle(cliente: httpx.AsyncClient, s: Settings, estado: dict[str, Any])
                              "actualizado" if cambio else "ya estaba al día")
         except asyncio.CancelledError:
             raise
+        except WebhookFijo as e:
+            if estado.get("webhook_fijo") != e.url:  # se avisa una vez, no cada 10 s
+                log.warning("%s", e)
+            estado["webhook_fijo"] = e.url
+            await asyncio.sleep(300)
+            continue
         except ErrorEnlace as e:
             log.error("%s", e)
         except Exception as e:  # noqa: BLE001 - el bucle no debe morir

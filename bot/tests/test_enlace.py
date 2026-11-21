@@ -71,7 +71,9 @@ def test_si_ya_estaba_registrada_no_la_toca():
 
 def test_no_le_quita_el_webhook_a_produccion():
     meta = MetaFalsa(callback_actual="https://brota-bot.onrender.com/webhook")
-    assert _correr(meta)["url"] is None and meta.registros == []
+    estado = _correr(meta)
+    assert estado["url"] is None and meta.registros == []
+    assert estado["webhook_fijo"] == "https://brota-bot.onrender.com/webhook"
 
 
 def test_reemplaza_produccion_solo_si_se_pide():

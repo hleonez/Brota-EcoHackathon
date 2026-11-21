@@ -116,7 +116,8 @@ def crear_app(settings: Settings | None = None, cliente: httpx.AsyncClient | Non
 
     @app.get("/health")
     async def health() -> dict[str, str | None]:
-        return {"status": "ok", "url_publica": app.state.publico["url"]}
+        return {"status": "ok", "url_publica": app.state.publico["url"],
+                "webhook_fijo": app.state.publico.get("webhook_fijo")}
 
     @app.get("/webhook")
     async def verificar(

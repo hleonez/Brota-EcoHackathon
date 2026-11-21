@@ -657,6 +657,13 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   editables y estilos del panel por vistas. API 76/77 (sigue fallando `test_sync_offline_sin_duplicar`),
   panel compila. El CI (`infra.yaml`) solo compila el panel y valida Compose: no corre las pruebas de API
   ni del bot, por eso ese fallo no se ve en GitHub.
+- **Panel local distinto al de producción:** el contenedor `panel` de Docker se había construido antes
+  del PR #21 (ingreso nuevo a dos columnas). No estaba mal, solo viejo. Docker no se actualiza solo con
+  `git pull`: hay que relanzar `.\brota.ps1` (reconstruye con `--build`). Tras relanzar, local y
+  Cloudflare muestran el mismo panel.
+- El bot local ahora avisa **una sola vez** que Meta está en producción (antes repetía el error cada
+  10 s), `/health` expone `webhook_fijo` y `.\brota.ps1` muestra «la atiende producción» y el enlace al
+  laboratorio (`http://localhost:8090/lab`) en lugar de «conectando...».
 
 ---
 
