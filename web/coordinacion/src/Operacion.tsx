@@ -52,7 +52,6 @@ export function Pesajes({
   const [confirmar, setConfirmar] = useState<Pesaje | null>(null);
   return (
     <>
-      <h1>Baldes y pesajes</h1>
       {tiquete && <DetalleTiquete id={tiquete} volver={() => setTiquete(null)} />}
       <div className="row g-3">
         <div className="col-12 col-lg-6">

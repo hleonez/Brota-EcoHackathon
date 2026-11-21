@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ErrorApi, pedir } from "./api";
+import { Estado } from "./portal";
 import { claveParaEnvio } from "./util";
 
 export type Valores = Record<string, string>;
@@ -64,12 +65,8 @@ export function Formulario({
       <button className="btn primario" disabled={ocupado}>
         {ocupado ? "Guardando…" : accion}
       </button>
-      {mensaje && <p role="status">{mensaje}</p>}
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
+      {mensaje && <Estado tipo="exito">{mensaje}</Estado>}
+      {error && <Estado tipo="error">{error}</Estado>}
     </form>
   );
 }

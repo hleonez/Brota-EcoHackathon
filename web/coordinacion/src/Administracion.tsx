@@ -1,3 +1,4 @@
+import { MarcoPanel, enlaceCuenta, type CuentaPanel } from "./MarcoPanel";
 import { useState } from "react";
 import { Campo, Formulario, type Operacion, type Valores } from "./Formulario";
 import { Espera, fechaBogota, useDatos } from "./portal";
@@ -73,21 +74,17 @@ function accionesContenido(fila: Fila): [string, string][] {
     ["retirar", "Retirar de la guía"],
   ];
 }
-const secciones = [
-  "Inicio",
-  "Cuentas",
-  "Recolectores",
-  "Unidades",
-  "Registro asistido",
-  "Piloto",
-  "Puntos",
-  "Educación",
-  "Materiales",
-  "Motivos",
-  "Equivalencias",
-  "Sistema",
+const gruposAdministracion = [
+  { enlaces: ["Inicio"] },
+  { titulo: "Personas y acceso", enlaces: ["Cuentas", "Registro asistido", "Piloto"] },
+  { titulo: "Contenido y operación", enlaces: ["Recolectores", "Unidades", "Educación", "Materiales"] },
+  { titulo: "Configuración", enlaces: ["Puntos", "Motivos", "Equivalencias", "Sistema"] },
 ] as const;
-type Seccion = (typeof secciones)[number];
+type Seccion = (typeof gruposAdministracion)[number]["enlaces"][number];
+const secciones = gruposAdministracion.map((grupo) => ({
+  titulo: "titulo" in grupo ? grupo.titulo : undefined,
+  enlaces: grupo.enlaces.map((seccion) => ({ id: seccion, texto: seccion })),
+}));
 const rutas: Partial<Record<Seccion, string>> = {
   Cuentas: "cuentas-operadoras?limit=100",
   Recolectores: "recolectores?limit=100",
@@ -103,7 +100,8 @@ interface Capacidades {
   avisos: { modo: string };
   registro: { politica_datos_version: string };
 }
-export default function Administracion() {
+export default function Administracion({ cuenta: cuentaSesion }: { cuenta: CuentaPanel }) {
+  const [cuentaActiva, setCuentaActiva] = useState(false);
   const [vista, setVista] = useState<Seccion>("Inicio");
   const [seleccion, setSeleccion] = useState<Fila | null>(null);
   const [conflicto, setConflicto] = useState(false);
@@ -325,32 +323,23 @@ export default function Administracion() {
     vista === "Motivos"
       ? cat.datos?.motivos_rechazo.map((m) => ({ ...m, version: 0 }))
       : lista.datos;
+  function navegar(id: string) {
+    setCuentaActiva(id === enlaceCuenta.id);
+    if (id === enlaceCuenta.id || !gruposAdministracion.some((grupo) => grupo.enlaces.some((item) => item === id))) return;
+    setVista(id as Seccion);
+    setSeleccion(null);
+    setConflicto(false);
+    setRol("");
+    setParticipanteId("");
+  }
+
   return (
-    <>
+    <MarcoPanel grupos={secciones} activo={cuentaActiva ? enlaceCuenta.id : vista}
+      titulo={cuentaActiva ? enlaceCuenta.texto : vista === "Inicio" ? "Administración" : vista}
+      contexto="Administración de EcoConecta" cuenta={cuentaSesion} navegar={navegar}>
       {conflicto && (
         <p role="alert">Este registro cambió. Vuelve a seleccionarlo para revisar la versión actual.</p>
       )}
-      <div className="saludo-admin">
-        <img src="/marca/administracion.png" alt="" />
-        <p>Gestiona las cuentas, los contenidos y las reglas del programa.</p>
-      </div>
-      <nav className="pestanas" aria-label="Administración">
-        {secciones.map((t) => (
-          <button
-            key={t}
-            className={"pestana " + (t === vista ? "activa" : "")}
-            onClick={() => {
-              setVista(t);
-              setSeleccion(null);
-              setConflicto(false);
-              setRol("");
-              setParticipanteId("");
-            }}
-          >
-            {t}
-          </button>
-        ))}
-      </nav>
       {vista === "Sistema" ? (
         <section className="eco-tarjeta">
           <h2>Estado del sistema</h2>
@@ -369,8 +358,8 @@ export default function Administracion() {
           <h2>Administración de EcoConecta</h2>
           <p>Gestiona accesos, unidades y configuración del programa.</p>
           <div className="acciones">
-            <button className="btn primario" onClick={() => setVista("Piloto")}>Revisar habilitaciones</button>
-            <button className="btn" onClick={() => setVista("Cuentas")}>Crear cuenta</button>
+            <button className="btn primario" onClick={() => navegar("Piloto")}>Revisar habilitaciones</button>
+            <button className="btn" onClick={() => navegar("Cuentas")}>Crear cuenta</button>
           </div>
         </section>
       ) : vista === "Piloto" && !lista.datos ? (
@@ -804,6 +793,6 @@ export default function Administracion() {
           </div>
         </div>
       )}
-    </>
+    </MarcoPanel>
   );
 }

@@ -190,21 +190,23 @@ class Brota:
 
     async def asignar(
         self, celular: str, clave: str, orden_id: str, version: int, recolector_id: str,
-        inicio: str | None, fin: str | None,
+        inicio: str | None, fin: str | None, acuerdo_canal: str | None,
     ) -> dict[str, Any]:
         cuerpo: dict[str, Any] = {"version_esperada": version, "recolector_id": recolector_id, "forma_aviso": "llamada"}
         if inicio and fin:
-            cuerpo |= {"inicio": inicio, "fin": fin}
+            cuerpo |= {"inicio": inicio, "fin": fin, "acuerdo_canal": acuerdo_canal}
         return (await self._pedir("POST", f"/v1/ordenes/{orden_id}/asignacion", celular, clave=clave, json=cuerpo))[
             "data"
         ]
 
     async def registrar_resultado(
-        self, celular: str, clave: str, orden_id: str, version: int, resultado: str, motivo_id: str | None = None,
+        self, celular: str, clave: str, orden_id: str, version: int, resultado: str,
+        materiales_confirmados: list[str], motivo_id: str | None = None,
     ) -> dict[str, Any]:
         cuerpo: dict[str, Any] = {
             "version_esperada": version,
             "resultado": resultado,
+            "materiales_confirmados": materiales_confirmados,
             "ocurrido_at": datetime.now(timezone.utc).isoformat(),
         }
         if motivo_id:
