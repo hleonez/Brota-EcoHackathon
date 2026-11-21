@@ -475,6 +475,9 @@ const nombresEvento: Record<string, [string, string]> = {
   orden_reasignada: ["Solicitud reasignada", "recolectores"],
   orden_cancelada: ["Solicitud cancelada", "cerrar"],
   orden_programada: ["Visita programada", "calendario"],
+  orden_recogida: ["Recolección hecha", "check"],
+  orden_rechazada: ["Recolección rechazada", "motivos"],
+  solicitud_creada: ["Vecino pidió una recolección", "bandeja"],
   caso_creado: ["Reporte de un vecino", "reportes"],
   caso_atendido: ["Reporte respondido", "check"],
   cuenta_creada: ["Cuenta del panel creada", "cuentas"],
@@ -500,7 +503,7 @@ const nombresEvento: Record<string, [string, string]> = {
 function nombreEvento(tipo: string) {
   return nombresEvento[tipo]?.[0] ?? tipo.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
 }
-const actorPorTipo: Record<string, string> = { servicio_bot: "Brisa", servicio: "Brisa", participante: "Vecino", operador: "Panel", sistema: "Sistema" };
+const actorPorTipo: Record<string, string> = { servicio_bot: "Brisa", servicio: "Brisa", participante: "Vecino", operador: "Panel", sistema: "Sistema", no_registrado: "Vecino nuevo" };
 
 export function Actividad() {
   const [tipo, setTipo] = useState("");

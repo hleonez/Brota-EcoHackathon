@@ -803,6 +803,31 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   vecino» sigue en línea.
 - CSV con «;» y BOM para que Excel en español muestre bien las tildes; ninguno incluye celulares ni
   direcciones.
+- **Servidor (migración `0014_conversaciones`):** tablas `mensaje_conversacion` y `parametro_programa`.
+  - `POST /v1/canal/mensajes` (solo el bot como servicio; idempotente por `wamid`; borra lo más viejo
+    que `CONVERSACIONES_RETENCION_DIAS`, por defecto 30).
+  - `GET /v1/conversaciones` y `GET /v1/conversaciones/{clave}/mensajes` (solo administración; la clave
+    es un HMAC del celular, que nunca se devuelve completo: «+57 300 ••• 0001»).
+  - `GET /v1/eventos` y `/v1/eventos/tipos` (solo administración; auditoría desde `evento_dominio`, con
+    números enmascarados en `datos`).
+  - `GET /v1/programa` (público) y `PATCH /v1/programa` (administración; guarda el evento
+    `programa_actualizado` solo con los nombres de las claves). PATCH y no PUT porque el CORS solo
+    permite GET, POST y PATCH.
+- **Bot (`bot/app/registro.py`):** registra cada mensaje entrante y saliente en segundo plano; si la API
+  falla, Brisa sigue igual y el log no guarda el celular. Audio queda como «🎤 Nota de voz» y foto como
+  «📷 Foto» (solo texto). `mensaje_bienvenida` reemplaza el saludo del primer contacto (caché de 5 min,
+  con respaldo al texto de siempre).
+- **Pantallas:** Conversaciones estilo WhatsApp (lista de chats, burbujas del vecino y de Brisa, hora,
+  separador por día, actualización cada 15–20 s, solo lectura, aviso de privacidad), Actividad (línea de
+  tiempo por día con quién hizo qué, filtro por tipo y CSV) y Programa (formulario con vista previa del
+  saludo de Brisa).
+- **Pruebas:** API 99/100 (16 nuevas; sigue fallando solo `test_sync_offline_sin_duplicar`), bot 72/72
+  (10 nuevas). De punta a punta con una Brisa temporal en modo simulado: dos vecinos del laboratorio
+  conversaron y sus chats aparecieron en el panel; guardar Programa quedó en Actividad. El trabajo del
+  servidor lo hizo un agente en una copia aislada y se unió a `dev/jeremy` tras revisarlo.
+- **Al desplegar:** Render debe correr la migración 0014 (`MIGRAR_AL_INICIAR=true` ya está en
+  `render.yaml`) y conviene definir `CONVERSACIONES_RETENCION_DIAS` si se quiere otro plazo. La política
+  de privacidad debe mencionar que las conversaciones se guardan 30 días.
 
 ---
 
