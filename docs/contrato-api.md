@@ -186,7 +186,7 @@ envío de WhatsApp.
 - La Liga usa una fórmula fija identificada (`participacion_hogares_v1`) y el número de viviendas
   vigente al cierre del periodo; `version_regla_liga` queda para cuando se apruebe otra fórmula.
 - No implementados todavía: archivos, canjes, exportaciones Excel y hojas de ruta. El Certificado Verde sí se emite en `GET /v1/reportes/certificado` y no se persiste.
-- `POST /v1/ia/interpretar` responde `503` y no llama a Gemini. `GET /v1/capacidades` informa `ia_disponible: false` y `piloto: restringido`.
+- Sin clave, `POST /v1/ia/interpretar` responde `503` y no llama a Gemini. Con clave, llama a Gemini. `GET /v1/capacidades` informa `ia_disponible` e `ia_mensajes` según esa clave, y `piloto: restringido`.
 
 ## 5. Cambios incompatibles de `0.3-ecoconecta.2`
 
