@@ -880,6 +880,25 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   ítems solo administración; canjes administración y coordinación; exportación administración y
   Fundación). `docs/modelo-de-datos.md` regenerado: 50 tablas y 101 relaciones.
 
+
+## 29 · 20-nov-2026 · Certificado Verde con diseño profesional
+
+- `api/app/modulos/certificado.py`: los cálculos no cambian; cambia la presentación del PDF (fpdf2):
+  - **Encabezado:** logos de EcoConecta y Brota, banda verde bosque con el título y sello del mes en
+    amarillo solar.
+  - **Cuerpo:** ficha de datos (conjunto, período, zona horaria y corte en hora local) y cuatro
+    tarjetas (reciclables, orgánicos, hogares, tasa de rechazo). Tablas con encabezado verde y filas
+    cebra: resumen del período, detalle por colectivo (con su tasa) y detalle por material.
+  - **Cierre y pie:** recuadro de advertencia (apoyo documental, no sustituye el aforo), «Cómo se
+    calcula», bloque de emisión y pie con Fundación Santo Domingo, Villas de San Pablo y Universidad
+    Libre, más «Página n de N».
+  - Colores del manual (`--eco-*`).
+- Logos en `api/app/recursos/` (PNG optimizados): la imagen de Docker copia `app/`, así que viajan con
+  la API.
+- `tests/test_certificado_verde.py`: cada indicador es ahora una celda de tabla, así que las pruebas
+  verifican «etiqueta, valor» en celdas seguidas (`_fila`) en vez de «Etiqueta: valor» en una línea.
+  Las cifras comprobadas son las mismas. API 115/119 (las 4 de `develop`).
+
 ---
 
 ## Próximos pasos

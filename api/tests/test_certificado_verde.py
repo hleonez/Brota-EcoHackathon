@@ -63,6 +63,11 @@ def _texto_pdf(data: bytes) -> str:
     return "\n".join(textos)
 
 
+def _fila(texto: str, etiqueta: str, valor: str) -> bool:
+    """En el PDF el indicador y su valor son celdas seguidas de la tabla «Resumen del período»."""
+    return f"{etiqueta}\n{valor}" in texto
+
+
 def _pedir(client, operador, catalogo, mes: str, usuario: str = "fundacion", conjunto_id: str | None = None):
     return client.get(
         "/v1/reportes/certificado",
@@ -159,13 +164,13 @@ def test_fundacion_recibe_pdf_con_kilos_confirmados(client, operador, catalogo):
     assert nombre in r.headers["content-disposition"]
 
     texto = _texto_pdf(r.content)
-    assert "Kilos aprovechados (reciclables): 10.000 kg" in texto
+    assert _fila(texto, "Kilos aprovechados (reciclables)", "10.000 kg")
     assert "Kilos compostados" in texto and "4.500 kg" in texto
-    assert "Kilos aceptados en total: 14.500 kg" in texto
-    assert "Kilos rechazados: 2.500 kg" in texto
-    assert "Tasa de rechazo por peso: 14.71 %" in texto
-    assert "Hogares participantes: 0" in texto
-    assert "Torres con pesaje confirmado: 2" in texto
+    assert _fila(texto, "Kilos aceptados en total", "14.500 kg")
+    assert _fila(texto, "Kilos rechazados", "2.500 kg")
+    assert _fila(texto, "Tasa de rechazo por peso", "14.71 %")
+    assert _fila(texto, "Hogares participantes", "0")
+    assert _fila(texto, "Torres con pesaje confirmado", "2")
     assert "ASORESCATAR" in texto and "ECORAZON" in texto
     assert "apoyo documental" in texto
     assert "sustituye el aforo de la empresa de aseo" in texto
@@ -193,10 +198,10 @@ def test_borrador_no_suma(client, operador, catalogo):
     assert r.status_code == 200, r.text
     assert r.content.startswith(b"%PDF")
     texto = _texto_pdf(r.content)
-    assert "Kilos aprovechados (reciclables): 6.250 kg" in texto
-    assert "Kilos aceptados en total: 6.250 kg" in texto
-    assert "Kilos rechazados: 1.250 kg" in texto
-    assert "Torres con pesaje confirmado: 1" in texto
+    assert _fila(texto, "Kilos aprovechados (reciclables)", "6.250 kg")
+    assert _fila(texto, "Kilos aceptados en total", "6.250 kg")
+    assert _fila(texto, "Kilos rechazados", "1.250 kg")
+    assert _fila(texto, "Torres con pesaje confirmado", "1")
     assert "3.750" not in texto
     assert "10.000" not in texto
 
@@ -238,12 +243,12 @@ def test_mes_sin_datos_devuelve_pdf(client, operador, catalogo):
         assert r.content.startswith(b"%PDF")
         assert r.headers["content-disposition"].endswith(f'-{MES_VACIO}.pdf"') or MES_VACIO in r.headers["content-disposition"]
         texto = _texto_pdf(r.content)
-        assert "Kilos aprovechados (reciclables): 0.000 kg" in texto
+        assert _fila(texto, "Kilos aprovechados (reciclables)", "0.000 kg")
         assert "Kilos compostados" in texto and "0.000 kg" in texto
-        assert "Kilos rechazados: 0.000 kg" in texto
-        assert "Tasa de rechazo por peso: 0 %" in texto
+        assert _fila(texto, "Kilos rechazados", "0.000 kg")
+        assert _fila(texto, "Tasa de rechazo por peso", "0 %")
         assert "Sin pesajes confirmados en este período." in texto
-        assert "Hogares participantes: 0" in texto
-        assert "Torres con pesaje confirmado: 0" in texto
+        assert _fila(texto, "Hogares participantes", "0")
+        assert _fila(texto, "Torres con pesaje confirmado", "0")
         assert "apoyo documental" in texto
         assert "aforo de la empresa de aseo" in texto

@@ -20,7 +20,8 @@ import re
 import unicodedata
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
+from pathlib import Path
 from decimal import ROUND_HALF_UP, Decimal
 
 from fpdf import FPDF
@@ -261,123 +262,320 @@ def _cifras(db: Session, conjunto_id: uuid.UUID, mes: str) -> _Cifras:
     )
 
 
+_RECURSOS = Path(__file__).resolve().parent.parent / "recursos"
+
+# Colores del manual de identidad EcoConecta (RGB).
+_BOSQUE = (6, 59, 46)
+_VERDE = (22, 138, 46)
+_HOJA = (101, 169, 10)
+_TURQUESA = (10, 155, 112)
+_SOLAR = (246, 196, 0)
+_MARIPOSA = (242, 140, 0)
+_CARBON = (32, 37, 34)
+_GRIS = (88, 99, 92)
+_LINEA = (221, 229, 223)
+_FONDO = (242, 245, 242)
+_ZEBRA = (247, 250, 247)
+
+
+def _logo(pdf: FPDF, nombre: str, x: float, y: float, h: float) -> float:
+    """Dibuja un logo de `app/recursos` con alto `h`; devuelve el ancho usado (0 si falta el archivo)."""
+    ruta = _RECURSOS / nombre
+    if not ruta.exists():
+        return 0.0
+    info = pdf.image(str(ruta), x=x, y=y, h=h)
+    return float(info.rendered_width)
+
+
+def _fecha_larga(d: datetime) -> str:
+    return f"{d.day} de {_MESES[d.month]} de {d.year}"
+
+
+def _hora(d: datetime) -> str:
+    return f"{d:%H:%M}"
+
+
 class _PDF(FPDF):
     def footer(self) -> None:
-        self.set_y(-16)
-        self.set_font("Helvetica", "", 8)
-        self.set_text_color(70, 70, 70)
-        self.cell(
-            0,
-            4,
-            _texto("No sustituye el aforo de la empresa de aseo."),
-            align="C",
-            new_x="LMARGIN",
-            new_y="NEXT",
-        )
-        self.cell(0, 4, _texto(f"Brota · fórmula {FORMULA}"), align="C")
+        y = self.h - 21
+        self.set_draw_color(*_LINEA)
+        self.set_line_width(0.3)
+        self.line(15, y, 195, y)
+        self.set_xy(15, y + 3)
+        self.set_font("Helvetica", "", 7.5)
+        self.set_text_color(*_GRIS)
+        self.cell(27, 6, _texto("Una iniciativa con"))
+        x = 43.0
+        x += _logo(self, "fundacion.png", x, y + 1.6, 9) + 4
+        x += _logo(self, "villas.png", x, y + 2.2, 7.5) + 4
+        self.set_xy(x, y + 3)
+        self.set_font("Helvetica", "B", 8)
+        self.set_text_color(*_BOSQUE)
+        self.cell(32, 6, _texto("Universidad Libre"))
+        self.set_xy(15, self.h - 10)
+        self.set_font("Helvetica", "", 7)
+        self.set_text_color(*_GRIS)
+        self.cell(150, 4, _texto(f"No sustituye el aforo de la empresa de aseo. Brota · fórmula {FORMULA}"))
+        self.cell(30, 4, _texto(f"Página {self.page_no()} de {{nb}}"), align="R")
 
 
-def _linea(
-    pdf: FPDF, texto: str, size: int = 11, estilo: str = "", alto: float = 6, relleno: bool = False
-) -> None:
+def _espacio(pdf: FPDF, alto: float) -> None:
+    """Salta de página si el bloque que sigue no cabe completo."""
+    if pdf.get_y() + alto > pdf.h - 28:
+        pdf.add_page()
+
+
+def _titulo(pdf: FPDF, texto: str) -> None:
+    _espacio(pdf, 20)
+    pdf.ln(3)
+    y = pdf.get_y()
+    pdf.set_fill_color(*_HOJA)
+    pdf.ellipse(15, y + 2.1, 2.6, 2.6, style="F")
+    pdf.set_xy(20, y)
+    pdf.set_font("Helvetica", "B", 12.5)
+    pdf.set_text_color(*_BOSQUE)
+    pdf.cell(0, 7, _texto(texto), new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(1)
+
+
+def _recortar(pdf: FPDF, texto: str, ancho: float) -> str:
     limpio = _texto(texto)
-    for tamano in range(size, 7, -1):
-        pdf.set_font("Helvetica", estilo, tamano)
-        if pdf.get_string_width(limpio) <= pdf.epw:
-            pdf.cell(0, alto, limpio, fill=relleno, new_x="LMARGIN", new_y="NEXT")
-            return
-    pdf.set_font("Helvetica", estilo, 8)
-    pdf.multi_cell(0, 4, limpio, fill=relleno)
+    if pdf.get_string_width(limpio) <= ancho - 3:
+        return limpio
+    while limpio and pdf.get_string_width(limpio + "...") > ancho - 3:
+        limpio = limpio[:-1]
+    return limpio + "..."
+
+
+def _tabla(pdf: FPDF, encabezados: list[str], anchos: list[float], filas: list[list[str]],
+           alineaciones: list[str], negrita_col: int | None = 0) -> None:
+    """Tabla con encabezado verde bosque, filas cebra y líneas suaves. Cada celda es un texto propio."""
+    _espacio(pdf, 8 + 7 * min(len(filas), 4))
+    pdf.set_font("Helvetica", "B", 8.5)
+    pdf.set_fill_color(*_BOSQUE)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_draw_color(*_BOSQUE)
+    for texto, ancho, alin in zip(encabezados, anchos, alineaciones):
+        pdf.cell(ancho, 8, _texto(texto), border=0, align=alin, fill=True)
+    pdf.ln(8)
+    pdf.set_draw_color(*_LINEA)
+    pdf.set_line_width(0.2)
+    for n, fila in enumerate(filas):
+        _espacio(pdf, 7)
+        pdf.set_fill_color(*(_ZEBRA if n % 2 else (255, 255, 255)))
+        for i, (texto, ancho, alin) in enumerate(zip(fila, anchos, alineaciones)):
+            pdf.set_font("Helvetica", "B" if i == negrita_col else "", 9)
+            pdf.set_text_color(*(_CARBON if i == negrita_col else _GRIS))
+            pdf.cell(ancho, 7, _recortar(pdf, texto, ancho), border="B", align=alin, fill=True)
+        pdf.ln(7)
+    pdf.ln(2)
+
+
+def _tarjeta(pdf: FPDF, x: float, y: float, w: float, h: float, color: tuple[int, int, int],
+             valor: str, unidad: str, etiqueta: str) -> None:
+    tinte = tuple(round(c + (255 - c) * 0.88) for c in color)
+    pdf.set_fill_color(*tinte)
+    pdf.set_draw_color(*tinte)
+    pdf.rect(x, y, w, h, style="F", round_corners=True, corner_radius=3)
+    pdf.set_fill_color(*color)
+    pdf.rect(x, y, w, 1.6, style="F")
+    pdf.set_xy(x + 4, y + 5)
+    pdf.set_font("Helvetica", "B", 15)
+    pdf.set_text_color(*color)
+    pdf.cell(w - 8, 8, _texto(valor))
+    pdf.set_xy(x + 4, y + 13)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(w - 8, 4, _texto(unidad))
+    pdf.set_xy(x + 4, y + 18)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(*_GRIS)
+    pdf.multi_cell(w - 8, 3.8, _texto(etiqueta))
 
 
 def render_pdf(cifras: _Cifras) -> bytes:
     pdf = _PDF(format="A4", unit="mm")
     pdf.set_compression(False)
     pdf.set_margins(15, 15, 15)
-    pdf.set_auto_page_break(auto=True, margin=22)
-    pdf.set_title(f"Certificado Verde {cifras.mes}")
-    pdf.set_author("Brota")
+    pdf.set_auto_page_break(auto=True, margin=28)
+    pdf.alias_nb_pages()
+    pdf.set_title(f"Certificado Verde {cifras.conjunto_nombre} {cifras.mes}")
+    pdf.set_author("Brota · EcoConecta Villas de San Pablo")
+    pdf.set_subject("Informe mensual de aprovechamiento de residuos")
     pdf.set_creator("Brota")
     pdf.add_page()
+    zona_local = cifras.desde.tzinfo
+    corte = cifras.corte.astimezone(zona_local) if zona_local else cifras.corte
+    ultimo_dia = (cifras.hasta - timedelta(days=1))
 
-    pdf.set_fill_color(27, 94, 32)
-    pdf.rect(0, 0, 210, 28, style="F")
-    pdf.set_y(8)
+    # ---------------------------------------------------------------- encabezado con marcas
+    _logo(pdf, "ecoconecta.png", 15, 9, 19)
+    ancho_brota = 36.0
+    _logo(pdf, "brota.png", 195 - ancho_brota, 13, ancho_brota * 100 / 420)
+    pdf.set_fill_color(*_BOSQUE)
+    pdf.rect(0, 33, 210, 30, style="F")
+    pdf.set_fill_color(*_SOLAR)
+    pdf.rect(0, 63, 210, 1.6, style="F")
+    pdf.set_xy(15, 38)
+    pdf.set_font("Helvetica", "B", 24)
     pdf.set_text_color(255, 255, 255)
-    _linea(pdf, "Certificado Verde", size=18, estilo="B", alto=8)
-    _linea(pdf, "Informe mensual del conjunto", size=10, alto=5)
-    pdf.set_y(34)
-    pdf.set_text_color(33, 33, 33)
+    pdf.cell(120, 11, _texto("Certificado Verde"))
+    pdf.set_xy(15, 50)
+    pdf.set_font("Helvetica", "", 10.5)
+    pdf.set_text_color(214, 236, 222)
+    pdf.cell(120, 6, _texto("Informe mensual de aprovechamiento de residuos del conjunto"))
+    # sello del mes
+    sello = _texto(f"{cifras.etiqueta_mes}".upper())
+    pdf.set_font("Helvetica", "B", 10)
+    ancho_sello = pdf.get_string_width(sello) + 12
+    pdf.set_fill_color(*_SOLAR)
+    pdf.rect(195 - ancho_sello, 42, ancho_sello, 11, style="F", round_corners=True, corner_radius=5.5)
+    pdf.set_xy(195 - ancho_sello, 42)
+    pdf.set_text_color(*_BOSQUE)
+    pdf.cell(ancho_sello, 11, sello, align="C")
+    pdf.set_y(70)
 
-    _linea(pdf, f"Conjunto: {cifras.conjunto_nombre}", size=13, estilo="B", alto=7)
-    _linea(pdf, f"Período: {cifras.etiqueta_mes} ({cifras.mes})", size=11)
-    _linea(pdf, f"Desde {cifras.desde.isoformat()} hasta {cifras.hasta.isoformat()} (exclusivo).", size=9)
-    _linea(pdf, f"Zona horaria: {cifras.zona}. Corte de datos: {cifras.corte.isoformat()}.", size=9)
-    pdf.ln(2)
+    # ---------------------------------------------------------------- datos del certificado
+    _titulo(pdf, "Datos del certificado")
+    datos = [
+        ("Conjunto", cifras.conjunto_nombre),
+        ("Período", f"1 al {ultimo_dia.day} de {cifras.etiqueta_mes} ({cifras.mes})"),
+        ("Zona horaria", cifras.zona),
+        ("Corte de datos", f"{_fecha_larga(corte)}, {_hora(corte)} (hora local)"),
+    ]
+    y0 = pdf.get_y()
+    pdf.set_fill_color(*_FONDO)
+    pdf.rect(15, y0, 180, 7 * len(datos) + 4, style="F", round_corners=True, corner_radius=3)
+    pdf.set_y(y0 + 2)
+    for etiqueta, valor in datos:
+        pdf.set_x(20)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(*_GRIS)
+        pdf.cell(38, 7, _texto(etiqueta))
+        pdf.set_font("Helvetica", "B", 9.5)
+        pdf.set_text_color(*_CARBON)
+        pdf.cell(130, 7, _recortar(pdf, valor, 130), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_y(y0 + 7 * len(datos) + 8)
 
-    _linea(pdf, f"Kilos aprovechados (reciclables): {_fmt_kg(cifras.kg_aprovechados)} kg", estilo="B")
-    _linea(pdf, f"Kilos compostados (orgánicos): {_fmt_kg(cifras.kg_compostados)} kg", estilo="B")
+    # ---------------------------------------------------------------- indicadores
+    _titulo(pdf, "Indicadores del mes")
+    y = pdf.get_y()
+    ancho = (180 - 3 * 4) / 4
+    tarjetas = [
+        (_VERDE, _fmt_kg(cifras.kg_aprovechados), "kg", "Reciclables aprovechados"),
+        (_HOJA, _fmt_kg(cifras.kg_compostados), "kg", "Orgánicos compostados"),
+        (_TURQUESA, str(cifras.hogares), "con entrega válida", "Hogares participantes"),
+        (_MARIPOSA, cifras.tasa_pct, "del peso", "Tasa de rechazo"),
+    ]
+    for i, (color, valor, unidad, etiqueta) in enumerate(tarjetas):
+        _tarjeta(pdf, 15 + i * (ancho + 4), y, ancho, 28, color, valor, unidad, etiqueta)
+    pdf.set_y(y + 33)
+
+    # ---------------------------------------------------------------- resumen
+    _titulo(pdf, "Resumen del período")
+    filas = [
+        ["Kilos aprovechados (reciclables)", f"{_fmt_kg(cifras.kg_aprovechados)} kg"],
+        ["Kilos compostados (orgánicos)", f"{_fmt_kg(cifras.kg_compostados)} kg"],
+    ]
     if cifras.kg_otros:
-        _linea(pdf, f"Kilos aceptados de otro aprovechamiento: {_fmt_kg(cifras.kg_otros)} kg", estilo="B")
-    _linea(pdf, f"Kilos aceptados en total: {_fmt_kg(cifras.kg_aceptados)} kg")
-    _linea(pdf, f"Kilos rechazados: {_fmt_kg(cifras.kg_rechazados)} kg")
-    _linea(pdf, f"Tasa de rechazo por peso: {cifras.tasa_pct} ({cifras.tasa_ratio} del total pesado)")
-    _linea(pdf, f"Hogares participantes: {cifras.hogares}")
-    _linea(pdf, f"Torres con pesaje confirmado: {cifras.torres}")
-    pdf.ln(2)
+        filas.append(["Kilos aceptados de otro aprovechamiento", f"{_fmt_kg(cifras.kg_otros)} kg"])
+    filas += [
+        ["Kilos aceptados en total", f"{_fmt_kg(cifras.kg_aceptados)} kg"],
+        ["Kilos rechazados", f"{_fmt_kg(cifras.kg_rechazados)} kg"],
+        ["Tasa de rechazo por peso", cifras.tasa_pct],
+        ["Hogares participantes", str(cifras.hogares)],
+        ["Torres con pesaje confirmado", str(cifras.torres)],
+    ]
+    _tabla(pdf, ["Indicador", "Valor"], [130, 50], filas, ["L", "R"])
 
-    pdf.set_fill_color(255, 248, 225)
-    pdf.set_text_color(90, 45, 0)
-    _linea(
-        pdf,
-        "Este certificado es apoyo documental para la tarifa multiusuario.",
-        size=10,
-        estilo="B",
-        relleno=True,
-    )
-    _linea(
-        pdf,
-        "No determina la tarifa ni sustituye el aforo de la empresa de aseo.",
-        size=10,
-        estilo="B",
-        relleno=True,
-    )
-    pdf.set_text_color(33, 33, 33)
-    pdf.ln(2)
-
-    _linea(pdf, "Origen: pesajes confirmados con torre de origen de este conjunto.", size=9)
-    _linea(pdf, "Los kilos salen de las líneas de esos pesajes, según el gremio del material.", size=9)
-    _linea(pdf, "Reciclables: servicio RECICLABLES. Compostados: servicio ORGANICOS.", size=9)
-    _linea(pdf, "Hogares: recogidas cerradas o entregas directas con pesaje confirmado.", size=9)
-    _linea(pdf, "No entran borradores, pesajes anulados ni pendientes de sincronizar.", size=9)
-    pdf.ln(2)
-
-    _linea(pdf, "Detalle por gremio", size=12, estilo="B", alto=7)
+    # ---------------------------------------------------------------- detalle por colectivo
+    _titulo(pdf, "Detalle por colectivo")
     if cifras.sin_pesajes:
-        _linea(pdf, "Sin pesajes confirmados en este período.", size=11)
-        _linea(pdf, "Kilos en cero: 0.000 kg aprovechados, 0.000 kg compostados, 0.000 kg rechazados.", size=10)
+        _espacio(pdf, 16)
+        y = pdf.get_y()
+        pdf.set_fill_color(*_FONDO)
+        pdf.rect(15, y, 180, 14, style="F", round_corners=True, corner_radius=3)
+        pdf.set_xy(20, y + 2)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(*_CARBON)
+        pdf.cell(170, 5, _texto("Sin pesajes confirmados en este período."), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_x(20)
+        pdf.set_font("Helvetica", "", 8.5)
+        pdf.set_text_color(*_GRIS)
+        pdf.cell(170, 5, _texto("Los kilos aparecen cuando la coordinación confirma un pesaje con torre de origen."))
+        pdf.set_y(y + 18)
     else:
-        for gremio in cifras.gremios:
-            _linea(
-                pdf,
-                f"{gremio.codigo} ({_ETIQUETA_TIPO[gremio.tipo]}): aceptados {_fmt_kg(gremio.kg_aceptados)} kg, "
-                f"rechazados {_fmt_kg(gremio.kg_rechazados)} kg",
-                size=10,
-            )
-            _linea(pdf, f"Gremio: {gremio.nombre}", size=9)
-        pdf.ln(1)
-        _linea(pdf, "Detalle por material", size=12, estilo="B", alto=7)
-        for material in cifras.materiales:
-            _linea(
-                pdf,
-                f"{material.codigo} ({material.gremio_codigo}): aceptados {_fmt_kg(material.kg_aceptados)} kg, "
-                f"rechazados {_fmt_kg(material.kg_rechazados)} kg",
-                size=10,
-            )
-            _linea(pdf, f"Material: {material.nombre}", size=9)
+        filas_g = []
+        for g in cifras.gremios:
+            tasa, _ = _tasa(g.kg_aceptados, g.kg_rechazados)
+            filas_g.append([g.nombre, g.codigo, _ETIQUETA_TIPO[g.tipo].capitalize(),
+                            _fmt_kg(g.kg_aceptados), _fmt_kg(g.kg_rechazados), tasa])
+        _tabla(pdf, ["Colectivo", "Código", "Tipo", "Aceptados (kg)", "Rechazados (kg)", "Rechazo"],
+               [52, 30, 24, 28, 28, 18], filas_g, ["L", "L", "L", "R", "R", "R"])
 
-    pdf.ln(3)
-    _linea(pdf, f"Identificador del conjunto: {cifras.conjunto_id}", size=8)
+        _titulo(pdf, "Detalle por material")
+        filas_m = [[m.nombre, m.codigo, m.gremio_codigo, _fmt_kg(m.kg_aceptados), _fmt_kg(m.kg_rechazados)]
+                   for m in cifras.materiales]
+        _tabla(pdf, ["Material", "Código", "Colectivo", "Aceptados (kg)", "Rechazados (kg)"],
+               [60, 34, 30, 28, 28], filas_m, ["L", "L", "L", "R", "R"])
+
+    # ---------------------------------------------------------------- advertencia
+    _espacio(pdf, 22)
+    pdf.ln(2)
+    y = pdf.get_y()
+    pdf.set_fill_color(255, 246, 214)
+    pdf.rect(15, y, 180, 17, style="F", round_corners=True, corner_radius=3)
+    pdf.set_fill_color(*_MARIPOSA)
+    pdf.rect(15, y, 2.2, 17, style="F")
+    pdf.set_xy(21, y + 2.5)
+    pdf.set_font("Helvetica", "B", 9.5)
+    pdf.set_text_color(110, 60, 0)
+    pdf.cell(170, 5, _texto("Este certificado es apoyo documental para la tarifa multiusuario."),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(21)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(170, 5, _texto("No determina la tarifa ni sustituye el aforo de la empresa de aseo."))
+    pdf.set_y(y + 21)
+
+    # ---------------------------------------------------------------- metodología
+    _titulo(pdf, "Cómo se calcula")
+    puntos = [
+        "Origen: pesajes confirmados con torre de origen de este conjunto.",
+        "Los kilos salen de las líneas de esos pesajes, según el colectivo (gremio) del material.",
+        "Reciclables: servicio RECICLABLES. Compostados: servicio ORGANICOS.",
+        "Hogares: recogidas cerradas o entregas directas con pesaje confirmado.",
+        "No entran borradores, pesajes anulados ni pendientes de sincronizar.",
+    ]
+    for punto in puntos:
+        _espacio(pdf, 6)
+        y = pdf.get_y()
+        pdf.set_fill_color(*_VERDE)
+        pdf.ellipse(17, y + 1.9, 1.6, 1.6, style="F")
+        pdf.set_xy(21, y)
+        pdf.set_font("Helvetica", "", 8.8)
+        pdf.set_text_color(*_GRIS)
+        pdf.multi_cell(174, 5, _texto(punto), new_x="LMARGIN", new_y="NEXT")
+
+    # ---------------------------------------------------------------- emisión
+    _espacio(pdf, 24)
+    pdf.ln(4)
+    y = pdf.get_y()
+    pdf.set_draw_color(*_LINEA)
+    pdf.set_line_width(0.3)
+    pdf.rect(15, y, 180, 20, style="D", round_corners=True, corner_radius=3)
+    pdf.set_xy(20, y + 3)
+    pdf.set_font("Helvetica", "B", 9.5)
+    pdf.set_text_color(*_BOSQUE)
+    pdf.cell(170, 5, _texto("Emitido por la plataforma Brota · Programa EcoConecta Villas de San Pablo"),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(20)
+    pdf.set_font("Helvetica", "", 8.5)
+    pdf.set_text_color(*_GRIS)
+    pdf.cell(170, 5, _texto(f"Fecha de emisión: {_fecha_larga(corte)}, {_hora(corte)}. Fórmula {FORMULA}."),
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(20)
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.cell(170, 5, _texto(f"Identificador del conjunto: {cifras.conjunto_id}"))
+
     raw = pdf.output()
     return raw.encode("latin-1") if isinstance(raw, str) else bytes(raw)
 
