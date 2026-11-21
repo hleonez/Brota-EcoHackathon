@@ -9,6 +9,8 @@ export default function Comunidad({ volver }: { volver: () => void }) {
   const [tema, setTema] = useState<TemaEducativo>("separacion");
   const contenidos = useDatos<Contenido[]>("/v1/contenidos-educativos?tema=" + tema);
   const numero = String(import.meta.env.VITE_WHATSAPP_NUMERO || "").trim();
+  // Datos públicos del programa (Administración → Programa). Si no cargan, el recuadro no aparece.
+  const programa = useDatos<Record<string, string>>("/v1/programa");
   return (
     <div className="portal">
       <header className="encabezado">
@@ -80,6 +82,17 @@ export default function Comunidad({ volver }: { volver: () => void }) {
                 </p>
               )}
             </section>
+            {programa.datos && (
+              <section className="eco-tarjeta comunidad-contacto">
+                <h2>Contacto y horarios</h2>
+                <ul className="previa-datos">
+                  {programa.datos.horario_atencion && <li><span aria-hidden="true">🕘</span>{programa.datos.horario_atencion}</li>}
+                  {programa.datos.dias_recoleccion && <li><span aria-hidden="true">🗓️</span>{programa.datos.dias_recoleccion}</li>}
+                  {programa.datos.telefono_contacto && <li><span aria-hidden="true">📞</span><a href={"tel:" + programa.datos.telefono_contacto.replace(/[^\d+]/g, "")}>{programa.datos.telefono_contacto}</a></li>}
+                  {programa.datos.correo_contacto && <li><span aria-hidden="true">✉️</span><a href={"mailto:" + programa.datos.correo_contacto}>{programa.datos.correo_contacto}</a></li>}
+                </ul>
+              </section>
+            )}
           </div>
         </div>
       </main>

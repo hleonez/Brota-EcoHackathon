@@ -782,6 +782,28 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
 - La API ya limita cada consulta (`limit=100`); si una lista supera 100 registros, hará falta pedir más
   páginas al servidor (`offset`).
 
+## 26 · 20-nov-2026 · Módulos nuevos de Administración (solo en `dev/jeremy`)
+
+- **Menú reorganizado:** Personas y acceso (Cuentas, Participantes, Registrar vecino, Habilitación del
+  piloto) · Operación (Recolectores, Unidades, Materiales, Precios, Educación) · Seguimiento
+  (Conversaciones, Reportes, Liga de torres, Actividad) · Configuración (Puntos, Motivos, Equivalencias,
+  Programa, Sistema). «Registro asistido» y «Piloto» se muestran como «Registrar vecino» y «Habilitación
+  del piloto» (el id interno no cambia).
+- **Tablero de inicio:** indicadores del mes con contadores animados (solicitudes, por atender,
+  recolecciones, kilos, hogares, tasa de rechazo) y barra de estados de las solicitudes
+  (`/v1/reportes/resumen`).
+- **Participantes:** vecinos registrados, su unidad y si están habilitados en el piloto; sin celulares;
+  CSV. **Precios:** valor por kilo de cada material, versión vigente o histórica, «Nuevo precio» en
+  ventana modal (`/v1/configuracion?tipo=precios`, `POST /v1/precios-material`). **Liga de torres:**
+  podio con medallas, barras de participación y periodo (mes, mes pasado, 3 meses); CSV. **Reportes:**
+  descargas CSV (resumen, liga, actividad) sobre los indicadores de impacto. La guía pública muestra
+  «Contacto y horarios» desde `/v1/programa`.
+- **Listas genéricas:** vista Tarjetas o Tabla (se recuerda), tabla ordenable por nombre y estado;
+  «＋ Crear…» en la cabecera abre el formulario en una ventana modal clay (también Editar); «Registrar
+  vecino» sigue en línea.
+- CSV con «;» y BOM para que Excel en español muestre bien las tildes; ninguno incluye celulares ni
+  direcciones.
+
 ---
 
 ## Próximos pasos
