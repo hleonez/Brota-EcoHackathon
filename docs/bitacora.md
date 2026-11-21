@@ -665,6 +665,42 @@ Brisa deja el número de prueba de Meta (+1 555…) y pasa a **+57 312 708 3263*
   10 s), `/health` expone `webhook_fijo` y `.\brota.ps1` muestra «la atiende producción» y el enlace al
   laboratorio (`http://localhost:8090/lab`) en lugar de «conectando...».
 
+## 22 · 20-nov-2026 · Nuevo ingreso al panel y seguridad de la autenticación (solo en `dev/jeremy`)
+
+- **Diseño:** el ingreso se rehízo según el diseño que trajo el usuario: escena ilustrada a la izquierda
+  (vecina, Brisa, plantas) y tarjeta de ingreso a la derecha. El fondo, el logo de Brota y la escena
+  móvil salen recortados del propio diseño (`web/coordinacion/public/acceso/`); título, campos, botón y
+  textos son HTML real. En escritorio todo se dibuja sobre un lienzo de 1672×941 unidades (`--u`) que
+  calza con la ilustración; en móvil y tablet vertical se apila. Código: `src/Acceso.tsx` y
+  `src/estilo/acceso.css` (se retiró el teclado de PIN y la tarjeta anterior).
+- **Manual de identidad y reto:** logo de EcoConecta original, ≥220 px y sobre fondo claro; aliados
+  (Fundación Santo Domingo, Villas de San Pablo, Universidad Libre) en una franja blanca; Poppins e
+  Inter; colores `--eco-*` (botón en Verde Eco); etiquetas siempre visibles (flotan al escribir);
+  errores con icono y texto. La etiqueta dice «Coordinadores, recolectores y administradores» porque el
+  reto exige que entren también huerteros y recicladores. Se mantuvo el acceso de vecinos: guía para
+  hogares y negocios y, si hay `VITE_WHATSAPP_NUMERO`, el enlace a Brisa.
+- **Recordarme:** sin marcar, la sesión vive en `sessionStorage` (muere al cerrar la pestaña); marcada, en
+  `localStorage` hasta que vence el token. Solo se recuerda el usuario; la contraseña nunca se guarda.
+  **¿Olvidaste tu contraseña?** explica que la asigna la administración (no hay correo de recuperación).
+- **API (`POST /v1/auth/sesiones`):**
+  - Freno a la fuerza bruta (`app/core/limite_acceso.py`): 5 fallos en 15 min bloquean ese usuario
+    (429 `TOO_MANY_ATTEMPTS` + `Retry-After`); 30 por IP. Un ingreso correcto limpia los fallos.
+    Configurable con `LOGIN_MAX_FALLOS`, `LOGIN_MAX_FALLOS_IP`, `LOGIN_VENTANA_MINUTOS`. Vive en
+    memoria (Render tiene una sola instancia).
+  - Mismo mensaje y mismo tiempo para usuario inexistente o contraseña errada (hash señuelo).
+  - El token JWT ahora lleva `iss`, `iat` y `jti`; la API exige `iss` e `iat`. **Las sesiones abiertas
+    antes de este cambio dejan de valer** y hay que volver a entrar.
+  - Cabeceras: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cache-Control: no-store`
+    en `/v1` y HSTS detrás de https.
+- **Panel:** cabeceras de seguridad con CSP (`script-src 'self'`, sin marcos, `connect-src` solo a la API)
+  en Cloudflare Pages (`public/_headers`) y en Docker (`nginx.conf`).
+- **Pruebas:** API 83/84 (7 nuevas en `tests/test_acceso_seguro.py`; sigue fallando solo
+  `test_sync_offline_sin_duplicar`, de develop). En el navegador: error con contraseña errada, ingreso de
+  `coord-huerta`, «Recordarme» en localStorage sin contraseña, bloqueo al sexto intento, sesión vencida;
+  escritorio 1672×941 y 1366×768, tablet 768 y móvil 375.
+- **Pendiente:** «Correo o usuario» acepta el usuario; las cuentas no tienen correo todavía. Revocar
+  sesiones en el servidor al salir (lista de `jti`) y PIN más largo para cuentas de administración.
+
 ---
 
 ## Próximos pasos

@@ -1,9 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { api, cuandoExpire, ErrorApi, fijarToken } from "./api";
+import { useEffect, useState } from "react";
+import { cuandoExpire, fijarToken } from "./api";
+import { EstadoAcceso, FormularioAcceso, PantallaAcceso } from "./Acceso";
 import Indicadores from "./Indicadores";
 import Administracion from "./Administracion";
 import Comunidad from "./Comunidad";
-import { Aliados, Marca } from "./portal";
 import Panel from "./Panel";
 import { MarcoPanel, enlaceCuenta, nombresPerfil, type CuentaPanel } from "./MarcoPanel";
 import type { Sesion } from "./tipos";
@@ -27,10 +27,10 @@ export default function App() {
     });
   }, []);
 
-  const cambiar = (s: Sesion | null) => {
+  const cambiar = (s: Sesion | null, recordar = false) => {
     setPerfil("");
     setPagina(null);
-    guardarSesion(s);
+    guardarSesion(s, recordar);
     setSesion(s);
   };
 
@@ -46,13 +46,15 @@ export default function App() {
 
   if (!sesion && pagina === "vencida")
     return <EstadoAcceso titulo="Sesión vencida" accion="Volver a entrar" volver={() => cambiar(null)}>
-      Vuelve a ingresar con tu usuario y PIN.
+      Por seguridad cerramos tu sesión. Vuelve a ingresar con tu usuario y contraseña.
     </EstadoAcceso>;
   if (!sesion)
     return comunidad ? (
       <Comunidad volver={() => setComunidad(false)} />
     ) : (
-      <Login onEntrar={cambiar} comunidad={() => setComunidad(true)} />
+      <PantallaAcceso etiqueta="Iniciar sesión">
+        <FormularioAcceso onEntrar={cambiar} comunidad={() => setComunidad(true)} />
+      </PantallaAcceso>
     );
   const roles = [...new Set(sesion.cuenta.permisos.map((p) => p.rol))];
   const actual = roles.includes(perfil) ? perfil : roles[0];
@@ -89,126 +91,5 @@ function Fundacion({ cuenta }: { cuenta: CuentaPanel }) {
       contexto="Fundación Santo Domingo" titulo={activo === enlaceCuenta.id ? enlaceCuenta.texto : "Impacto del programa"}>
       <Indicadores />
     </MarcoPanel>
-  );
-}
-
-function EstadoAcceso({ titulo, accion, volver, children }: {
-  titulo: string;
-  accion: string;
-  volver: () => void;
-  children: string;
-}) {
-  return <main className="login">
-    <section className="login-caja">
-      <Marca />
-      <h1>{titulo}</h1>
-      <p>{children}</p>
-      <button className="btn primario grande" onClick={volver}>{accion}</button>
-    </section>
-  </main>;
-}
-
-function Login({
-  onEntrar,
-  comunidad,
-}: {
-  onEntrar: (s: Sesion) => void;
-  comunidad: () => void;
-}) {
-  const [usuario, setUsuario] = useState("");
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState(false);
-
-  async function entrar(e: FormEvent) {
-    e.preventDefault();
-    setEnviando(true);
-    setError(null);
-    try {
-      const r = await api.iniciarSesion(usuario.trim(), pin);
-      onEntrar({
-        token: r.token,
-        expira: Date.now() + r.expira_en * 1000,
-        cuenta: r.cuenta,
-      });
-    } catch (err) {
-      setError(
-        err instanceof ErrorApi && err.status === 401
-          ? "Usuario o PIN incorrectos."
-          : (err as Error).message,
-      );
-      setPin("");
-    } finally {
-      setEnviando(false);
-    }
-  }
-
-  return (
-    <main className="login acceso">
-      <div className="acceso-tarjeta">
-        <section className="acceso-ilustracion">
-          <Marca />
-          <div className="acceso-mensaje">
-            <h1>Entra a Brota</h1>
-            <p>Organiza las solicitudes y el aprovechamiento de materiales en Villas de San Pablo.</p>
-          </div>
-          <div className="acceso-personajes" aria-hidden="true">
-            <img src="/marca/reciclaje.png" alt="" />
-            <img src="/marca/huerta.png" alt="" />
-          </div>
-        </section>
-        <form className="login-caja acceso-form" onSubmit={entrar}>
-          <div className="acceso-form-cabeza">
-            <h2>Ingresa a tu cuenta</h2>
-            <p className="tenue">Usa la cuenta que te asignó el equipo de EcoConecta.</p>
-          </div>
-        <label>
-          Usuario
-          <input
-            value={usuario}
-            onChange={(e) => setUsuario(e.target.value)}
-            autoComplete="username"
-            autoCapitalize="none"
-            required
-          />
-        </label>
-        <label>
-          PIN
-          <input
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ""))}
-            type="password"
-            inputMode="numeric"
-            autoComplete="current-password"
-            minLength={4}
-            maxLength={12}
-            required
-          />
-        </label>
-        <div className="teclado-pin" role="group" aria-label="Teclado numérico del PIN">
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "Borrar", "0", "⌫"].map((tecla) =>
-            <button key={tecla} type="button" className="btn" disabled={enviando}
-              aria-label={tecla === "⌫" ? "Borrar último dígito" : tecla}
-              onClick={() => setPin((actual) => tecla === "Borrar" ? "" : tecla === "⌫" ? actual.slice(0, -1) : (actual + tecla).slice(0, 12))}>
-              {tecla}
-            </button>
-          )}
-        </div>
-        {error && (
-          <p className="aviso aviso-error" data-motion="notice" role="alert">
-            {error}
-          </p>
-        )}
-        <button className="btn primario grande" disabled={enviando}>
-          {enviando ? "Entrando…" : "Entrar"}
-        </button>
-        <p className="acceso-ayuda">¿Olvidaste tu PIN? Pídelo a la administración.</p>
-        <button type="button" className="btn acceso-comunidad" onClick={comunidad}>
-          Guía para hogares y negocios
-        </button>
-        </form>
-      </div>
-      <Aliados />
-    </main>
   );
 }

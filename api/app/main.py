@@ -77,6 +77,15 @@ def crear_app(iniciar_despachador: bool = True) -> FastAPI:
         request.state.request_id = rid[:64]
         resp = await call_next(request)
         resp.headers["X-Request-ID"] = request.state.request_id
+        # Cabeceras de seguridad: nada de adivinar tipos, ni incrustar la API en marcos, ni filtrar
+        # la URL de origen; las respuestas de /v1 traen datos personales y no se guardan en caché.
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        if "/v1/" in request.url.path:
+            resp.headers.setdefault("Cache-Control", "no-store")
+        if request.headers.get("x-forwarded-proto", request.url.scheme) == "https":
+            resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return resp
 
     registrar_manejadores(app)

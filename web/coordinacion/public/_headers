@@ -1,0 +1,16 @@
+# Cabeceras de seguridad del panel en Cloudflare Pages (Vite copia este archivo a dist/).
+# Las mismas que web/coordinacion/nginx.conf usa en Docker: si cambias una, cambia la otra.
+# connect-src: la API de Render en producción y localhost en desarrollo.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' https://*.onrender.com http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+/index.html
+  Cache-Control: no-cache
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

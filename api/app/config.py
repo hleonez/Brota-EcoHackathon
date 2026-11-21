@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # Autenticación de cuentas operadoras (tablet, paneles).
     jwt_secret: str = Field(default="", description="Secreto HS256 para sesiones de operadores")
     jwt_minutos: int = 12 * 60
+    # Freno a la fuerza bruta del inicio de sesión (app/core/limite_acceso.py).
+    login_max_fallos: int = 5
+    login_max_fallos_ip: int = 30
+    login_ventana_minutos: int = 15
 
     # Integración con el bot de WhatsApp.
     bot_service_token: str = ""

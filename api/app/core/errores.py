@@ -21,6 +21,7 @@ class AppError(Exception):
         message: str,
         fields: dict[str, str] | None = None,
         extra: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(message)
         self.status = status
@@ -28,6 +29,7 @@ class AppError(Exception):
         self.message = message
         self.fields = fields
         self.extra = extra
+        self.headers = headers
 
     def cuerpo(self, request_id: str | None) -> dict[str, Any]:
         err: dict[str, Any] = {"code": self.code, "message": self.message}
@@ -77,7 +79,7 @@ def _campo(loc: tuple[Any, ...]) -> str:
 def registrar_manejadores(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(request: Request, exc: AppError) -> JSONResponse:
-        return JSONResponse(exc.cuerpo(_request_id(request)), status_code=exc.status)
+        return JSONResponse(exc.cuerpo(_request_id(request)), status_code=exc.status, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def _validacion(request: Request, exc: RequestValidationError) -> JSONResponse:

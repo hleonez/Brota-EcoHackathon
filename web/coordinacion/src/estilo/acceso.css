@@ -1,4 +1,4 @@
-/* Login and access states: always centered in the viewport, mobile first.
+/* Estados simples del panel (p. ej. cuenta sin gremio en Panel.tsx): caja centrada, móvil primero.
    `safe center` keeps the top reachable when the content is taller than the screen. */
 
 .login {
@@ -27,98 +27,442 @@
 .login-caja label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 15px; }
 .login > .login-caja .identidad { align-items: center; }
 
-.acceso { width: 100%; }
-.acceso-tarjeta {
-  width: min(100%, 1000px);
+/* ======================================================================== Pantalla de acceso
+   Escritorio: lienzo de 1672x941 "unidades" (--u) que calza con la ilustración de fondo
+   (public/acceso/fondo.webp). Cada medida del diseño se escribe como calc(N * var(--u)).
+   Móvil y tablet vertical: se apila y la ilustración pasa abajo. */
+
+.acceso {
+  --u: calc(min(100vw, 100svh * 1.77683) / 1672);
+  --acceso-crema: #fcf0e6;
+  --acceso-tarjeta: #fffcf8;
+  --acceso-campo: #fcf8f4;
+  --acceso-borde: #ede4db;
+  --acceso-placeholder: #66706a;
+  min-height: 100svh;
   display: grid;
+  place-items: center;
   overflow: hidden;
-  border: 1px solid var(--eco-line);
-  border-radius: var(--eco-radius-lg);
-  background: var(--eco-white);
-  box-shadow: var(--eco-shadow-raised);
+  background: var(--acceso-crema);
+  color: var(--eco-charcoal);
+  font-family: var(--font-body, "Inter", "Arial", sans-serif);
 }
-.acceso-ilustracion {
+.acceso-lienzo {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  padding: clamp(22px, 5vw, 40px) clamp(16px, 5vw, 40px) 20px;
-  text-align: center;
-  background: var(--eco-green-50);
-  color: var(--eco-forest);
-  isolation: isolate;
-  overflow: hidden;
+  width: calc(1672 * var(--u));
+  height: calc(941 * var(--u));
 }
-/* One flat decorative shape, no gradients (manual §6). */
-.acceso-ilustracion::before {
+.acceso-fondo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  pointer-events: none;
+}
+.acceso-escena { display: none; }
+
+/* --- marcas: Brota a la izquierda; EcoConecta centrado sobre la tarjeta, >=220 px (manual) */
+.acceso-marcas { display: contents; }
+.acceso-logo {
+  position: absolute;
+  left: calc(85 * var(--u));
+  top: calc(36 * var(--u));
+  width: calc(291 * var(--u));
+  height: auto;
+}
+.acceso-ecoconecta {
+  position: absolute;
+  left: calc(1190 * var(--u));
+  top: calc(16 * var(--u));
+  width: max(220px, calc(272 * var(--u)));
+  height: auto;
+  transform: translateX(-50%);
+  padding: 4px 8px; /* área de seguridad alrededor del logo */
+  box-sizing: content-box;
+}
+
+/* --- saludo */
+.acceso-saludo {
+  position: absolute;
+  z-index: 0;
+  left: calc(86 * var(--u));
+  top: calc(181 * var(--u));
+  width: calc(700 * var(--u));
+}
+.acceso-saludo h1 {
+  position: relative;
+  margin: 0;
+  font-family: var(--font-heading, "Poppins", "Arial", sans-serif);
+  font-weight: 700;
+  font-size: calc(70 * var(--u));
+  line-height: 1.05;
+  letter-spacing: calc(-0.8 * var(--u));
+  color: var(--eco-forest);
+  white-space: nowrap;
+}
+/* trazo suave verde-amarillo bajo el título, como en la ilustración */
+.acceso-saludo h1::after {
   content: "";
   position: absolute;
   z-index: -1;
-  right: -90px;
-  top: -90px;
-  width: 260px;
-  height: 260px;
-  border-radius: 50%;
-  background: var(--eco-yellow-100);
+  left: calc(-24 * var(--u));
+  right: calc(30 * var(--u));
+  bottom: calc(-4 * var(--u));
+  height: calc(22 * var(--u));
+  border-radius: 999px;
+  background: linear-gradient(90deg, #dcec9a00, #dcec9acc 12%, #e6efa8aa 60%, #eef2b300);
+  filter: blur(calc(2 * var(--u)));
 }
-.acceso-ilustracion .identidad img { box-shadow: var(--eco-shadow); }
-.acceso-mensaje h1 { margin: 6px 0; }
-.acceso-mensaje p { margin: 0 auto; max-width: 34ch; color: var(--eco-forest); }
-.acceso-personajes { display: none; }
-.acceso .login-caja.acceso-form {
-  width: 100%;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  padding: clamp(22px, 5vw, 44px);
+.acceso-saludo p {
+  margin: calc(22 * var(--u)) 0 0;
+  font-weight: 500;
+  font-size: calc(34.5 * var(--u));
+  line-height: calc(45 * var(--u));
+  color: #414844;
 }
-.acceso-form-cabeza { display: grid; gap: 4px; }
-.acceso-ayuda { font-size: 14px; color: var(--eco-muted); text-align: center; }
-.acceso-comunidad { width: 100%; }
-.acceso > .aliados {
-  width: min(100%, 1000px);
-  padding: 10px 20px;
-  border: 1px solid var(--eco-line);
-  border-radius: var(--eco-radius);
+.acceso-resaltado {
+  background: radial-gradient(ellipse at 45% 60%, #e3efa4 0 45%, #e3efa400 72%);
+  border-radius: 999px;
+  padding: calc(4 * var(--u)) 0 calc(4 * var(--u)) calc(24 * var(--u));
+  margin-left: calc(-24 * var(--u));
 }
 
-.teclado-pin { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.teclado-pin .btn {
-  min-height: 48px;
-  border: 0;
-  border-radius: var(--eco-radius-sm);
-  background: var(--eco-green-50);
+/* --- tarjeta */
+.acceso-tarjeta {
+  position: absolute;
+  left: calc(819 * var(--u));
+  top: calc(114 * var(--u));
+  width: calc(742 * var(--u));
+  height: calc(724 * var(--u));
+  box-sizing: border-box;
+  padding: 0 calc(48 * var(--u)) 0 calc(51 * var(--u));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--acceso-borde);
+  border-radius: calc(48 * var(--u));
+  background: var(--acceso-tarjeta);
+  box-shadow: 0 calc(22 * var(--u)) calc(60 * var(--u)) #6b4a2a1c, 0 2px 6px #6b4a2a0f;
+}
+.acceso-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: calc(58 * var(--u)) 0 0;
+  height: calc(63 * var(--u));
   color: var(--eco-forest);
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
 }
-.teclado-pin .btn:nth-child(10) { font-size: 14px; }
-/* The on-screen PIN pad is for touch screens; mouse + keyboard devices type the PIN. */
-@media (hover: hover) and (pointer: fine) {
-  .teclado-pin { display: none; }
+.acceso-chip-texto {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  height: 100%;
+  padding: 0 calc(26 * var(--u));
+  border-radius: 999px;
+  background: #fff0c2; /* tinte de --eco-yellow */
+  box-shadow: 0 calc(4 * var(--u)) calc(12 * var(--u)) #f6c40024;
+  font-family: var(--font-heading, "Poppins", "Arial", sans-serif);
+  font-weight: 600;
+  font-size: calc(21 * var(--u));
+  white-space: nowrap;
+}
+.acceso-chip-icono { width: calc(38 * var(--u)); height: calc(38 * var(--u)); flex: none; }
+.acceso-chispas { width: calc(30 * var(--u)); height: calc(48 * var(--u)); color: #4caf3a; flex: none; }
+.acceso-chispas.espejo { transform: scaleX(-1); }
+
+.acceso-form { display: flex; flex-direction: column; flex: 1; }
+
+/* --- campos con etiqueta flotante (siempre visible: manual de identidad, accesibilidad) */
+.acceso-campo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: calc(90 * var(--u));
+  margin-top: calc(52 * var(--u));
+  border: 1px solid var(--acceso-borde);
+  border-radius: 999px;
+  background: var(--acceso-campo);
+  box-shadow: 0 calc(6 * var(--u)) calc(16 * var(--u)) #6b4a2a0d;
+  transition: border-color .15s, box-shadow .15s;
+}
+.acceso-campo + .acceso-campo { margin-top: calc(33 * var(--u)); }
+.acceso-campo:focus-within {
+  border-color: var(--eco-green);
+  box-shadow: 0 0 0 4px #168a2e2e;
+}
+.acceso-campo:has(input[aria-invalid="true"]) { border-color: var(--eco-danger); }
+.acceso-campo-icono {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(75 * var(--u));
+  height: calc(67 * var(--u));
+  margin-left: calc(19 * var(--u));
+  border-radius: calc(18 * var(--u));
+  background: #e5f2d0; /* tinte de --eco-leaf */
+  color: var(--eco-forest);
+}
+.acceso-campo-icono svg { width: calc(40 * var(--u)); height: calc(40 * var(--u)); }
+.acceso-campo-control { position: relative; flex: 1; align-self: stretch; display: block; cursor: text; }
+.acceso-campo-control input {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: calc(26 * var(--u)) calc(16 * var(--u)) 0 calc(28 * var(--u));
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: 500 calc(29 * var(--u)) / 1.2 var(--font-body, "Inter", "Arial", sans-serif);
+  color: var(--eco-charcoal);
+}
+.acceso-campo-etiqueta {
+  position: absolute;
+  left: calc(28 * var(--u));
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: calc(30 * var(--u));
+  font-weight: 500;
+  color: var(--acceso-placeholder);
+  pointer-events: none;
+  transition: top .15s, font-size .15s, color .15s;
+}
+.acceso-campo-control input:focus + .acceso-campo-etiqueta,
+.acceso-campo-control input:not(:placeholder-shown) + .acceso-campo-etiqueta {
+  top: calc(24 * var(--u));
+  font-size: calc(18 * var(--u));
+  font-weight: 600;
+  color: var(--eco-forest);
+}
+.acceso-campo-control input:-webkit-autofill { -webkit-box-shadow: 0 0 0 100px var(--acceso-campo) inset; }
+.acceso-ojo {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(64 * var(--u));
+  height: calc(64 * var(--u));
+  margin-right: calc(22 * var(--u));
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #4d5550;
+  cursor: pointer;
+}
+.acceso-ojo svg { width: calc(46 * var(--u)); height: calc(46 * var(--u)); }
+.acceso-ojo:hover { background: #063b2e0d; }
+.acceso-ojo:focus-visible { outline: 3px solid #168a2e66; }
+
+/* --- recordarme y olvido */
+.acceso-opciones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: calc(47 * var(--u));
+  min-height: calc(42 * var(--u));
+  gap: 12px;
+}
+.acceso-recordar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(18 * var(--u));
+  margin-left: calc(3 * var(--u));
+  font-size: calc(26 * var(--u));
+  font-weight: 500;
+  color: var(--eco-charcoal);
+  cursor: pointer;
+}
+.acceso-recordar input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.acceso-check {
+  display: grid;
+  place-items: center;
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
+  border: 2px solid var(--eco-green);
+  border-radius: calc(9 * var(--u));
+  background: var(--eco-white);
+  color: transparent;
+  box-sizing: border-box;
+}
+.acceso-check svg { width: 78%; height: 78%; }
+.acceso-recordar input:checked + .acceso-check { background: var(--eco-green); color: var(--eco-white); }
+.acceso-recordar input:focus-visible + .acceso-check { outline: 3px solid #168a2e66; outline-offset: 2px; }
+.acceso-olvido {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: 600 calc(26 * var(--u)) var(--font-body, "Inter", "Arial", sans-serif);
+  color: var(--eco-forest);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: calc(7 * var(--u));
+  cursor: pointer;
 }
 
-@media (min-width: 860px) {
-  .acceso-tarjeta { grid-template-columns: 1.05fr 1fr; min-height: min(600px, calc(100dvh - 140px)); }
-  .acceso-ilustracion { align-items: flex-start; text-align: left; padding: 40px 40px 0; }
-  .acceso-mensaje p { margin: 0; }
-  .acceso-personajes {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    width: 100%;
-    margin-top: auto;
+/* --- botón principal (Verde Eco del manual, con relieve suave) */
+.acceso-entrar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(30 * var(--u));
+  height: calc(105 * var(--u));
+  margin-top: calc(54 * var(--u));
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #1d9638 0%, var(--eco-green) 45%, #0f6f27 100%);
+  box-shadow: 0 calc(12 * var(--u)) calc(24 * var(--u)) #0f6f2740, inset 0 2px 0 #ffffff33;
+  color: var(--eco-white);
+  font: 700 calc(40 * var(--u)) var(--font-heading, "Poppins", "Arial", sans-serif);
+  cursor: pointer;
+  transition: transform .12s, filter .12s;
+}
+.acceso-entrar:hover:not(:disabled) { filter: brightness(1.06); }
+.acceso-entrar:active:not(:disabled) { transform: translateY(1px); }
+.acceso-entrar:disabled { opacity: .75; cursor: progress; }
+.acceso-entrar:focus-visible { outline: 4px solid var(--eco-yellow); outline-offset: 3px; }
+.acceso-entrar-icono { width: calc(54 * var(--u)); height: calc(54 * var(--u)); flex: none; }
+
+/* --- pie de la tarjeta: avisos y acceso para vecinos */
+.acceso-pie {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10 * var(--u));
+  margin-top: calc(18 * var(--u));
+}
+.acceso-aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: calc(10 * var(--u)) calc(16 * var(--u));
+  border-radius: calc(16 * var(--u));
+  font-size: max(13px, calc(20 * var(--u)));
+  line-height: 1.35;
+}
+.acceso-aviso svg { flex: none; width: 1.3em; height: 1.3em; }
+.acceso-aviso-error { background: var(--eco-danger-50); color: var(--eco-danger); }
+.acceso-aviso-info { background: var(--eco-green-50); color: var(--eco-forest); }
+.acceso-vecinos {
+  margin: 0;
+  text-align: center;
+  font-size: max(13px, calc(20 * var(--u)));
+  color: var(--eco-muted);
+}
+.acceso-vecinos a, .acceso-vecinos button {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--eco-forest);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* --- estados (sesión vencida, acceso restringido) dentro de la misma tarjeta */
+.acceso-estado { display: flex; flex-direction: column; flex: 1; justify-content: center; text-align: center; }
+.acceso-estado h2 {
+  margin: 0;
+  font: 700 calc(46 * var(--u)) var(--font-heading, "Poppins", "Arial", sans-serif);
+  color: var(--eco-forest);
+}
+.acceso-estado p { margin: calc(18 * var(--u)) 0 0; font-size: calc(28 * var(--u)); color: #414844; }
+.acceso-estado .acceso-entrar { margin-bottom: calc(60 * var(--u)); }
+
+/* --- aliados: bajo la tarjeta, sobre blanco (cada logo con sus propias reglas) */
+.acceso-aliados {
+  position: absolute;
+  left: calc(819 * var(--u));
+  top: calc(852 * var(--u));
+  width: calc(742 * var(--u));
+  height: calc(76 * var(--u));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(26 * var(--u));
+  border: 1px solid var(--acceso-borde);
+  border-radius: 999px;
+  background: var(--eco-white);
+  box-shadow: 0 calc(8 * var(--u)) calc(20 * var(--u)) #3c5a2a1a;
+  font-size: max(12px, calc(19 * var(--u)));
+  color: var(--eco-muted);
+}
+.acceso-aliados img { height: calc(50 * var(--u)); width: auto; }
+.acceso-aliados img[src*="fundacion"] { height: calc(72 * var(--u)); margin: 0 calc(-8 * var(--u)); } /* el archivo trae margen blanco */
+.acceso-aliados strong { font-family: var(--font-heading, "Poppins", "Arial", sans-serif); font-weight: 600; color: var(--eco-forest); }
+
+/* --- entrada suave (respeta "reducir movimiento") */
+@media (prefers-reduced-motion: no-preference) {
+  .acceso-tarjeta { animation: acceso-entra .5s cubic-bezier(.2, .8, .2, 1) both; }
+  .acceso-saludo { animation: acceso-entra .5s .08s cubic-bezier(.2, .8, .2, 1) both; }
+}
+@keyframes acceso-entra {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ======================================================================== móvil y tablet vertical
+   Diseñado primero para móvil (manual): una columna, controles de 52+ px y textos de 16 px. */
+@media (max-width: 1199px), (max-aspect-ratio: 5/4) {
+  .acceso {
+    --u: min(0.8px, calc((100vw - 32px) / 742));
+    display: block;
+    overflow: visible;
+    padding: max(16px, env(safe-area-inset-top)) 16px 0;
   }
-  .acceso-personajes img { width: 48%; max-width: 230px; height: auto; object-fit: contain; }
-  .acceso-personajes img + img { margin-left: -8%; }
-  .acceso .login-caja.acceso-form { justify-content: center; }
-}
-@media (max-height: 640px) and (min-width: 860px) {
-  .acceso-tarjeta { min-height: 0; }
-  .acceso-personajes img { max-width: 170px; }
-}
-/* Keep the logo at its 220px minimum on the narrowest phones by trimming plate padding. */
-@media (max-width: 359px) {
-  .acceso-ilustracion .identidad img { padding: 10px; }
+  .acceso-lienzo {
+    width: auto;
+    height: auto;
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+  }
+  .acceso-fondo { display: none; }
+  .acceso-marcas { display: flex; align-items: center; justify-content: space-between; gap: 8px 6px; flex-wrap: wrap; }
+  .acceso-logo, .acceso-ecoconecta { position: static; transform: none; }
+  .acceso-logo { width: clamp(100px, 28vw, 150px); }
+  .acceso-ecoconecta { width: 220px; padding: 4px 0; }
+  .acceso-saludo, .acceso-tarjeta, .acceso-aliados { position: static; width: auto; }
+  .acceso-saludo h1 { font-size: clamp(28px, 8vw, 40px); letter-spacing: -0.5px; white-space: normal; }
+  .acceso-saludo h1::after { height: 12px; left: -10px; bottom: 0; }
+  .acceso-saludo p { margin-top: 10px; font-size: 16px; line-height: 1.5; }
+  .acceso-resaltado { padding: 2px 0 2px 12px; margin-left: -12px; }
+  .acceso-tarjeta { height: auto; padding: 0 18px 22px; border-radius: 28px; }
+  .acceso-chip { margin-top: 22px; height: auto; min-height: 44px; }
+  .acceso-chip-texto { white-space: normal; font-size: 14px; padding: 8px 14px; gap: 8px; line-height: 1.25; }
+  .acceso-chip-icono { width: 24px; height: 24px; }
+  .acceso-chispas { width: 16px; height: 26px; }
+  .acceso-campo { height: 60px; margin-top: 22px; }
+  .acceso-campo + .acceso-campo { margin-top: 16px; }
+  .acceso-campo-icono { width: 44px; height: 42px; margin-left: 8px; border-radius: 13px; }
+  .acceso-campo-icono svg { width: 24px; height: 24px; }
+  .acceso-campo-control input { font-size: 16px; padding: 18px 10px 0 14px; } /* 16px evita el zoom de iOS */
+  .acceso-campo-etiqueta { left: 14px; font-size: 16px; }
+  .acceso-campo-control input:focus + .acceso-campo-etiqueta,
+  .acceso-campo-control input:not(:placeholder-shown) + .acceso-campo-etiqueta { top: 15px; font-size: 12px; }
+  .acceso-ojo { width: 44px; height: 44px; margin-right: 8px; }
+  .acceso-ojo svg { width: 26px; height: 26px; }
+  .acceso-opciones { margin-top: 18px; flex-wrap: wrap; gap: 0 10px; }
+  .acceso-recordar, .acceso-olvido { font-size: 14px; min-height: 44px; }
+  .acceso-recordar { gap: 10px; }
+  .acceso-check { width: 24px; height: 24px; border-radius: 6px; }
+  .acceso-olvido { text-underline-offset: 4px; }
+  .acceso-entrar { height: 56px; margin-top: 16px; gap: 12px; font-size: 18px; }
+  .acceso-entrar-icono { width: 26px; height: 26px; }
+  .acceso-pie { margin-top: 14px; gap: 10px; }
+  .acceso-aviso, .acceso-vecinos { font-size: 14px; }
+  .acceso-aviso { padding: 10px 12px; border-radius: 12px; }
+  .acceso-estado { padding: 26px 0 0; }
+  .acceso-estado h2 { font-size: 24px; }
+  .acceso-estado p { font-size: 16px; margin-top: 8px; }
+  .acceso-estado .acceso-entrar { margin-bottom: 0; }
+  .acceso-aliados { height: auto; flex-wrap: wrap; gap: 10px 18px; padding: 12px 18px; border-radius: 22px; font-size: 13px; }
+  .acceso-aliados span { flex-basis: 100%; text-align: center; }
+  .acceso-aliados img { height: 34px; }
+  .acceso-aliados img[src*="fundacion"] { height: 50px; margin: -8px -6px; }
+  .acceso-escena { display: block; width: calc(100% + 32px); max-width: none; margin: 0 -16px; height: auto; }
 }

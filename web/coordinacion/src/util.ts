@@ -4,21 +4,55 @@ import type { Sesion } from "./tipos";
 
 const CLAVE_SESION = "brota.coordinacion.sesion";
 
+const CLAVE_USUARIO = "brota.coordinacion.usuario";
+
+/**
+ * Sin «Recordarme» la sesión vive en sessionStorage y muere al cerrar la pestaña. Con «Recordarme»
+ * va a localStorage, pero nunca más allá de su vencimiento (`expira`, el mismo del token).
+ */
 export function leerSesion(incluirVencida = false): Sesion | null {
+  for (const almacen of [sessionStorage, localStorage]) {
+    try {
+      const s = JSON.parse(almacen.getItem(CLAVE_SESION) ?? "null") as Sesion | null;
+      if (s && (incluirVencida || s.expira > Date.now())) return s;
+    } catch {
+      /* almacenamiento bloqueado o dañado: se ignora */
+    }
+  }
+  return null;
+}
+
+export function guardarSesion(s: Sesion | null, recordar = false): void {
+  for (const almacen of [sessionStorage, localStorage]) {
+    try {
+      almacen.removeItem(CLAVE_SESION);
+    } catch {
+      /* sin almacenamiento */
+    }
+  }
+  if (!s) return;
   try {
-    const s = JSON.parse(sessionStorage.getItem(CLAVE_SESION) ?? "null") as Sesion | null;
-    return s && (incluirVencida || s.expira > Date.now()) ? s : null;
+    (recordar ? localStorage : sessionStorage).setItem(CLAVE_SESION, JSON.stringify(s));
   } catch {
-    return null;
+    /* sin almacenamiento: la sesión dura lo que la pestaña */
   }
 }
 
-export function guardarSesion(s: Sesion | null): void {
+/** «Recordarme» guarda solo el nombre de usuario (nunca la contraseña) para precargarlo. */
+export function usuarioRecordado(): string {
   try {
-    if (s) sessionStorage.setItem(CLAVE_SESION, JSON.stringify(s));
-    else sessionStorage.removeItem(CLAVE_SESION);
+    return localStorage.getItem(CLAVE_USUARIO) ?? "";
   } catch {
-    /* sin almacenamiento: la sesión dura lo que la pestaña */
+    return "";
+  }
+}
+
+export function recordarUsuario(usuario: string | null): void {
+  try {
+    if (usuario) localStorage.setItem(CLAVE_USUARIO, usuario);
+    else localStorage.removeItem(CLAVE_USUARIO);
+  } catch {
+    /* sin almacenamiento */
   }
 }
 

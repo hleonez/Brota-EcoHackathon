@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import Field
 from sqlalchemy import select, text
@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core.errores import AppError
-from app.core.seguridad import emitir_token, verificar_pin
+from app.core import limite_acceso
+from app.core.seguridad import HASH_SENUELO, emitir_token, verificar_pin
 from app.core.tipos import Entrada
 from app.db import get_db, get_engine
 from app.models import CuentaOperadora
@@ -91,13 +92,25 @@ class SesionIn(Entrada):
 
 
 @router.post("/auth/sesiones", status_code=201)
-def iniciar_sesion(datos: SesionIn, db: Session = Depends(get_db)) -> dict:
-    cuenta = db.execute(
-        select(CuentaOperadora).where(CuentaOperadora.usuario == datos.usuario.lower())
-    ).scalar_one_or_none()
-    ok = verificar_pin(datos.pin, cuenta.pin_hash if cuenta else None)
+def iniciar_sesion(datos: SesionIn, request: Request, db: Session = Depends(get_db)) -> dict:
+    usuario = datos.usuario.strip().lower()
+    ip = request.client.host if request.client else "desconocida"
+    espera = limite_acceso.segundos_de_espera(usuario, ip)
+    if espera:
+        minutos = max(1, -(-espera // 60))
+        raise AppError(
+            429, "TOO_MANY_ATTEMPTS",
+            f"Demasiados intentos fallidos. Espera {minutos} min y vuelve a intentar.",
+            extra={"reintentar_en_segundos": espera}, headers={"Retry-After": str(espera)},
+        )
+    cuenta = db.execute(select(CuentaOperadora).where(CuentaOperadora.usuario == usuario)).scalar_one_or_none()
+    # Con usuario inexistente se verifica igual contra un hash señuelo: la respuesta tarda lo mismo
+    # y no revela qué usuarios existen.
+    ok = verificar_pin(datos.pin, cuenta.pin_hash if cuenta and cuenta.pin_hash else HASH_SENUELO)
     if cuenta is None or not ok or not cuenta.activo:
-        raise AppError(401, "INVALID_CREDENTIALS", "Usuario o PIN incorrectos.")
+        limite_acceso.registrar_fallo(usuario, ip)
+        raise AppError(401, "INVALID_CREDENTIALS", "Usuario o contraseña incorrectos.")
+    limite_acceso.registrar_exito(usuario)
     token, segundos = emitir_token(cuenta.id)
     return {
         "data": {

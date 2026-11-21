@@ -124,7 +124,15 @@ def verificar_pin(pin: str, guardado: str | None) -> bool:
     return hmac.compare_digest(h, base64.b64decode(h_b64))
 
 
+# Se verifica contra este hash cuando el usuario no existe, para que el tiempo de respuesta no
+# delate qué usuarios hay. Su PIN es aleatorio y nadie lo conoce.
+HASH_SENUELO = hash_pin(secrets.token_urlsafe(16))
+
+
 # --------------------------------------------------------------------------- JWT
+
+
+EMISOR = "brota-api"
 
 
 def _secreto() -> str:
@@ -136,9 +144,16 @@ def _secreto() -> str:
 
 def emitir_token(cuenta_id: uuid.UUID) -> tuple[str, int]:
     minutos = get_settings().jwt_minutos
-    exp = ahora() + timedelta(minutes=minutos)
-    token = jwt.encode({"sub": str(cuenta_id), "typ": "operador", "exp": exp}, _secreto(), algorithm="HS256")
-    return token, minutos * 60
+    emitido = ahora()
+    reclamos = {
+        "sub": str(cuenta_id),
+        "typ": "operador",
+        "iss": EMISOR,
+        "iat": emitido,
+        "exp": emitido + timedelta(minutes=minutos),
+        "jti": secrets.token_urlsafe(16),  # identificador único: base para revocar sesiones
+    }
+    return jwt.encode(reclamos, _secreto(), algorithm="HS256"), minutos * 60
 
 
 def _no_autenticado(msg: str = "Falta autenticación.") -> AppError:
@@ -195,7 +210,10 @@ def get_actor(request: Request, db: Session = Depends(get_db)) -> Actor:
         return Actor(tipo="participante", canal="whatsapp", celular=celular, participante_id=p.id, nombre=p.nombre)
 
     try:
-        datos = jwt.decode(token, _secreto(), algorithms=["HS256"], options={"require": ["exp", "sub"]})
+        datos = jwt.decode(
+            token, _secreto(), algorithms=["HS256"], issuer=EMISOR,
+            options={"require": ["exp", "sub", "iat", "iss"]},
+        )
     except jwt.ExpiredSignatureError:
         raise _no_autenticado("La sesión expiró. Ingresa de nuevo.") from None
     except jwt.PyJWTError:
