@@ -29,6 +29,13 @@ SOLICITUD_CREADA = "¡Recibido, {nombre}! 💚 Tu recolección de {servicios} qu
 SOLICITUD_ABIERTA = "Ya tienes una solicitud en camino ({codigo}) 🚲 Te aviso cuando sepamos quién pasa."
 PUNTOS = "⭐ Tienes {saldo} puntos. Ganas puntos cada vez que tu material llega bien separado."
 PUNTOS_DETALLE = "• {modalidad} · {puntos_por_entrega} puntos por entrega · total {total}"
+CANJE_ELIGE = "🌱 Con tus puntos puedes canjear:\n{lista}\n\nElige uno y te pido confirmación."
+CANJE_CONFIRMA = "¿Canjeas {nombre} por {costo} puntos?"
+CANJE_LISTO = "¡Listo! 💚 Aparté tu canje. Te lo entregan en el punto del aliado."
+CANJE_SIN_PUNTOS = "Con esos puntos no alcanza para este canje 🌱 Sigue separando y vuelves a intentarlo."
+CANJE_VACIO = "Todavía no hay premios para canjear 🌱 Cuando haya alguno, lo ves aquí."
+CANJE_NO = "Ese premio ya no está disponible. Elige otro 🙂"
+CANJE_CANCELADO = "Listo, no canjeé nada 🌱"
 PILOTO_NO = (
     "El piloto todavía no está habilitado para tu unidad 🌱 "
     "Mientras tanto te explico qué se recicla y cómo prepararlo."

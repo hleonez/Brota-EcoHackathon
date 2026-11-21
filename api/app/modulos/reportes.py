@@ -1,4 +1,4 @@
-"""M09 · Liga de Torres, resumen y serie para paneles.
+"""M09 · Liga de Torres, resumen, serie y cierre (certificado, hoja de ruta, Excel).
 
 Reglas de cálculo:
 - Solo pesajes confirmados (no borradores ni anulados); cada línea se suma una vez.
@@ -109,27 +109,25 @@ def _hogares_participantes(
     return union(q1, q2).subquery()
 
 
-@router.get("/reportes/resumen")
-def get_resumen(
-    desde: InstanteEntrada = Query(...),
-    hasta: InstanteEntrada = Query(...),
-    gremio_id: uuid.UUID | None = Query(None),
-    conjunto_id: uuid.UUID | None = Query(None),
-    torre_id: uuid.UUID | None = Query(None),
-    material_id: uuid.UUID | None = Query(None),
-    recolector_id: uuid.UUID | None = Query(None),
-    actor: Actor = Depends(get_actor),
-    db: Session = Depends(get_db),
-):
-    periodo = _periodo(desde, hasta)
-    gremios = _alcance_gremios(actor, gremio_id)
-    torres_filtro: list[uuid.UUID] | None = None
+def _torres_filtro(
+    db: Session, conjunto_id: uuid.UUID | None, torre_id: uuid.UUID | None,
+) -> list[uuid.UUID] | None:
+    """None = sin filtro territorial. Lista (aunque vacía) = torres del conjunto o la torre pedida."""
     if torre_id is not None:
-        torres_filtro = [torre_id]
-    elif conjunto_id is not None:
-        torres_filtro = list(db.execute(select(Torre.id).where(Torre.conjunto_id == conjunto_id)).scalars())
+        return [torre_id]
+    if conjunto_id is not None:
+        return list(db.execute(select(Torre.id).where(Torre.conjunto_id == conjunto_id)).scalars())
+    return None
 
-    # Órdenes por estado (cohorte por fecha de creación)
+
+def _ordenes_por_estado(
+    db: Session,
+    desde: datetime,
+    hasta: datetime,
+    gremios: list[uuid.UUID] | None,
+    torres_filtro: list[uuid.UUID] | None,
+) -> dict[str, int]:
+    """Cohorte por fecha de creación. Incluye cada estado, también en cero."""
     q = select(Orden.estado, func.count()).join(Solicitud, Solicitud.id == Orden.solicitud_id).join(
         Unidad, Unidad.id == Solicitud.unidad_id
     ).where(Orden.created_at >= desde, Orden.created_at < hasta)
@@ -138,25 +136,19 @@ def get_resumen(
     if torres_filtro is not None:
         q = q.where(Unidad.torre_id.in_(torres_filtro))
     conteos = dict(db.execute(q.group_by(Orden.estado)).all())
-    ordenes_por_estado = {e: int(conteos.get(e, 0)) for e in ESTADOS}
+    return {e: int(conteos.get(e, 0)) for e in ESTADOS}
 
-    # Resultados (cohorte por fecha en que ocurrió)
-    q = (
-        select(ResultadoOrden.resultado, func.count())
-        .join(Orden, Orden.id == ResultadoOrden.orden_id)
-        .join(Solicitud, Solicitud.id == Orden.solicitud_id)
-        .join(Unidad, Unidad.id == Solicitud.unidad_id)
-        .where(ResultadoOrden.ocurrido_at >= desde, ResultadoOrden.ocurrido_at < hasta)
-    )
-    if gremios is not None:
-        q = q.where(Orden.gremio_id.in_(gremios))
-    if torres_filtro is not None:
-        q = q.where(Unidad.torre_id.in_(torres_filtro))
-    res = dict(db.execute(q.group_by(ResultadoOrden.resultado)).all())
-    recogidas, rechazadas = int(res.get("recogida", 0)), int(res.get("rechazada", 0))
-    tasa_ordenes = None if recogidas + rechazadas == 0 else round(rechazadas / (recogidas + rechazadas), 4)
 
-    # Material (cohorte por fecha de medición; solo confirmados)
+def _filas_material(
+    db: Session,
+    desde: datetime,
+    hasta: datetime,
+    gremios: list[uuid.UUID] | None,
+    torres_filtro: list[uuid.UUID] | None,
+    material_id: uuid.UUID | None = None,
+    recolector_id: uuid.UUID | None = None,
+):
+    """Líneas de pesajes confirmados, agrupadas por material. Misma cohorte que el resumen."""
     filtros = [Pesaje.estado == "confirmado", Pesaje.fecha_medicion >= desde, Pesaje.fecha_medicion < hasta]
     if gremios is not None:
         filtros.append(Pesaje.gremio_id.in_(gremios))
@@ -167,7 +159,7 @@ def get_resumen(
     if recolector_id is not None:
         filtros.append(Pesaje.recolector_id == recolector_id)
     es_bascula = LineaPesaje.metodo_medicion == "bascula"
-    filas = db.execute(
+    return db.execute(
         select(
             Material.id,
             Material.codigo,
@@ -187,6 +179,54 @@ def get_resumen(
         .group_by(Material.id, Material.codigo, Material.nombre, Material.gremio_id)
         .order_by(Material.nombre)
     ).all()
+
+
+def _contar_hogares(
+    db: Session,
+    desde: datetime,
+    hasta: datetime,
+    torres_filtro: list[uuid.UUID] | None,
+    gremios: list[uuid.UUID] | None,
+) -> int:
+    hp = _hogares_participantes(db, desde, hasta, torres_filtro, gremios)
+    return int(db.execute(select(func.count(distinct(hp.c.unidad_id)))).scalar_one())
+
+
+@router.get("/reportes/resumen")
+def get_resumen(
+    desde: InstanteEntrada = Query(...),
+    hasta: InstanteEntrada = Query(...),
+    gremio_id: uuid.UUID | None = Query(None),
+    conjunto_id: uuid.UUID | None = Query(None),
+    torre_id: uuid.UUID | None = Query(None),
+    material_id: uuid.UUID | None = Query(None),
+    recolector_id: uuid.UUID | None = Query(None),
+    actor: Actor = Depends(get_actor),
+    db: Session = Depends(get_db),
+):
+    periodo = _periodo(desde, hasta)
+    gremios = _alcance_gremios(actor, gremio_id)
+    torres_filtro = _torres_filtro(db, conjunto_id, torre_id)
+    ordenes_por_estado = _ordenes_por_estado(db, desde, hasta, gremios, torres_filtro)
+
+    # Resultados (cohorte por fecha en que ocurrió)
+    q = (
+        select(ResultadoOrden.resultado, func.count())
+        .join(Orden, Orden.id == ResultadoOrden.orden_id)
+        .join(Solicitud, Solicitud.id == Orden.solicitud_id)
+        .join(Unidad, Unidad.id == Solicitud.unidad_id)
+        .where(ResultadoOrden.ocurrido_at >= desde, ResultadoOrden.ocurrido_at < hasta)
+    )
+    if gremios is not None:
+        q = q.where(Orden.gremio_id.in_(gremios))
+    if torres_filtro is not None:
+        q = q.where(Unidad.torre_id.in_(torres_filtro))
+    res = dict(db.execute(q.group_by(ResultadoOrden.resultado)).all())
+    recogidas, rechazadas = int(res.get("recogida", 0)), int(res.get("rechazada", 0))
+    tasa_ordenes = None if recogidas + rechazadas == 0 else round(rechazadas / (recogidas + rechazadas), 4)
+
+    # Material (cohorte por fecha de medición; solo confirmados)
+    filas = _filas_material(db, desde, hasta, gremios, torres_filtro, material_id, recolector_id)
     materiales = []
     tot_a = tot_r = tot_sin_torre = Decimal(0)
     valor_total: Decimal | None = None
@@ -213,8 +253,7 @@ def get_resumen(
     total_kg = tot_a + tot_r
     tasa_peso = None if total_kg == 0 else round(float(tot_r / total_kg), 4)
 
-    hp = _hogares_participantes(db, desde, hasta, torres_filtro, gremios)
-    hogares = db.execute(select(func.count(distinct(hp.c.unidad_id)))).scalar_one()
+    hogares = _contar_hogares(db, desde, hasta, torres_filtro, gremios)
 
     return {
         "data": {
@@ -388,6 +427,56 @@ def get_certificado(
     return Response(
         content=contenido,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+    )
+
+
+@router.get(
+    "/reportes/hoja-ruta",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}, "description": "PDF de la hoja de ruta del día"}},
+)
+def get_hoja_ruta(
+    gremio_id: uuid.UUID = Query(...),
+    fecha: str = Query(..., description="Día AAAA-MM-DD en America/Bogota"),
+    actor: Actor = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Paradas programadas de ese gremio. Coordinación del gremio o administración."""
+    from app.modulos.hoja_ruta import generar_hoja_ruta
+
+    contenido, nombre = generar_hoja_ruta(db, actor, gremio_id, fecha)
+    return Response(
+        content=contenido,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
+    )
+
+
+@router.get(
+    "/reportes/exportacion",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}},
+            "description": "Excel del periodo",
+        }
+    },
+)
+def get_exportacion(
+    desde: str = Query(..., description="InstanteEntrada inclusive, con zona"),
+    hasta: str = Query(..., description="InstanteEntrada exclusivo, con zona"),
+    conjunto_id: uuid.UUID | None = Query(None),
+    actor: Actor = Depends(get_actor),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Informe institucional del periodo. Fundación o administración. Sin datos de contacto."""
+    from app.modulos.exportacion import generar_exportacion, media_type
+
+    contenido, nombre = generar_exportacion(db, actor, desde, hasta, conjunto_id)
+    return Response(
+        content=contenido,
+        media_type=media_type(),
         headers={"Content-Disposition": f'attachment; filename="{nombre}"'},
     )
 

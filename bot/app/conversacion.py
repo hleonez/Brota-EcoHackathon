@@ -37,6 +37,7 @@ FILAS_MENU = [
     Fila("M_DUDA", "❓ Tengo una duda", "¿Esto se recicla? ¿Cómo lo preparo?"),
     Fila("M_ESTADO", "📦 Mis solicitudes", "Cómo va lo que pediste"),
     Fila("M_PUNTOS", "⭐ Mis puntos"),
+    Fila("M_CANJEAR", "🌱 Canjear puntos", "Abono, plántulas o un descuento"),
     Fila("M_LIGA", "🏆 Liga de torres"),
     Fila("M_QUEJA", "⚠ Reportar un problema", "Algo salió mal con una recolección"),
     Fila("M_PERSONA", "🙋 Hablar con alguien", "Te responde una persona del equipo"),
@@ -290,6 +291,14 @@ class Brisa:
             await self._estado(m.de)
         elif opcion == "M_PUNTOS" or comando in ("puntos", "mis puntos"):
             await self._puntos(m.de)
+        elif opcion == "M_CANJEAR" or comando in ("canjear", "canje", "canjear puntos"):
+            await self._ofrecer_canje(m.de)
+        elif opcion.startswith("C_SI:"):
+            await self._confirmar_canje(m.de, m.wamid, opcion.split(":", 1)[1])
+        elif opcion.startswith("C:"):
+            await self._preguntar_canje(m.de, opcion.split(":", 1)[1])
+        elif opcion == "C_NO":
+            await self.wa.texto(m.de, T.CANJE_CANCELADO)
         elif opcion == "M_LIGA" or comando == "liga":
             await self._liga(m.de, me)
         elif opcion == "M_QUEJA":
@@ -456,6 +465,40 @@ class Brisa:
         p = await self.api.puntos(celular)
         movimientos = await self.api.movimientos_puntos(celular)
         await self.wa.texto(celular, mensaje_puntos(p["saldo"], movimientos))
+
+    async def _ofrecer_canje(self, celular: str) -> None:
+        items = (await self.api.catalogo_canjes(celular))[:3]
+        if not items:
+            await self.wa.texto(celular, T.CANJE_VACIO)
+            return
+        lineas = [f"• {it['nombre']} · {_numero(str(it['costo_puntos']))} puntos" for it in items]
+        await self.wa.botones(
+            celular, T.CANJE_ELIGE.format(lista="\n".join(lineas)), [Boton(f"C:{it['id']}", it["nombre"]) for it in items]
+        )
+
+    async def _preguntar_canje(self, celular: str, item_id: str) -> None:
+        items = await self.api.catalogo_canjes(celular, limite=20)
+        item = next((it for it in items if it["id"] == item_id), None)
+        if item is None:
+            await self.wa.texto(celular, T.CANJE_NO)
+            return
+        await self.wa.botones(
+            celular,
+            T.CANJE_CONFIRMA.format(nombre=item["nombre"], costo=_numero(str(item["costo_puntos"]))),
+            [Boton(f"C_SI:{item_id}", "Sí, canjear"), Boton("C_NO", "Ahora no")],
+        )
+
+    async def _confirmar_canje(self, celular: str, wamid: str, item_id: str) -> None:
+        try:
+            await self.api.crear_canje(celular, wamid, item_id)
+        except ErrorBrota as e:
+            if e.status == 409:
+                await self.wa.texto(celular, T.CANJE_SIN_PUNTOS)
+                return
+            raise
+        puntos = await self.api.puntos(celular)
+        movimientos = await self.api.movimientos_puntos(celular)
+        await self.wa.texto(celular, T.CANJE_LISTO + "\n\n" + mensaje_puntos(puntos["saldo"], movimientos))
 
     async def _estado(self, celular: str) -> None:
         abiertas = await self.api.solicitudes_abiertas(celular)

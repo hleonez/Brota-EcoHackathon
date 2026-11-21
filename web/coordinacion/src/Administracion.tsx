@@ -1,3 +1,4 @@
+import { CanjesAdmin } from "./Canjes";
 import { MarcoPanel, Portada, TarjetaAccion, enlaceCuenta, type CuentaPanel } from "./MarcoPanel";
 import { useState } from "react";
 import { pedir } from "./api";
@@ -81,7 +82,7 @@ const gruposAdministracion = [
   { enlaces: ["Inicio"] },
   { titulo: "Personas y acceso", enlaces: ["Cuentas", "Registro asistido", "Piloto"] },
   { titulo: "Contenido y operación", enlaces: ["Recolectores", "Unidades", "Educación", "Materiales"] },
-  { titulo: "Configuración", enlaces: ["Puntos", "Motivos", "Equivalencias", "Sistema"] },
+  { titulo: "Configuración", enlaces: ["Puntos", "Canjes", "Motivos", "Equivalencias", "Sistema"] },
 ] as const;
 type Seccion = (typeof gruposAdministracion)[number]["enlaces"][number];
 const secciones = gruposAdministracion.map((grupo) => ({
@@ -379,7 +380,9 @@ export default function Administracion({ cuenta: cuentaSesion }: { cuenta: Cuent
       {conflicto && (
         <p role="alert">Este registro cambió. Vuelve a seleccionarlo para revisar la versión actual.</p>
       )}
-      {vista === "Sistema" ? (
+      {vista === "Canjes" ? (
+        <CanjesAdmin />
+      ) : vista === "Sistema" ? (
         <section className="eco-tarjeta">
           <h2>Estado del sistema</h2>
           {cap.datos ? (

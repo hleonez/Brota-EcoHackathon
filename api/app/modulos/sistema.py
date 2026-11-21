@@ -52,8 +52,9 @@ def capacidades() -> dict:
                 "pesajes": True,
                 "entregas_directas": True,
                 "puntos": True,
-                "canjes": False,
-                "archivos_ia": False,
+                "canjes": True,
+                "archivos": True,
+                "archivos_ia": True,
                 "ia_mensajes": ia_activa,  # texto, audio y fotos del vecino (M06)
                 "educacion_avisos": True,
                 "liga": True,

@@ -9,11 +9,13 @@ import { Estado, fechaBogota } from "./portal";
 import { MarcoPanel, Portada, TarjetaAccion, TareaPrincipal, enlaceCuenta, nombresPerfil, type CuentaPanel, type GrupoPanel } from "./MarcoPanel";
 import { hace, textoFranja } from "./util";
 import { Icono } from "./Iconos";
+import { CanjesReservados } from "./Canjes";
 import { DetalleSolicitud, VistaBandeja, VistaHistorial, VistaMisOrdenes, VistaReportes, VistaRutas } from "./Vistas";
 
 const titulos = {
   inicio: "Inicio", bandeja: "Bandeja", rutas: "Rutas de hoy", historial: "Historial",
   reportes: "Reportes", pesajes: "Baldes y pesajes", indicadores: "Indicadores", equipo: "Equipo",
+  canjes: "Canjes",
 };
 type Vista = keyof typeof titulos | typeof enlaceCuenta.id;
 export type Accion = { tipo: "detalle" | "asignar" | "programar" | "reasignar" | "recogida" | "rechazada" | "cancelar"; orden: Orden };
@@ -165,7 +167,10 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
   ];
   if (!campo) grupos.push({
     titulo: "Colectivo",
-    enlaces: (["pesajes", "indicadores", "equipo"] as const).map((id) => ({ id, texto: titulos[id] })),
+    enlaces: [
+      ...(["pesajes", "indicadores", "equipo"] as const).map((id) => ({ id, texto: titulos[id] })),
+      ...(organico ? [{ id: "canjes", texto: titulos.canjes }] : []),
+    ],
   });
   const titulo = vista === enlaceCuenta.id ? enlaceCuenta.texto : vista === "bandeja" ? bandeja : titulos[vista];
 
@@ -249,7 +254,8 @@ export default function Panel({ sesion, cuenta }: { sesion: Sesion; cuenta: Cuen
               ) : <Estado tipo="vacio">No hay solicitudes pendientes por ahora.</Estado>}
             </section>
           </>
-        ) : vista === "indicadores" ? <Indicadores gremioId={gremioId} />
+        ) : vista === "canjes" ? <CanjesReservados />
+        : vista === "indicadores" ? <Indicadores gremioId={gremioId} />
         : vista === "pesajes" ? <Pesajes gremio={gremioId} recolectores={recolectores} />
         : vista === "equipo" ? (
           <EquipoColectivo gremioId={gremioId} organico={organico} recolectores={recolectores} abiertas={abiertas}

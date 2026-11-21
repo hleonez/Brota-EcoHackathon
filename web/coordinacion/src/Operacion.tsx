@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ErrorApi, pedir } from "./api";
 import { Modal } from "./Dialogos";
 import { Campo, Formulario, Pildoras } from "./Formulario";
-import { Espera, fechaBogota, useDatos } from "./portal";
+import { Espera, Estado, fechaBogota, useDatos } from "./portal";
 import type { ItemCatalogo, Recolector } from "./tipos";
+import { claveNueva } from "./util";
 interface CatalogoPesaje {
   materiales: ItemCatalogo[];
   equivalencias: { id: string; recipiente: string; kg_por_unidad: string }[];
@@ -21,6 +23,169 @@ interface Tiquete extends Pesaje {
   emisor_tiquete: string | null;
   totales: { kg_aceptados: string; kg_rechazados: string };
   advertencias: string[];
+}
+interface Dudoso {
+  campo: string;
+  confianza: number | null;
+  detalle: string;
+}
+interface BorradorIa extends Pesaje {
+  origen_captura: string;
+  dudosos: Dudoso[];
+  materiales_descartados: string[];
+  numero_tiquete: string | null;
+  proveedor_referencia: string | null;
+}
+const amarillo = {
+  background: "var(--eco-yellow-100)",
+  color: "var(--eco-yellow-ink)",
+  padding: "8px 12px",
+  borderRadius: 12,
+  margin: "6px 0",
+} as const;
+
+function archivoABase64(archivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => {
+      const texto = String(lector.result ?? "");
+      const coma = texto.indexOf(",");
+      resolve(coma >= 0 ? texto.slice(coma + 1) : texto);
+    };
+    lector.onerror = () => reject(lector.error ?? new Error("No se pudo leer la imagen"));
+    lector.readAsDataURL(archivo);
+  });
+}
+
+function lineaDudosa(nombre: string, dudosos: Dudoso[]): boolean {
+  const normalizado = nombre.toLocaleUpperCase("es-CO");
+  return dudosos.some((d) => {
+    if (!d.campo.startsWith("lineas.") || !d.detalle.includes("por debajo de 0.6")) return false;
+    return normalizado.includes(d.campo.slice("lineas.".length).toLocaleUpperCase("es-CO"));
+  });
+}
+
+function CapturaPesaje({
+  gremio,
+  recolectores,
+  alProponer,
+}: {
+  gremio: string;
+  recolectores: Recolector[];
+  alProponer: (borrador: BorradorIa) => void;
+}) {
+  const archivoRef = useRef<HTMLInputElement>(null);
+  const [frase, setFrase] = useState("");
+  const [recolector, setRecolector] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [aviso, setAviso] = useState("");
+  const [borrador, setBorrador] = useState<BorradorIa | null>(null);
+
+  async function enviar(ruta: string, cuerpo: Record<string, unknown>) {
+    setOcupado(true);
+    setAviso("");
+    try {
+      const propuesto = await pedir<BorradorIa>("POST", ruta, { cuerpo, clave: claveNueva() });
+      setBorrador(propuesto);
+      alProponer(propuesto);
+    } catch (e) {
+      if (e instanceof ErrorApi && e.status === 503) {
+        setAviso("La IA no está disponible. Registra el pesaje a mano.");
+      } else {
+        setAviso(e instanceof Error ? e.message : "No se pudo leer el pesaje.");
+      }
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function leerTiquete(archivo: File) {
+    const mime = archivo.type || "image/jpeg";
+    if (!mime.startsWith("image/")) {
+      setAviso("Elige una imagen del tiquete. Si la IA no está, regístralo a mano.");
+      return;
+    }
+    const datos = await archivoABase64(archivo);
+    await enviar("/v1/pesajes/desde-foto", {
+      gremio_id: gremio,
+      fecha_medicion: new Date().toISOString(),
+      ...(recolector ? { recolector_id: recolector } : {}),
+      imagen: { mime_type: mime, datos_base64: datos },
+    });
+  }
+
+  return (
+    <section className="eco-tarjeta">
+      <h2>Leer o dictar</h2>
+      <label>
+        Responsable
+        <select value={recolector} onChange={(e) => setRecolector(e.target.value)}>
+          <option value="">Sin responsable</option>
+          {recolectores.map((r) => (
+            <option key={r.id} value={r.id}>{r.nombre}</option>
+          ))}
+        </select>
+      </label>
+      <input
+        ref={archivoRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const archivo = e.target.files?.[0];
+          e.target.value = "";
+          if (archivo) void leerTiquete(archivo);
+        }}
+      />
+      <button type="button" className="btn primario" disabled={ocupado} onClick={() => archivoRef.current?.click()}>
+        Leer tiquete
+      </button>
+      <label>
+        Dictar pesaje
+        <textarea
+          value={frase}
+          maxLength={2000}
+          rows={3}
+          placeholder="Rosa trajo 9 kg de cartón y 3 de PET"
+          onChange={(e) => setFrase(e.target.value)}
+        />
+      </label>
+      <button
+        type="button"
+        className="btn"
+        disabled={ocupado || !frase.trim()}
+        onClick={() =>
+          void enviar("/v1/pesajes/desde-dictado", {
+            gremio_id: gremio,
+            texto: frase.trim(),
+            fecha_medicion: new Date().toISOString(),
+            ...(recolector ? { recolector_id: recolector } : {}),
+          })
+        }
+      >
+        Crear borrador
+      </button>
+      {aviso && <Estado tipo="error">{aviso}</Estado>}
+      {borrador && (
+        <div>
+          <p>
+            <strong>{borrador.codigo}</strong> · borrador
+            {borrador.numero_tiquete ? " · tiquete " + borrador.numero_tiquete : ""}
+          </p>
+          <ul>
+            {borrador.lineas.map((linea, i) => (
+              <li key={i} style={lineaDudosa(linea.material_nombre, borrador.dudosos) ? amarillo : undefined}>
+                {linea.material_nombre} · {linea.kg_aceptados} kg
+              </li>
+            ))}
+          </ul>
+          {borrador.dudosos.map((d) => (
+            <p key={d.campo + d.detalle} style={amarillo}>{d.detalle}</p>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function DetalleTiquete({ id, volver }: { id: string; volver: () => void }) {
@@ -50,11 +215,21 @@ export function Pesajes({
   const [metodo, setMetodo] = useState("bascula");
   const [tiquete, setTiquete] = useState<string | null>(null);
   const [confirmar, setConfirmar] = useState<Pesaje | null>(null);
+  const [propuesta, setPropuesta] = useState<BorradorIa | null>(null);
   return (
     <>
       {tiquete && <DetalleTiquete id={tiquete} volver={() => setTiquete(null)} />}
       <div className="row g-3">
         <div className="col-12 col-lg-6">
+          <CapturaPesaje
+            gremio={gremio}
+            recolectores={recolectores}
+            alProponer={(propuesto) => {
+              setPropuesta(propuesto);
+              setConfirmar(propuesto);
+              lista.recargar();
+            }}
+          />
           {c.datos ? (
             <Formulario
               titulo="Registrar medición"
@@ -164,6 +339,14 @@ export function Pesajes({
               </ul>
             )}
           </section>
+          {propuesta && confirmar?.id === propuesta.id && propuesta.dudosos.length > 0 && (
+            <section className="eco-tarjeta">
+              <h2>Campos por revisar</h2>
+              {propuesta.dudosos.map((d) => (
+                <p key={d.campo + d.detalle} style={amarillo}>{d.detalle}</p>
+              ))}
+            </section>
+          )}
           {confirmar && (
             <Formulario
               key={confirmar.id}
