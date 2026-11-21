@@ -33,6 +33,7 @@ class Brota:
     cliente: httpx.AsyncClient
     _catalogo: dict[str, Any] | None = field(default=None, repr=False)
     _residuos: tuple[float, list[dict[str, Any]]] | None = field(default=None, repr=False)
+    _programa: tuple[float, dict[str, Any]] | None = field(default=None, repr=False)
 
     def _url(self, ruta: str) -> str:
         return f"{self.settings.brota_api_url.rstrip('/')}{ruta}"
@@ -121,6 +122,13 @@ class Brota:
         if self._residuos is None or ahora - self._residuos[0] > 300:
             self._residuos = (ahora, (await self._pedir("GET", "/v1/residuos", celular))["data"])
         return self._residuos[1]
+
+    async def programa(self) -> dict[str, Any]:
+        """Datos editables del programa (público), en caché 5 minutos. Si la API falla, lanza el error."""
+        ahora = time.monotonic()
+        if self._programa is None or ahora - self._programa[0] > 300:
+            self._programa = (ahora, (await self._pedir("GET", "/v1/programa", timeout=5))["data"])
+        return self._programa[1]
 
     async def interpretar(
         self, celular: str, texto: str | None = None, media: tuple[bytes, str] | None = None,
@@ -230,6 +238,13 @@ class Brota:
         if error:
             cuerpo["error"] = error[:500]
         await self._pedir("POST", f"/v1/canal/avisos/{aviso_id}/resultado", json=cuerpo)
+
+    async def registrar_mensaje(
+        self, celular: str, direccion: str, tipo: str, texto: str, wamid: str | None = None
+    ) -> dict[str, Any]:
+        """Guarda un mensaje de la conversación para Administración (como servicio, sin X-Canal-Celular)."""
+        cuerpo = {"celular": celular, "direccion": direccion, "tipo": tipo, "texto": texto, "wamid": wamid}
+        return (await self._pedir("POST", "/v1/canal/mensajes", json=cuerpo, timeout=10))["data"]
 
 
 def clave_nueva() -> str:

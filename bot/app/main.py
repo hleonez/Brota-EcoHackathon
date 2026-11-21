@@ -18,6 +18,7 @@ from app import avisos, enlace, laboratorio
 from app.brota import Brota
 from app.config import Settings, get_settings
 from app.conversacion import Brisa
+from app.registro import Registro
 from app.whatsapp import Entrante, ErrorWhatsApp, WhatsApp, firma_valida, leer_webhook
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -78,6 +79,8 @@ def crear_app(settings: Settings | None = None, cliente: httpx.AsyncClient | Non
         app.state.lab = laboratorio.Laboratorio() if s.lab_activo else None
         app.state.wa.lab = app.state.lab
         app.state.api = Brota(s, http)
+        app.state.registro = Registro(app.state.api)
+        app.state.wa.registro = app.state.registro
         app.state.brisa = Brisa(app.state.wa, app.state.api)
         app.state.vistos = Vistos()
         app.state.candados = {}
@@ -94,6 +97,7 @@ def crear_app(settings: Settings | None = None, cliente: httpx.AsyncClient | Non
         for tarea in (tarea_avisos, tarea_enlace):
             if tarea:
                 tarea.cancel()
+        await app.state.registro.esperar()
         if propio:
             await http.aclose()
 
@@ -104,6 +108,7 @@ def crear_app(settings: Settings | None = None, cliente: httpx.AsyncClient | Non
         async with candado:  # mensajes del mismo vecino, en orden
             if app.state.lab is not None:
                 app.state.lab.entrante(m)
+            app.state.registro.entrante(m)  # en segundo plano: nunca frena ni rompe la respuesta
             try:
                 await app.state.brisa.atender(m)
             except ErrorWhatsApp as e:
